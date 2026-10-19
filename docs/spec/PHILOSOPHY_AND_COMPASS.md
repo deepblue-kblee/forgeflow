@@ -85,6 +85,6 @@
 
 ## 5. 실전 가이드라인 및 문서 연계
 
-- **세부 기술 사양서 작성 시**: 구체적인 10대 스펙 포맷, FSM 상태 전이표, Lamport 불변식 작성법은 [`docs/session-state/spec-engineering-standard.md`](file:///Users/jarvis/work/repo/forgeflow/docs/session-state/spec-engineering-standard.md)를 참고합니다.
-- **작업 계획 및 우선순위 수립 시**: 현재 세션의 상태와 다음 과업은 항상 [`docs/session-state/next-actions.md`](file:///Users/jarvis/work/repo/forgeflow/docs/session-state/next-actions.md) 및 [`docs/session-state/CURRENT_STATE.md`](file:///Users/jarvis/work/repo/forgeflow/docs/session-state/CURRENT_STATE.md)와 동기화합니다.
+- **세부 기술 사양서 작성 시**: 구체적인 하이브리드 파이프라인 명세와 게이트 기준은 [`docs/spec/FLOW_SPEC.md`](file:///Users/deepblue/work/repo/forgeflow/docs/spec/FLOW_SPEC.md) 및 [`docs/spec/GATES_AND_LOOPS.md`](file:///Users/deepblue/work/repo/forgeflow/docs/spec/GATES_AND_LOOPS.md)를 참고합니다.
+- **작업 계획 및 우선순위 수립 시**: 현재 세션의 상태와 다음 과업은 항상 [`docs/session-state/next-actions.md`](file:///Users/deepblue/work/repo/forgeflow/docs/session-state/next-actions.md) 및 [`docs/session-state/current_state.md`](file:///Users/deepblue/work/repo/forgeflow/docs/session-state/current_state.md)와 동기화합니다.
 - **방향성 혼선 시**: 과업 진행 중 오버엔지니어링 논쟁이나 형식주의로 인한 피로감이 발생할 경우, 즉시 본 헌장 문서로 돌아와 의사결정의 척도로 삼습니다.
