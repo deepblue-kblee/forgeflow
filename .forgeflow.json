@@ -1,0 +1,12 @@
+{
+  "forgeflow_version": "0.1.0",
+  "governance": {
+    "tasks_dir": "tasks",
+    "strict_mode": true,
+    "max_loop_budget": 5
+  },
+  "paths": {
+    "in_progress": "tasks/in-progress",
+    "completed": "tasks/completed"
+  }
+}

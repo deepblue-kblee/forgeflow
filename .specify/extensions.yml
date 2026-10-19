@@ -1,0 +1,7 @@
+version: "1.0"
+hooks:
+  before_implement:
+    - extension: forgeflow-gatekeeper
+      command: forgeflow check --stage 2 --quiet
+      optional: false
+      prompt: "ForgeFlow Gate 1 승인 증적(GATE1_REVIEW.md)의 유효성을 검증한다. 미승인 시 즉시 중단한다."
