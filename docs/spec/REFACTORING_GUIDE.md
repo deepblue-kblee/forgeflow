@@ -22,14 +22,14 @@
 
 ## 2. 정량적 소스 관리 및 리팩토링 임계치 (Thresholds)
 
-ForgeFlow 정적 분석 엔진(`smell_detector.py`)은 Python 3.10+ 표준 라이브러리(`ast`)만으로 다음 정량적 임계치를 검증한다.
+ForgeFlow 정적 분석 엔진(`forgeflow review`, `smell_detector.py`)은 Python 3.10+ 표준 라이브러리(`ast`)만으로 다음 정량적 임계치를 검증한다.
 
 ### 2.1 모듈/파일 레벨 (File LOC)
 | 구분 | 파일 줄 수 (LOC) | 판정 및 조치 가이드 |
 |---|---|---|
 | **Healthy Zone** | **≤ 400 LOC** | 정상: 단일 관심사와 명확한 인터페이스를 품은 건강한 Deep Module |
 | **Soft Warning** | **> 500 LOC** | **리팩토링 권고 (Warning)**: 단일 책임 원칙(SRP) 점검 및 응집된 하위 모듈 분할 검토 |
-| **Critical Gate** | **> 800 LOC** | **아키텍처 승인 필요 (Critical)**: God Module 위험. 패키지 디렉터리로 승격(Package Promotion)하거나 Gate 증적(`DESIGN.md`) 내 `Architecture Exception` 승인 사유 기록 강제 |
+| **Critical Gate** | **> 800 LOC** | **아키텍처 승인 필요 (Critical)**: God Module 위험. 패키지 디렉터리로 승격(Package Promotion)하거나 `plan.md` 내 아키텍처 예외 사유 기록 권장 |
 
 ### 2.2 함수/메서드 레벨 (Complexity & Metrics)
 | 메트릭 | 임계치 | 위반 시 위험 및 조치 가이드 |
@@ -84,8 +84,8 @@ src/forgeflow/module/
 
 ---
 
-## 4. Stage 4 격리 구현 및 자가 치유(Loop 2/3) 체크리스트
+## 4. Stage 4 구현 및 자가 치유(Loop 2) 체크리스트
 
 1. **사전 검사**: 새 기능 작성 시 `forgeflow review`를 실행하여 새로 도입된 함수가 인지 복잡도 15점을 넘지 않는지 확인한다.
-2. **비대화 억제**: 수정된 파일이 500줄을 초과하면 리팩토링 가능성을 점검하고, 800줄을 초과할 경우 `DESIGN.md`에 명시적 예외 사유가 기록되어 있는지 확인한다.
-3. **무결성 유지**: 리팩토링 진행 전후로 단위 테스트(`python3 -m unittest`)를 실행하여 동작 불변성을 엄격히 보장한다.
+2. **비대화 억제**: 수정된 파일이 500줄을 초과하면 리팩토링 가능성을 점검하고, 800줄을 초과할 경우 `plan.md`에 명시적 예외 사유가 기록되어 있는지 확인한다.
+3. **무결성 유지**: 리팩토링 진행 전후로 단위/통합 테스트(`pytest` 또는 `python3 -m unittest`)를 실행하여 동작 불변성을 엄격히 보장한다.
