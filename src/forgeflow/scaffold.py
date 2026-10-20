@@ -811,7 +811,7 @@ class TemplateScaffolder:
             guard_file.write_text(cls.TASKS_GUARD_CONTENT, encoding="utf-8")
             (updated_files if guard_file.exists() and force else created_files).append("tasks/README.md")
 
-        # 2. .forgeflow.json
+        # 2. .forgeflow.json (with Date-Based Amnesia enforcement)
         config_file = root / ".forgeflow.json"
         config_data = {
             "forgeflow_version": "0.1.0",
@@ -825,9 +825,28 @@ class TemplateScaffolder:
                 "completed": "tasks/completed",
             },
         }
-        if not config_file.exists() or force:
+        needs_write = False
+        if not config_file.exists():
+            needs_write = True
+            created_files.append(".forgeflow.json")
+        else:
+            try:
+                existing = json.loads(config_file.read_text(encoding="utf-8"))
+                # Date-Based Amnesia: If not matching standard v0.1.0 or contains legacy fields, overwrite
+                if (
+                    force
+                    or existing.get("forgeflow_version") != "0.1.0"
+                    or "required_documents" in existing.get("governance", {})
+                    or "default_tier" in existing.get("governance", {})
+                ):
+                    needs_write = True
+                    updated_files.append(".forgeflow.json")
+            except Exception:
+                needs_write = True
+                updated_files.append(".forgeflow.json")
+
+        if needs_write:
             config_file.write_text(json.dumps(config_data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-            (updated_files if config_file.exists() and force else created_files).append(".forgeflow.json")
 
         # 3. .specify/memory/constitution.md
         specify_mem_dir = root / ".specify" / "memory"
@@ -894,6 +913,46 @@ class TemplateScaffolder:
         if not implement_cmd_file.exists() or force:
             implement_cmd_file.write_text(implement_cmd_content, encoding="utf-8")
             (updated_files if implement_cmd_file.exists() and force else created_files).append(".specify/templates/commands/implement.md")
+
+        # 6. Spec Kit bash scripts (6 scripts with 0o755 executable permissions)
+        scripts_dir = specify_dir / "scripts" / "bash"
+        scripts_dir.mkdir(parents=True, exist_ok=True)
+        created_dirs.append(".specify/scripts/bash")
+
+        speckit_scripts = [
+            "check-prerequisites.sh",
+            "common.sh",
+            "create-new-feature.sh",
+            "resolve-template.sh",
+            "setup-plan.sh",
+            "setup-tasks.sh",
+        ]
+        for script_name in speckit_scripts:
+            script_path = scripts_dir / script_name
+            content = cls.get_template_content(f"speckit/scripts/bash/{script_name}")
+            existed = script_path.exists()
+            if not existed or force:
+                script_path.write_text(content, encoding="utf-8")
+                os.chmod(script_path, 0o755)
+                (updated_files if existed else created_files).append(f".specify/scripts/bash/{script_name}")
+
+        # 7. Spec Kit templates (4 templates)
+        templates_dir = specify_dir / "templates"
+        templates_dir.mkdir(parents=True, exist_ok=True)
+
+        speckit_templates = [
+            "spec-template.md",
+            "plan-template.md",
+            "tasks-template.md",
+            "checklist-template.md",
+        ]
+        for tmpl_name in speckit_templates:
+            tmpl_path = templates_dir / tmpl_name
+            content = cls.get_template_content(f"speckit/templates/{tmpl_name}")
+            existed = tmpl_path.exists()
+            if not existed or force:
+                tmpl_path.write_text(content, encoding="utf-8")
+                (updated_files if existed else created_files).append(f".specify/templates/{tmpl_name}")
 
         # 6. .gitignore lock entries
         gitignore_file = root / ".gitignore"

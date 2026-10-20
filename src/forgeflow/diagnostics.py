@@ -3,6 +3,7 @@ Field Diagnostics, Structured Event Logging, and Doctor CLI (Zero-Dependency)
 """
 
 import json
+import os
 import platform
 import sys
 from dataclasses import asdict, dataclass, field
@@ -109,8 +110,6 @@ class DiagnosticAnalyzer:
         if events is None:
             events = self.logger.read_events()
         anomalies: List[DiagnosticAnomaly] = []
-        if not events:
-            return anomalies
 
         # 1. Repeated Failures Detection (No-progress loop)
         failure_streak = 0
@@ -195,6 +194,51 @@ class DiagnosticAnalyzer:
                         context={"command": cmd, "latency_ms": lat},
                     )
                 )
+
+        # 4. Spec Kit Hybrid Environment Prerequisite Validation
+        specify_dir = self.repo_root / ".specify"
+        if specify_dir.is_dir():
+            required_scripts = ["check-prerequisites.sh", "setup-plan.sh"]
+            for s in required_scripts:
+                s_path = specify_dir / "scripts" / "bash" / s
+                if not s_path.exists():
+                    anomalies.append(
+                        DiagnosticAnomaly(
+                            anomaly_type="MISSING_SPECKIT_PREREQUISITE",
+                            severity="CRITICAL",
+                            message=f"Spec Kit 필수 런타임 스크립트(.specify/scripts/bash/{s})가 누락되었습니다.",
+                            remedy="후속 /speckit-clarify 및 /speckit-plan의 exit 127 방지를 위해 'forgeflow init --speckit'을 실행하세요.",
+                            context={"missing_file": str(s_path.relative_to(self.repo_root))},
+                        )
+                    )
+                elif not os.access(s_path, os.X_OK):
+                    anomalies.append(
+                        DiagnosticAnomaly(
+                            anomaly_type="SPECKIT_SCRIPT_NOT_EXECUTABLE",
+                            severity="CRITICAL",
+                            message=f"Spec Kit 스크립트(.specify/scripts/bash/{s})에 실행 권한이 없습니다.",
+                            remedy=f"chmod +x {s_path} 를 실행하거나 'forgeflow init --speckit'을 재실행하세요.",
+                            context={"script_file": str(s_path.relative_to(self.repo_root))},
+                        )
+                    )
+
+        # 5. Legacy Configuration & Amnesia Policy Check
+        config_file = self.repo_root / ".forgeflow.json"
+        if config_file.is_file():
+            try:
+                cfg = json.loads(config_file.read_text(encoding="utf-8"))
+                if cfg.get("forgeflow_version") != "0.1.0" or "required_documents" in cfg.get("governance", {}):
+                    anomalies.append(
+                        DiagnosticAnomaly(
+                            anomaly_type="LEGACY_CONFIG_DETECTED",
+                            severity="WARNING",
+                            message="2026-10-20 이전의 구버전 거버넌스 설정이 감지되었습니다 (하위 호환 미지원).",
+                            remedy="'forgeflow init --speckit'을 실행하여 v0.1.0 표준 설정으로 교체하세요.",
+                            context={"current_version": cfg.get("forgeflow_version")},
+                        )
+                    )
+            except Exception:
+                pass
 
         return anomalies
 

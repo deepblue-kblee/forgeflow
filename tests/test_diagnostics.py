@@ -146,6 +146,22 @@ class TestDoctorCLI(unittest.TestCase):
         code = doctor_main(args=["--clear"], repo_root=self.root)
         self.assertEqual(code, 0)
 
+    def test_doctor_detects_missing_speckit_prerequisites(self):
+        # Create .specify dir without bash scripts
+        (self.root / ".specify").mkdir()
+        analyzer = DiagnosticAnalyzer(repo_root=self.root)
+        anomalies = analyzer.analyze()
+        types = [a.anomaly_type for a in anomalies]
+        self.assertIn("MISSING_SPECKIT_PREREQUISITE", types)
+
+    def test_doctor_detects_legacy_config_amnesia(self):
+        config_file = self.root / ".forgeflow.json"
+        config_file.write_text(json.dumps({"forgeflow_version": "0.22.1"}), encoding="utf-8")
+        analyzer = DiagnosticAnalyzer(repo_root=self.root)
+        anomalies = analyzer.analyze()
+        types = [a.anomaly_type for a in anomalies]
+        self.assertIn("LEGACY_CONFIG_DETECTED", types)
+
 
 if __name__ == "__main__":
     unittest.main()

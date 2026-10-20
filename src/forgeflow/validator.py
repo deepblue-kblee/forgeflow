@@ -355,7 +355,11 @@ class TierRules:
         return "Tier 2 (Default)"
 
     @staticmethod
-    def get_required_docs(tier: Optional[int]) -> List[str]:
+    def get_required_docs(tier: Optional[int], is_hybrid: bool = False, is_completed: bool = False) -> List[str]:
+        if is_hybrid:
+            if is_completed:
+                return ["spec.md", "GATE1_REVIEW.md", "plan.md", "tasks.md", "QA_SIGNOFF.md", "RELEASE_SIGNOFF.md"]
+            return ["spec.md", "GATE1_REVIEW.md", "plan.md", "tasks.md"]
         if tier == 1:
             return ["CHANGE_NOTE.md"]
         return ["PRD.md", "DESIGN.md", "QA_SIGNOFF.md", "COMPLETION_REPORT.md"]
@@ -704,24 +708,71 @@ class DocumentIntegrityValidator:
         rel_id = self.release_path.name
         res = ReleaseCheckResult(release_id=rel_id, path=str(self.release_path))
 
+        spec_file = self.release_path / "spec.md"
+        gate1_file = self.release_path / "GATE1_REVIEW.md"
         prd_file = self.release_path / "PRD.md"
         change_note_file = self.release_path / "CHANGE_NOTE.md"
-        if prd_file.exists():
+        is_hybrid = spec_file.exists() or gate1_file.exists() or (self.release_path.parent.parent / ".specify").is_dir()
+        is_completed = "completed" in str(self.release_path)
+
+        if is_hybrid:
+            if spec_file.exists():
+                try:
+                    res.tier = MarkdownSectionParser.extract_tier(spec_file.read_text(encoding="utf-8"))
+                except Exception:
+                    res.tier = None
+            if not res.tier and gate1_file.exists():
+                try:
+                    res.tier = MarkdownSectionParser.extract_tier(gate1_file.read_text(encoding="utf-8"))
+                except Exception:
+                    res.tier = None
+            if not res.tier:
+                res.tier = 2
+
+            if is_completed:
+                doc_map = {
+                    "spec": "spec.md",
+                    "gate1_review": "GATE1_REVIEW.md",
+                    "plan": "plan.md",
+                    "tasks": "tasks.md",
+                    "qa_signoff": "QA_SIGNOFF.md",
+                    "release_signoff": "RELEASE_SIGNOFF.md",
+                }
+            else:
+                doc_map = {
+                    "spec": "spec.md",
+                    "gate1_review": "GATE1_REVIEW.md",
+                    "plan": "plan.md",
+                    "tasks": "tasks.md",
+                }
+                if (self.release_path / "QA_SIGNOFF.md").exists():
+                    doc_map["qa_signoff"] = "QA_SIGNOFF.md"
+                if (self.release_path / "RELEASE_SIGNOFF.md").exists():
+                    doc_map["release_signoff"] = "RELEASE_SIGNOFF.md"
+        elif prd_file.exists():
             try:
                 res.tier = MarkdownSectionParser.extract_tier(prd_file.read_text(encoding="utf-8"))
             except Exception:
                 res.tier = 2
+            doc_map = {
+                "prd": "PRD.md",
+                "design": "DESIGN.md",
+                "qa_signoff": "QA_SIGNOFF.md",
+                "completion_report": "COMPLETION_REPORT.md",
+            }
         elif change_note_file.exists():
             try:
                 res.tier = MarkdownSectionParser.extract_tier(change_note_file.read_text(encoding="utf-8")) or 1
             except Exception:
                 res.tier = 1
+            doc_map = {"change_note": "CHANGE_NOTE.md"} if res.tier == 1 else {
+                "prd": "PRD.md",
+                "design": "DESIGN.md",
+                "qa_signoff": "QA_SIGNOFF.md",
+                "completion_report": "COMPLETION_REPORT.md",
+            }
         else:
             res.tier = 2
-
-        if res.tier == 1:
-            doc_map = {"change_note": "CHANGE_NOTE.md"}
-        else:
             doc_map = {
                 "prd": "PRD.md",
                 "design": "DESIGN.md",
@@ -767,7 +818,45 @@ class DocumentIntegrityValidator:
             status.errors.append(f"파일 읽기 실패 ({filename}): {e}")
             return status
 
-        if filename == "PRD.md":
+        if filename == "spec.md":
+            has_acceptance = "acceptance" in content.lower() or "인수 조건" in content
+            status.passed = has_acceptance and len(content.strip().splitlines()) >= 10
+            status.details = {"has_acceptance": has_acceptance, "lines": len(content.strip().splitlines())}
+            if not has_acceptance:
+                status.errors.append("spec.md에 인수 조건(Acceptance Criteria) 섹션이 누락되었습니다.")
+
+        elif filename == "GATE1_REVIEW.md":
+            has_approved = "APPROVED" in content.upper()
+            has_sha = "spec sha" in content.lower() or "spec_sha" in content.lower()
+            status.passed = has_approved and has_sha
+            status.details = {"has_approved": has_approved, "has_sha": has_sha}
+            if not has_approved:
+                status.errors.append("GATE1_REVIEW.md에 APPROVED 승인 명시가 없습니다.")
+            if not has_sha:
+                status.errors.append("GATE1_REVIEW.md에 Spec SHA256 불변 바인딩이 누락되었습니다.")
+
+        elif filename == "plan.md":
+            has_arch = "architecture" in content.lower() or "아키텍처" in content or "설계" in content
+            status.passed = has_arch and len(content.strip().splitlines()) >= 10
+            status.details = {"has_architecture": has_arch, "lines": len(content.strip().splitlines())}
+            if not has_arch:
+                status.errors.append("plan.md에 아키텍처 또는 기술 설계 섹션이 누락되었습니다.")
+
+        elif filename == "tasks.md":
+            has_tasks = "- [" in content
+            status.passed = has_tasks and len(content.strip().splitlines()) >= 5
+            status.details = {"has_tasks": has_tasks, "lines": len(content.strip().splitlines())}
+            if not has_tasks:
+                status.errors.append("tasks.md에 체크리스트 작업 목록(- [ ])이 누락되었습니다.")
+
+        elif filename == "RELEASE_SIGNOFF.md":
+            has_signoff = "APPROVED" in content.upper() or "sign-off" in content.lower() or "승인" in content
+            status.passed = has_signoff and len(content.strip().splitlines()) >= 5
+            status.details = {"has_signoff": has_signoff, "lines": len(content.strip().splitlines())}
+            if not has_signoff:
+                status.errors.append("RELEASE_SIGNOFF.md에 릴리즈 승인(Sign-Off) 증적이 누락되었습니다.")
+
+        elif filename == "PRD.md":
             res = MarkdownSectionParser.parse_prd(content)
             status.details = res
             status.passed = res["passed"]

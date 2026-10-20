@@ -23,5 +23,5 @@ where = ["src"]
 version = {attr = "forgeflow._version.__version__"}
 
 [tool.setuptools.package-data]
-"forgeflow.templates" = ["*.md", "spec/*.md"]
+"forgeflow.templates" = ["*.md", "spec/*.md", "speckit/scripts/bash/*", "speckit/templates/*"]
 "forgeflow.catalog_oracles" = ["*.json"]

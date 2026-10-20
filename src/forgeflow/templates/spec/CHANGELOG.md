@@ -7,6 +7,23 @@ ForgeFlow 프레임워크의 모든 주요 변경 사항은 이 문서에 기록
 
 ---
 
+## [0.1.1] - 2026-10-20
+
+### 🚀 Spec Kit 런타임 자산 번들링 및 Date-Based Amnesia 적용
+
+### Fixed
+- **Spec Kit 필수 런타임 bash 스크립트 번들링 (Exit 127 블로커 해결)**:
+  - `check-prerequisites.sh`, `common.sh`, `create-new-feature.sh`, `resolve-template.sh`, `setup-plan.sh`, `setup-tasks.sh` 등 6개 핵심 bash 스크립트를 번들링하여 스캐폴딩 시 자동 생성 및 `0o755` 실행 권한 부여.
+  - `spec-template.md`, `plan-template.md`, `tasks-template.md`, `checklist-template.md` 템플릿 번들링.
+- **거버넌스 엔진 하이브리드 산출물 정식 인식**:
+  - `validator.py` 및 `harness.py`에서 하이브리드 산출물(`spec.md`, `GATE1_REVIEW.md`, `plan.md`, `tasks.md`, `QA_SIGNOFF.md`, `RELEASE_SIGNOFF.md`)을 정식 거버넌스 문서로 인식하도록 개정.
+- **날짜 기반 과거 레거시 강제 폐기 (Date-Based Amnesia Policy)**:
+  - 2026-10-20 이전 생성된 구버전 설정 감지 시 하위 호환 마이그레이션을 거부하고 v0.1.0/v0.1.1 표준으로 강제 재정립.
+- **진단 및 헬스체크 (`forgeflow doctor`) 고도화**:
+  - Spec Kit 로컬 bash 스크립트 누락 및 실행 권한 누락 감지 룰 추가.
+
+---
+
 ## [0.1.0] - 2026-10-20
 
 ### 🌟 하이브리드 아키텍처 공식 첫 공개 릴리즈 (Initial Public Release)

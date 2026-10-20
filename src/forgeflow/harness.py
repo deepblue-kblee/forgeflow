@@ -435,10 +435,29 @@ class HarnessEngine:
         rel_id = release_path.name
         res = ReleaseCheckResult(release_id=rel_id, path=str(release_path))
 
-        # Tier 1 releases use CHANGE_NOTE.md; Tier 2/3 use PRD.md.
+        # Check if hybrid release package
+        spec_file = release_path / "spec.md"
+        gate1_file = release_path / "GATE1_REVIEW.md"
         prd_file = release_path / "PRD.md"
         change_note = release_path / "CHANGE_NOTE.md"
-        if change_note.exists() and not prd_file.exists():
+        is_hybrid = spec_file.exists() or gate1_file.exists() or (release_path.parent.parent / ".specify").is_dir()
+        is_completed = "completed" in str(release_path)
+
+        if is_hybrid:
+            if spec_file.exists():
+                try:
+                    res.tier = MarkdownSectionParser.extract_tier(spec_file.read_text(encoding="utf-8"))
+                except Exception:
+                    res.tier = None
+            if not res.tier and gate1_file.exists():
+                try:
+                    res.tier = MarkdownSectionParser.extract_tier(gate1_file.read_text(encoding="utf-8"))
+                except Exception:
+                    res.tier = None
+            if not res.tier:
+                res.tier = 2
+            required_docs = TierRules.get_required_docs(res.tier, is_hybrid=True, is_completed=is_completed)
+        elif change_note.exists() and not prd_file.exists():
             try:
                 res.tier = MarkdownSectionParser.extract_tier(
                     change_note.read_text(encoding="utf-8")
@@ -447,16 +466,17 @@ class HarnessEngine:
                 res.tier = None
             if res.tier != 1:
                 res.tier = 2
+            required_docs = ["CHANGE_NOTE.md"] if res.tier == 1 else TierRules.get_required_docs(res.tier)
         elif prd_file.exists():
             try:
                 content = prd_file.read_text(encoding="utf-8")
                 res.tier = MarkdownSectionParser.extract_tier(content)
             except Exception:
                 res.tier = 2
+            required_docs = TierRules.get_required_docs(res.tier)
         else:
             res.tier = 2
-
-        required_docs = ["CHANGE_NOTE.md"] if res.tier == 1 and change_note.exists() else TierRules.get_required_docs(res.tier)
+            required_docs = TierRules.get_required_docs(res.tier)
         doc_passed_count = 0
 
         for doc_name in required_docs:
