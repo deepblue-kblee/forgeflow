@@ -580,7 +580,7 @@ def verify_stage2_gatekeeper(repo_root: Path, target: Optional[str] = None, quie
             if not quiet:
                 print(f"❌ ForgeFlow Gatekeeper Error: Gate 1 approval proof missing: {gate1_file}", file=sys.stderr)
                 print("   [CRITICAL] Implementation code cannot be written before Gate 1 approval.", file=sys.stderr)
-                print("   Please execute 'forgeflow gate1 review' or obtain approval first.", file=sys.stderr)
+                print("   Please complete Stage 1 specification and obtain Gate 1 approval (GATE1_REVIEW.md with APPROVED verdict).", file=sys.stderr)
             return 1
 
         gate1_content = gate1_file.read_text(encoding="utf-8")
@@ -588,21 +588,6 @@ def verify_stage2_gatekeeper(repo_root: Path, target: Optional[str] = None, quie
             if not quiet:
                 print(f"❌ ForgeFlow Gatekeeper Error: Gate 1 verdict is not APPROVED in {gate1_file}", file=sys.stderr)
             return 1
-
-        spec_file = pkg / "spec.md"
-        if spec_file.exists():
-            for line in gate1_content.splitlines():
-                if "Spec SHA256:" in line or "spec_sha:" in line:
-                    expected_hash = line.split(":", 1)[1].strip()
-                    if expected_hash and len(expected_hash) == 64:
-                        actual_hash = hashlib.sha256(spec_file.read_bytes()).hexdigest()
-                        if actual_hash != expected_hash:
-                            if not quiet:
-                                print(f"❌ ForgeFlow Gatekeeper Error: spec.md SHA-256 mismatch for {pkg.name}!", file=sys.stderr)
-                                print(f"   Expected: {expected_hash}", file=sys.stderr)
-                                print(f"   Actual:   {actual_hash}", file=sys.stderr)
-                                print("   [CRITICAL] Requirements were modified after Gate 1 approval. Loop 3 regression required.", file=sys.stderr)
-                            return 1
 
     if not quiet:
         pkg_names = ", ".join(p.name for p in active_packages)

@@ -92,19 +92,55 @@ ForgeFlow 판올림 시 기존 프로젝트에서 지시합니다:
 
 ## 🌊 엔드투엔드 개발 워크플로우
 
-1. **Stage 1 (기획 & 명세 작성)**:
-   - `/speckit.specify "새로운 기능 요구사항"`
-   - `/speckit.clarify` (대화형 인터뷰를 통해 모호성 제거 및 Acceptance Criteria 확정)
-2. **Stage 2 (Gate 1 사전 심사)**:
-   - `forgeflow gate1 review`
-   - 리스크 티어링(Tier 1/2/3) 심사, `spec.md` SHA-256 해시 바인딩 및 `GATE1_REVIEW.md` 생성
-3. **Stage 3 (기술 설계 & 태스크 분해)**:
-   - `/speckit.plan` (아키텍처, 데이터 모델, 에러 처리 규격)
-   - `/speckit.tasks` (원자적 체크리스트 분해)
-4. **Stage 4 (격리 구현, 자가 치유 및 Gate 2 QA Sign-Off)**:
-   - `/speckit.implement` (진입 시 `.specify/extensions.yml`의 `forgeflow check --stage 2`가 자동 실행되어 Gate 1 미승인 시 물리적으로 코드 작성을 차단)
-   - Inner Loop (Loop 2): 테스트 실패 시 `분석 ➔ 수정 ➔ 테스트 성공 ➔ git commit` 자율 주행 (동일 결함 5회 한도)
-   - `forgeflow gate2 signoff`: 엄격 리뷰, 커밋 SHA 바인딩 및 `QA_SIGNOFF.md` 발행
-5. **Stage 5 (Gate 3 릴리즈 승인 및 패키지 밀봉)**:
-   - `forgeflow release`: `RELEASE_SIGNOFF.md` 생성 및 사용자 최종 승인 확인
-   - 패키지를 `tasks/completed/`로 원자적 이동하여 안전하게 밀봉
+Stage(작업 수행 단계)와 Gate(품질 및 명세 승인 관문)를 명확히 분리하여, 어느 시점에 어떤 승인이 이루어지는지 직관적으로 제어합니다.
+
+### 1. 표준 흐름도 (Canonical Workflow)
+
+```text
+[Stage 1: 기획 & 명세 작성]
+   - 도구: /speckit.specify ➔ /speckit.clarify
+   - 결과물: tasks/in-progress/<id>/spec.md
+       │
+       ▼
+[Gate 1: 명세 승인 (Spec Sign-Off)]  <--- ★ Gate 1 승인 관문
+   - 수행: 리스크 판정(Tier 1/2/3) 및 GATE1_REVIEW.md 발행
+   - 승인 주체: Tier 1=AI 자체 승인 / Tier 2=독립 에이전트 검토 / Tier 3=3대 패널 심사 후 사용자 대화 승인
+   - 완료 상태: GATE1_REVIEW.md 내 "Gate 1 Verdict: APPROVED"
+   - 잠금 해제: Stage 2 기술 설계 및 Stage 3 구현 착수 허용
+       │
+       ▼
+[Stage 2: 기술 설계 & 태스크 분해]
+   - 도구: /speckit.plan (plan.md) ➔ /speckit.tasks (tasks.md)
+       │
+       ▼
+[Stage 3: 격리 구현 & 자가 치유]
+   - 도구: /speckit.implement (TDD 순차 구현)
+   - 사전 가드: before_implement 훅이 forgeflow check --stage 2 실행 ➔ Gate 1 APPROVED 증적 확인
+   - Inner Loop (Loop 2): 테스트 실패 시 분석 ➔ 수정 ➔ 테스트 성공 ➔ git commit 자율 주행 (동일 결함 5회 한도)
+       │
+       ▼
+[Gate 2: QA 품질 승인 (QA Sign-Off)]  <--- ★ Gate 2 승인 관문
+   - 수행: forgeflow review --strict (정적 분석) + 전체 테스트 100% Pass + QA 커밋 결속
+   - 생성물: QA_SIGNOFF.md 발행
+   - 승인 주체: QA 심사관 에이전트 (Tier 3는 3대 패널 검증)
+   - 완료 상태: QA_SIGNOFF.md 내 "Gate 2 Verdict: APPROVED"
+   - 잠금 해제: 최종 릴리즈 승격 준비 허용
+       │
+       ▼
+[Gate 3: 릴리즈 승인 및 패키지 밀봉 (Release Sign-Off)]  <--- ★ Gate 3 승인 관문
+   - 수행: RELEASE_SIGNOFF.md 및 COMPLETION_REPORT.md 발행
+   - 승인 주체: 최종 사용자 (User Go/No-Go 구두 승인)
+   - 완료 상태: RELEASE_SIGNOFF.md 내 "Gate 3 Verdict: APPROVED"
+   - 패키지 밀봉: tasks/in-progress/<id> ➔ tasks/completed/<id> 원자적 이동 및 브랜치 정리 (Fast-Path Close)
+```
+
+### 2. 게이트(Gate) 요약 매트릭스
+
+| 항목 | Gate 1 (명세 승인 / Spec Sign-Off) | Gate 2 (QA 품질 승인 / QA Sign-Off) | Gate 3 (릴리즈 승인 / Release Sign-Off) |
+| :--- | :--- | :--- | :--- |
+| **Before (전제 조건)** | Stage 1 완료 (`spec.md` 작성 및 모호성 해소) | Stage 3 구현 완료, 전체 테스트 통과, 작업 커밋 생성 | Gate 2 `APPROVED` 완료, 릴리즈 커밋 생성 |
+| **Run (실제 CLI 명령)** | `forgeflow check --stage 2` (또는 implement 진입 시 훅 자동 검증) | `forgeflow review --strict` 및 `forgeflow lifecycle package-review <qa-sha>` | `forgeflow lifecycle seal <rc-sha>` 및 `forgeflow lifecycle complete <id>` |
+| **Creates (생성 산출물)** | `tasks/in-progress/<id>/GATE1_REVIEW.md` | `tasks/in-progress/<id>/QA_SIGNOFF.md` | `RELEASE_SIGNOFF.md`, `COMPLETION_REPORT.md` |
+| **User action (승인 방식)** | Tier 1: 자동 통과 / Tier 2: 결과 확인 / Tier 3: 사용자 대화창 구두 승인 ("승인합니다") | `QA_SIGNOFF.md`의 `APPROVED` 및 커밋 SHA 확인 | 사용자 Go/No-Go 최종 배포 구두 승인 |
+| **Done when (완료 조건)** | `GATE1_REVIEW.md` 내 `Gate 1 Verdict: APPROVED` 기록 완료 | 단위/통합 테스트 0 실패, 린트 0 Warning, QA-SHA 결속 | 릴리즈 산출물 완성 및 `tasks/completed/` 원자적 이동 완료 |
+| **Unlocks (허용 작업)** | Stage 2 기술 설계 (`plan.md`, `tasks.md`) 및 작업 브랜치 생성 | Gate 3 최종 배포 승격 준비 | main 브랜치 머지 및 피쳐 브랜치 정리 (Fast-Path Close) |

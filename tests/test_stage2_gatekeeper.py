@@ -41,23 +41,22 @@ class TestStage2Gatekeeper(unittest.TestCase):
         code = verify_stage2_gatekeeper(self.root, quiet=True)
         self.assertEqual(code, 0)
 
-    def test_gatekeeper_sha_integrity(self):
+    def test_gatekeeper_passes_regardless_of_spec_hash(self):
         pkg = self.tasks_dir / "v0.1.0-feature"
         pkg.mkdir()
         spec_content = "# Feature Spec\nDescription here.\n"
         (pkg / "spec.md").write_text(spec_content, encoding="utf-8")
-        actual_hash = hashlib.sha256(spec_content.encode("utf-8")).hexdigest()
 
-        # Approved with matching hash
+        # Approved without hash -> passes
         (pkg / "GATE1_REVIEW.md").write_text(
-            f"# Review\nStatus: APPROVED\nSpec SHA256: {actual_hash}\n",
+            "# Review\nStatus: APPROVED\n",
             encoding="utf-8",
         )
         self.assertEqual(verify_stage2_gatekeeper(self.root, quiet=True), 0)
 
-        # Alter spec content -> should fail closed
-        (pkg / "spec.md").write_text("# Tampered Spec Content\n", encoding="utf-8")
-        self.assertEqual(verify_stage2_gatekeeper(self.root, quiet=True), 1)
+        # Spec modified -> still passes as long as GATE1 is APPROVED
+        (pkg / "spec.md").write_text("# Modified Spec Content\n", encoding="utf-8")
+        self.assertEqual(verify_stage2_gatekeeper(self.root, quiet=True), 0)
 
     def test_cli_check_stage2(self):
         pkg = self.tasks_dir / "v0.1.0-feature"

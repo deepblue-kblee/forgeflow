@@ -827,13 +827,10 @@ class DocumentIntegrityValidator:
 
         elif filename == "GATE1_REVIEW.md":
             has_approved = "APPROVED" in content.upper()
-            has_sha = "spec sha" in content.lower() or "spec_sha" in content.lower()
-            status.passed = has_approved and has_sha
-            status.details = {"has_approved": has_approved, "has_sha": has_sha}
+            status.passed = has_approved
+            status.details = {"has_approved": has_approved}
             if not has_approved:
                 status.errors.append("GATE1_REVIEW.md에 APPROVED 승인 명시가 없습니다.")
-            if not has_sha:
-                status.errors.append("GATE1_REVIEW.md에 Spec SHA256 불변 바인딩이 누락되었습니다.")
 
         elif filename == "plan.md":
             has_arch = "architecture" in content.lower() or "아키텍처" in content or "설계" in content

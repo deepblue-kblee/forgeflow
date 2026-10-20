@@ -11,21 +11,23 @@ ForgeFlow는 실행과 통제를 분리하는 이중 엔진 모델을 채택한�
 2. **거버넌스 엔진 (Supervisor) — ForgeFlow**: 릴리즈 패키지(`tasks/in-progress/<release-id>`)의 상태 기계 관리, 게이트 통과 심사(Gate 1/2/3), 증적 바인딩 및 물리적 코드 작성 차단(Fail-Closed Gatekeeper).
 
 ```text
-[Stage 1: 기획/명세]       /speckit.specify ➔ /speckit.clarify (spec.md 생성)
+[Stage 1: 기획 & 명세]       /speckit.specify ➔ /speckit.clarify (spec.md 생성)
         │
         ▼
-[Stage 2: Gate 1 사전 심사] forgeflow gate1 review (티어링, 해시 바인딩, GATE1_REVIEW.md 승인)
+[Gate 1: 명세 승인]          GATE1_REVIEW.md (티어링 판정, 승인 서명 APPROVED)
         │
         ├─► [Fail-Closed] before_implement 훅: Gate 1 미승인 시 코드 작성 물리적 차단 (exit 1)
         ▼
-[Stage 3: 기술 설계/분해]   /speckit.plan (plan.md) ➔ /speckit.tasks (tasks.md)
+[Stage 2: 기술 설계 & 분해]   /speckit.plan (plan.md) ➔ /speckit.tasks (tasks.md)
         │
         ▼
-[Stage 4: 격리 구현/치유]   /speckit.implement (TDD 순차 구현)
+[Stage 3: 격리 구현 & 치유]   /speckit.implement (TDD 순차 구현)
         │                   └── [Loop 2 자가 치유] 테스트 실패 시 자율 수정-검증-커밋 (최대 5회)
-        │                   └── [Gate 2 QA Sign-Off] forgeflow gate2 signoff (QA_SIGNOFF.md)
         ▼
-[Stage 5: Gate 3 릴리즈]   forgeflow release (RELEASE_SIGNOFF.md, COMPLETION_REPORT.md)
+[Gate 2: QA 품질 승인]       QA_SIGNOFF.md (review --strict 통과, 100% 테스트 통과, QA-SHA 결속)
+        │
+        ▼
+[Gate 3: 릴리즈 승인 & 밀봉] RELEASE_SIGNOFF.md, COMPLETION_REPORT.md
                             └── 패키지 밀봉: tasks/in-progress/ ➔ tasks/completed/ 이동
 ```
 
@@ -43,36 +45,36 @@ ForgeFlow는 실행과 통제를 분리하는 이중 엔진 모델을 채택한�
 | :--- | :--- | :--- | :--- |
 | **Tier 1 (Minor)** | 동작 불변 문구, 포맷팅, 일반 문서 수정, 또는 인터페이스/보안 영향이 없는 단일 모듈의 국소 버그 수정 | `spec.md`, `GATE1_REVIEW.md` (Self-Review PASS, 계획된 변경 경로 명시) | 전체 테스트 통과, 계획된 경로와 실제 변경 경로 일치 인증 |
 | **Tier 2 (Standard)** | 새로운 기능 추가, 복수 모듈 수정, 단위/통합 테스트 추가 및 일반적인 리팩토링 | `spec.md`, `GATE1_REVIEW.md` (독립 시니어 리뷰어 1인 검토 및 승인) | 100% 테스트 통과, 정적 분석 오류 0건, 커밋 SHA 바인딩 |
-| **Tier 3 (Critical)** | 인증/인가, 보안, 암호화, 데이터베이스 마이그레이션, 공개 CLI/API 변경, 코어 거버넌스 규칙 수정 | `spec.md`, `GATE1_REVIEW.md` (Security, Reliability, Maintainability 3대 독립 패널 승인) | 3대 패널 전원 코드/테스트 승인, 커밋 SHA 불변 바인딩, 비파괴 프로브 검증 |
+| **Tier 3 (Critical)** | 인증/인가, 보안, 암호화, 데이터베이스 마이그레이션, 공개 CLI/API 변경, 코어 거버넌스 규칙 수정 | `spec.md`, `GATE1_REVIEW.md` (Security, Reliability, Maintainability 3대 독립 패널 승인 + 사용자 승인) | 3대 패널 전원 코드/테스트 승인, 커밋 SHA 불변 바인딩, 비파괴 프로브 검증 |
 
 ---
 
 ## 3. 게이트 정의 및 통과 기준 (Gate Criteria)
 
-### Gate 1: 사전 기획/명세 승인 게이트 (Pre-Implementation Gate)
-- **위치**: Stage 2 종료 시점 (Stage 3 기술 설계 및 Stage 4 구현 착수 직전)
+### Gate 1: 명세 승인 게이트 (Specification Sign-Off Gate)
+- **위치**: Stage 1(기획/명세) 종료 시점 (Stage 2 기술 설계 및 Stage 3 구현 착수 직전)
 - **통과 요건**:
   1. `tasks/in-progress/<release-id>/spec.md` 명세서 작성 완료.
   2. 요구사항별 검증 가능한 인수 조건(Acceptance Criteria) 명시.
   3. 리스크 등급(Tier 1/2/3) 판정 및 심사 완료:
      - Tier 1: 셀프 리뷰 체크리스트 완료 및 계획된 경로 확정.
      - Tier 2: 독립 시니어 심사관 1인 자문 및 설계 보완.
-     - Tier 3: 보안, 안정성, 유지보수성 3대 관점의 독립 패널 병렬 심사 및 블로커(Blocker) 결함 0건 입증.
-  4. `spec.md`의 SHA-256 해시를 산출하여 `GATE1_REVIEW.md`에 불변 바인딩 및 최종 `PASS` 판정 기록.
+     - Tier 3: 보안, 안정성, 유지보수성 3대 관점의 독립 패널 병렬 심사 및 사용자 구두 승인.
+  4. `GATE1_REVIEW.md`에 `Gate 1 Verdict: APPROVED` 최종 판정 기록.
 - **Fail-Closed Gatekeeper 강제 훅**:
-  - Spec Kit의 `before_implement` 훅(`forgeflow check --stage 2`)이 실행되어 `GATE1_REVIEW.md` 부재 또는 `spec.md` 해시 변조 시 물리적으로 코드 작성을 사전 차단(`exit 1`)한다.
+  - Spec Kit의 `before_implement` 훅(`forgeflow check --stage 2`)이 실행되어 `GATE1_REVIEW.md` 부재 또는 미승인 시 물리적으로 코드 작성을 사전 차단(`exit 1`)한다.
 
-### Gate 2: QA Sign-Off 게이트 (Quality Assurance Gate)
-- **위치**: Stage 4 구현 완료 후, 릴리즈 승격 전
+### Gate 2: QA 품질 승인 게이트 (QA Sign-Off Gate)
+- **위치**: Stage 3 구현 완료 후, Gate 3 릴리즈 승격 전
 - **통과 요건**:
   1. `spec.md`에 명시된 모든 인수 조건 충족.
   2. 단위 및 통합 테스트 100% Pass (Fail = 0, Error = 0).
-  3. Linter 및 정적 분석(`forgeflow review`) 오류 0건 (인지 복잡도 ≤ 15, 함수 LOC ≤ 50).
+  3. Linter 및 정적 분석(`forgeflow review --strict`) 오류 0건 (인지 복잡도 ≤ 15, 함수 LOC ≤ 50).
   4. 테스트가 통과된 최종 커밋 SHA를 `QA_SIGNOFF.md`에 결속 및 서명 발급.
   5. Tier 3 변경의 경우 격리 환경에서의 비파괴 런타임 프로브(Non-mutating probe) 전달성 검증 완료.
 
-### Gate 3: Release Sign-Off 및 패키지 밀봉 게이트 (Release & Package Seal Gate)
-- **위치**: Stage 5 최종 배포 및 운영 승격 시점
+### Gate 3: 릴리즈 승인 및 패키지 밀봉 게이트 (Release & Package Seal Gate)
+- **위치**: 최종 배포 및 운영 승격 시점 (Stage 3 및 Gate 2 통과 후)
 - **통과 요건**:
   1. `RELEASE_SIGNOFF.md` 및 `COMPLETION_REPORT.md` 작성.
   2. 사용자 최종 승인(Go/No-Go) 확인.

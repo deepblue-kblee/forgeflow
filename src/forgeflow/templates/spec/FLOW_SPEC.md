@@ -134,32 +134,37 @@ Spec Kit은 `specify preset add <preset-name>` 및 로컬 `.specify/templates/co
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
-│ Stage 1: 기획 & 명확화                                                                 │
-│   /speckit.specify (의도 입력 및 Triage) ──► /speckit.clarify (대화형 질문/답변 루프)   │
+│ Stage 1: 기획 & 명세 작성                                                             │
+│   /speckit.specify (의도 입력 및 Triage) ──► /speckit.clarify (대화형 질문/답변)       │
+│   ──► tasks/in-progress/<id>/spec.md 생성                                              │
 └────────────────────────────────────────┬───────────────────────────────────────────────┘
                                          ▼
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
-│ Stage 2: Gate 1 사전 심사 (Harness Control)                                            │
-│   forgeflow gate1 review ──► Risk Tiering (Tier 1/2/3) ──► GATE1_REVIEW.md 생성         │
-│   * 미승인 시 이후 단계(Stage 4) 물리적 실행 차단                                       │
+│ Gate 1: 명세 승인 (Spec Sign-Off) ★ Gate 1 승인 관문                                    │
+│   Risk Tiering (Tier 1/2/3) ──► GATE1_REVIEW.md 발행 및 "APPROVED" 확정                │
+│   * 미승인 시 이후 구현 단계 물리적 실행 차단 (Fail-Closed)                            │
 └────────────────────────────────────────┬───────────────────────────────────────────────┘
                                          ▼
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
-│ Stage 3: 기술 설계 & 태스크 분해                                                       │
+│ Stage 2: 기술 설계 & 태스크 분해                                                       │
 │   /speckit.plan (아키텍처/데이터모델) ──► /speckit.tasks (원자적 체크리스트 도출)       │
 └────────────────────────────────────────┬───────────────────────────────────────────────┘
                                          ▼
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
-│ Stage 4: 격리 구현 & Gate 2 QA Sign-off                                                │
+│ Stage 3: 격리 구현 & 자가 치유 루프                                                    │
 │   /speckit.implement ──► [Pre-Hook: Gate 1 검증] ──► 순차 구현 및 TDD                  │
 │     ├── Inner Loop (Loop 2): 테스트 실패 시 수정-테스트-커밋 자율 완수 (최대 5회)       │
 │     └── Outer Loop (Loop 3): 스펙 모순 발생 시 spec.md 수정 및 Gate 1 재승인 회귀      │
-│   forgeflow gate2 signoff ──► Strict Review & QE 픽스처 검증 ──► QA_SIGNOFF.md 승인    │
 └────────────────────────────────────────┬───────────────────────────────────────────────┘
                                          ▼
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
-│ Stage 5: Gate 3 릴리즈 승인 & 패키지 밀봉                                              │
-│   forgeflow release ──► RELEASE_SIGNOFF.md ──► Package Seal (tasks/completed/ 전이)    │
+│ Gate 2: QA 품질 승인 (QA Sign-Off) ★ Gate 2 승인 관문                                   │
+│   forgeflow review --strict ──► 100% Tests Pass ──► QA_SIGNOFF.md 발행 및 APPROVED     │
+└────────────────────────────────────────┬───────────────────────────────────────────────┘
+                                         ▼
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│ Gate 3: 릴리즈 승인 & 패키지 밀봉 (Release Sign-Off) ★ Gate 3 승인 관문                 │
+│   사용자 Go/No-Go 최종 승인 ──► RELEASE_SIGNOFF.md ──► tasks/completed/ 패키지 밀봉   │
 └────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -173,20 +178,19 @@ Spec Kit은 `specify preset add <preset-name>` 및 로컬 `.specify/templates/co
    - 사용자의 결정은 `spec.md` 파일의 `## Clarifications` 섹션에 불변 기록으로 저장되며, 본문 요구사항이 동기화된다.
 3. **단계 종료 조건**:
    - `spec.md`에 모호한 지점이 없으며, Acceptance Criteria가 명확히 기술된 상태.
-   - 네비게이터가 "다음 명령: `forgeflow gate1 review`"를 안내한다.
+   - Gate 1 승인 단계로 전이한다.
 
-### 3.2 Stage 2: Gate 1 사전 심사 (Pre-Implementation Gate)
-1. **심사 명령 실행 (`forgeflow gate1 review`)**:
-   - ForgeFlow 엔진은 `spec.md`의 변경 범위와 아키텍처 영향을 평가하여 리스크 티어를 동적 분류한다:
-     - **Tier 1 (Minor)**: 인터페이스 변경 없는 국소 버그 수정.
-     - **Tier 2 (Standard)**: 일반 신규 기능. 시니어 1인 정밀 심사.
-     - **Tier 3 (Core/Arch)**: 보안, 인증, 데이터 모델, 거버넌스 변경. 3인 패널(보안, 안정성, 유지보수성) 병렬 심사 필수.
-2. **승인 산출물 바인딩**:
-   - 심사 통과 시 `tasks/in-progress/<release-id>/GATE1_REVIEW.md`가 생성된다.
-   - 해당 시점의 `spec.md` 내용 해시(SHA-256)가 `GATE1_REVIEW.md`에 기록되어 불변성을 보장한다.
-   - 격리 작업 브랜치(`feat/<release-id>`) 생성이 허용된다.
+### 3.2 Gate 1: 명세 승인 (Specification Sign-Off)
+1. **심사 및 승인 절차**:
+   - ForgeFlow 엔진 및 에이전트는 `spec.md`의 변경 범위와 아키텍처 영향을 평가하여 리스크 티어를 동적 분류한다:
+     - **Tier 1 (Minor)**: 인터페이스 변경 없는 국소 버그 수정/문서. AI 자체 승인(Self-Review).
+     - **Tier 2 (Standard)**: 일반 신규 기능. 독립 시니어 리뷰어 1인 정밀 심사.
+     - **Tier 3 (Core/Arch)**: 보안, 인증, 데이터 모델, 거버넌스 제어 평면 변경. 3인 독립 패널(보안, 안정성, 유지보수성) 병렬 심사 및 사용자 구두 승인 필수.
+2. **승인 산출물 (`GATE1_REVIEW.md`) 확정**:
+   - 심사 통과 시 `tasks/in-progress/<release-id>/GATE1_REVIEW.md`에 `Gate 1 Verdict: APPROVED`가 확정 기록된다.
+   - 격리 작업 브랜치(`feat/<release-id>`) 생성 및 후속 기술 설계/구현 착수가 잠금 해제된다.
 
-### 3.3 Stage 3: 기술 설계 및 태스크 분해 (Architecture & Breakdown)
+### 3.3 Stage 2: 기술 설계 및 태스크 분해 (Architecture & Breakdown)
 1. **기술 아키텍처 수립 (`/speckit.plan`)**:
    - 승인된 `spec.md`를 바탕으로 모듈 인터페이스, 에러 처리 규격, 데이터 스키마를 기술한 `plan.md`를 생성한다.
 2. **원자적 태스크 분해 (`/speckit.tasks`)**:
@@ -195,10 +199,10 @@ Spec Kit은 `specify preset add <preset-name>` 및 로컬 `.specify/templates/co
 3. **단계 종료 조건**:
    - `tasks.md`의 의존성 정렬 완료 및 네비게이터의 "다음 명령: `/speckit.implement`" 출력.
 
-### 3.4 Stage 4: 격리 구현, 자가 치유 루프 및 Gate 2 QA Sign-off
+### 3.4 Stage 3: 격리 구현 및 자가 치유 루프 (Isolated Implementation & Self-Healing)
 1. **사전 검사(Pre-Execution Checks)에 의한 게이트 가로채기**:
    - `/speckit.implement`가 호출되면 `.specify/extensions.yml`의 `hooks.before_implement`가 트리거된다.
-   - `forgeflow check --stage 2`가 실행되어 `GATE1_REVIEW.md`의 존재 및 해시 일치 여부를 검증한다.
+   - `forgeflow check --stage 2`가 실행되어 `GATE1_REVIEW.md`의 존재 및 `APPROVED` 상태를 검증한다.
    - 미통과 시 에이전트 도구는 `exit 1`과 함께 물리적으로 정지하며, 코드를 단 한 줄도 작성하지 않는다.
 2. **이중 루프 제어 규범 (Dual-Loop Governance)**:
    - **Inner Loop (Loop 2: 수정-테스트 원자적 루프)**:
@@ -209,16 +213,20 @@ Spec Kit은 `specify preset add <preset-name>` 및 로컬 `.specify/templates/co
    - **Outer Loop (Loop 3: 아키텍처/스펙 회귀 프로토콜)**:
      - 구현 중 인터페이스 모순이나 요구사항 결함이 발견된 경우, 에이전트가 임의로 `spec.md`를 하향 축소(Spec Downgrade)하는 행위를 금지한다.
      - 에이전트는 "스펙 회귀(Loop 3 Regression)"를 공식 선언하고 기획 단계로 돌아가 `spec.md`를 수정한 후, Gate 1 재승인을 받아야만 구현을 재개할 수 있다.
-3. **Gate 2 QA Sign-off 승인 (`forgeflow gate2 signoff`)**:
-   - 모든 태스크 완료 후 QA 심사를 호출한다.
-   - `forgeflow review --strict`: 함수 복잡도, 중첩, 린트 Warning 0건을 확인한다.
-   - 골든 픽스처 매트릭스(QE-01~20) 및 샌드박스 실행 증적을 수집한다.
-   - 검증된 최종 커밋 SHA를 바인딩하여 `QA_SIGNOFF.md`를 발행하고 `PACKAGE_REVIEW_PENDING` 상태로 전이한다.
 
-### 3.5 Stage 5: Gate 3 릴리즈 승인 및 패키지 밀봉 (Release & Seal)
-1. **릴리즈 최종 승인 (`forgeflow release`)**:
+### 3.5 Gate 2: QA 품질 승인 (QA Sign-off)
+1. **품질 검증 통과 요건**:
+   - 모든 태스크 완료 후 QA 심사를 수행한다.
+   - `forgeflow review --strict`: 함수 복잡도, 중첩, 린트 Warning 0건을 확인한다.
+   - 단위 및 통합 테스트 100% Pass (Fail=0, Error=0).
+2. **QA 승인 증적 발행**:
+   - 검증된 최종 커밋 SHA를 바인딩하여 `QA_SIGNOFF.md`를 발행하고 `Gate 2 Verdict: APPROVED`를 기록한다.
+   - `PACKAGE_REVIEW_PENDING` 상태로 전이되어 최종 릴리즈 승격 준비가 완료된다.
+
+### 3.6 Gate 3: 릴리즈 승인 및 패키지 밀봉 (Release & Seal)
+1. **릴리즈 최종 승인**:
    - `QA_SIGNOFF.md`의 유효성을 최종 확인하고 `RELEASE_SIGNOFF.md` 및 `COMPLETION_REPORT.md`를 생성한다.
-   - 메인 브랜치 머지를 승인한다.
+   - 사용자 Go/No-Go 구두 승인을 확인하여 메인 브랜치 머지를 확정한다.
 2. **패키지 밀봉(Package Seal) 및 정리**:
    - `tasks/in-progress/<release-id>/` 디렉터리를 `tasks/completed/<release-id>/`로 원자적 이동한다.
    - 밀봉된 과거 릴리즈는 불변 감사 기록으로 격리되며, 향후 에이전트의 실행 지침으로 인용되지 않는다.

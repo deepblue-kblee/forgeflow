@@ -21,21 +21,21 @@
 
 ```text
 Stage 1: 기획 & 명세 (/speckit.specify ➔ /speckit.clarify ➔ spec.md 작성)
-  └── Stage 2: Gate 1 사전 심사 (Tier 1/2/3 리스크 기반 승인 ➔ GATE1_REVIEW.md 생성 & spec.md 해시 바인딩)
-        └── Stage 3: 기술 설계 & 태스크 분해 (/speckit.plan ➔ plan.md, /speckit.tasks ➔ tasks.md)
-              └── Stage 4: 격리 구현 & 자가 치유 루프 (Loop 2: 수정-테스트 5회 자율 치유 / Loop 3: 스펙 회귀)
-                    └── Stage 5: Gate 2 QA Sign-Off (QA_SIGNOFF.md) ➔ Gate 3 Release Sign-Off (RELEASE_SIGNOFF.md) ➔ Package Seal (tasks/completed/ 이동)
+  └── Gate 1: 명세 승인 (Tier 1/2/3 리스크 판정 및 GATE1_REVIEW.md "APPROVED" 승인)
+        └── Stage 2: 기술 설계 & 태스크 분해 (/speckit.plan ➔ plan.md, /speckit.tasks ➔ tasks.md)
+              └── Stage 3: 격리 구현 & 자가 치유 루프 (Loop 2: 수정-테스트 5회 자율 치유 / Loop 3: 스펙 회귀)
+                    └── Gate 2: QA 품질 승인 (QA_SIGNOFF.md) ➔ Gate 3: 릴리즈 승인 및 밀봉 (RELEASE_SIGNOFF.md ➔ tasks/completed/ 이동)
 ```
 
 1. **위험도 기반 동적 티어링 (Dynamic Risk Tiering)**:
    - **Tier 1 (Minor)**: 동작 불변 문구·formatting·일반 documentation 또는 인터페이스 변경이 없는 단일 모듈의 재현 가능한 국소 bugfix에 한정한다. `spec.md`, `GATE1_REVIEW.md`에는 계획된 변경 경로(planned paths)를 명시하고 Self-Review PASS를 기록한다. Gate 2 QA Sign-Off 시 전체 테스트 통과 및 계획된 경로와 실제 변경 경로 일치를 검증한다.
    - **Tier 2 (Standard Features)**: 일반 신규 기능 및 복수 모듈 개선. 독립 시니어 심사관 1인 정밀 검토 및 승인.
-   - **Tier 3 (Core/Architecture/Breaking Changes)**: 3인 독립 패널(보안, 안정성, 유지보수성) 병렬 심사 및 Gate 1/Gate 2 승인. 보안, 권한, secrets, dependency, configuration, external API, data operation, CI/CD, core interface, 또는 governance control-plane 변경은 규모와 무관하게 Tier 3이다.
+   - **Tier 3 (Core/Architecture/Breaking Changes)**: 3인 독립 패널(보안, 안정성, 유지보수성) 병렬 심사 및 사용자 구두 승인. 보안, 권한, secrets, dependency, configuration, external API, data operation, CI/CD, core interface, 또는 governance control-plane 변경은 규모와 무관하게 Tier 3이다.
 2. **사전 승인 전 구현 금지 (No Code Before Gate 1 Pass)**:
-   - `tasks/in-progress/<release-id>/GATE1_REVIEW.md`의 공식 승인(APPROVED) 증적이 존재하고 `spec.md`의 해시가 일치하기 전에는 `src/**`에 구현 코드를 작성하거나 수정할 수 없다. Spec Kit의 `before_implement` 훅(`forgeflow check --stage 2`)이 이를 물리적으로 fail-closed 차단한다.
+   - `tasks/in-progress/<release-id>/GATE1_REVIEW.md`의 공식 승인(APPROVED) 증적이 존재하기 전에는 `src/**`에 구현 코드를 작성하거나 수정할 수 없다. Spec Kit의 `before_implement` 훅(`forgeflow check --stage 2`)이 이를 물리적으로 fail-closed 차단한다.
 3. **하이브리드 거버넌스 필수 산출물 체계**:
    - 실행 엔진 산출물 (Spec Kit): `spec.md` (기능 요구사항), `plan.md` (기술 아키텍처/데이터모델), `tasks.md` (원자적 TDD 체크리스트)
-   - 거버넌스 엔진 산출물 (ForgeFlow): `GATE1_REVIEW.md` (Gate 1 사전 심사), `QA_SIGNOFF.md` (Gate 2 QA 승인), `RELEASE_SIGNOFF.md` (Gate 3 릴리즈 승인 및 밀봉)
+   - 거버넌스 엔진 산출물 (ForgeFlow): `GATE1_REVIEW.md` (Gate 1 명세 승인), `QA_SIGNOFF.md` (Gate 2 QA 승인), `RELEASE_SIGNOFF.md` (Gate 3 릴리즈 승인 및 밀봉)
 4. **과거 버전 및 흔적 강제 폐기 규범 (Date-Based Amnesia Policy)**:
    - **기준일**: **2026-10-20** (ForgeFlow v0.1.0 공식 릴리즈일).
    - 2026-10-20 이전에 생성된 모든 레거시 설정(`.forgeflow.json`), 메모리, 과거 릴리즈 산출물, 구버전 spec/PRD/DESIGN 등은 일체 폐기한다.
