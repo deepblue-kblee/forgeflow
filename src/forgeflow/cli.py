@@ -22,7 +22,6 @@ from .scaffold import TemplateScaffolder
 from .scanner import HierarchicalRootScanner, ReleaseScanner
 from .validator import TierRules
 from .validator import SelfGovernanceValidator
-from .update import apply as apply_update, inspect as inspect_update
 
 
 def parse_harness_args(args=None):
@@ -356,10 +355,6 @@ def parse_forgeflow_args(args=None):
         help="Remote repository base URL",
     )
 
-    update_parser = subparsers.add_parser("update", help="Preview a local governance bundle update")
-    update_parser.add_argument("--path", default=None, help="Target project directory")
-    update_parser.add_argument("--apply", action="store_true", help="Reserved: explicit update apply")
-    update_parser.add_argument("--json", action="store_true", help="Output JSON result")
     # Command: migrate
     migrate_parser = subparsers.add_parser("migrate", help="Migrate legacy release structures to tasks architecture")
     migrate_parser.add_argument("--tasks", action="store_true", help="Migrate legacy docs/releases/ to root tasks/completed/")
@@ -749,13 +744,6 @@ def main(args=None):
 
     if parsed.command == "lifecycle":
         _run_lifecycle_command(parsed)
-
-    if parsed.command == "update":
-        target = Path(parsed.path) if parsed.path else Path.cwd()
-        result = apply_update(target) if parsed.apply else inspect_update(target)
-        use_json = getattr(parsed, "json", False)
-        print(json.dumps(result, ensure_ascii=False, sort_keys=True) if use_json else json.dumps(result, ensure_ascii=False, indent=2))
-        sys.exit(0 if result["status"] in {"up_to_date", "upgrade_available"} else 1)
 
     if parsed.command == "check":
         if getattr(parsed, "stage", None) == 2:

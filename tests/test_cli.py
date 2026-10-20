@@ -206,27 +206,16 @@ class TestCliIntegration(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertIn("strict_audit_not_run", payload["unmet_conditions"])
 
-    def test_forgeflow_update_cli_does_not_raise_attribute_error(self):
+    def test_forgeflow_update_command_removed(self):
         repo_src = Path(__file__).resolve().parent.parent / "src"
-        # 1. Without --json
         cmd = [
             sys.executable,
             "-c",
-            f"import sys; sys.path.insert(0, '{repo_src}'); from forgeflow.cli import main; main(['update', '--path', '{self.temp_dir}'])",
+            f"import sys; sys.path.insert(0, '{repo_src}'); from forgeflow.cli import main; main(['update'])",
         ]
         res = subprocess.run(cmd, capture_output=True, text=True)
-        self.assertNotIn("AttributeError", res.stderr)
-
-        # 2. With --json
-        cmd_json = [
-            sys.executable,
-            "-c",
-            f"import sys; sys.path.insert(0, '{repo_src}'); from forgeflow.cli import main; main(['update', '--path', '{self.temp_dir}', '--json'])",
-        ]
-        res_json = subprocess.run(cmd_json, capture_output=True, text=True)
-        self.assertNotIn("AttributeError", res_json.stderr)
-        payload = json.loads(res_json.stdout)
-        self.assertIn("status", payload)
+        self.assertNotEqual(res.returncode, 0)
+        self.assertIn("invalid choice: 'update'", res.stderr)
 
 
 if __name__ == "__main__":
