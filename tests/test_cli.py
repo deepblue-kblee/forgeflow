@@ -206,17 +206,6 @@ class TestCliIntegration(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertIn("strict_audit_not_run", payload["unmet_conditions"])
 
-    def test_forgeflow_update_command_removed(self):
-        repo_src = Path(__file__).resolve().parent.parent / "src"
-        cmd = [
-            sys.executable,
-            "-c",
-            f"import sys; sys.path.insert(0, '{repo_src}'); from forgeflow.cli import main; main(['update'])",
-        ]
-        res = subprocess.run(cmd, capture_output=True, text=True)
-        self.assertNotEqual(res.returncode, 0)
-        self.assertIn("invalid choice: 'update'", res.stderr)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -91,12 +91,19 @@ forgeflow upgrade --check
 forgeflow upgrade
 ```
 
-### 3. 작업 프로젝트 스마트 업데이트 (`/update-forgeflow`)
+### 3. 로컬 프로젝트 거버넌스 사양 동기화 (`forgeflow update`)
+현재 작업 리포지토리의 거버넌스 사양(`.forgeflow.json`, `.specify/scripts/bash/`, 템플릿)을 현재 설치된 최신 규격으로 동기화합니다:
+```bash
+# 현재 프로젝트 거버넌스 사양 갱신 (tasks 작업 데이터 100% 보존)
+forgeflow update
+```
+
+### 4. 작업 프로젝트 스마트 업데이트 (`/update-forgeflow`)
 어느 작업 리포지토리에서든 한 줄로 지시하면 전역 런타임 최신화와 현재 프로젝트 거버넌스 사양 갱신을 원스톱으로 처리합니다:
 ```text
 /update-forgeflow
 ```
-- **스마트 파사드(Smart Facade)**: 원격에 새 버전이 있다면 전역 런타임(`forgeflow upgrade`)을 먼저 자동 실행하고, 이어서 현재 프로젝트의 `.forgeflow.json`, `.specify/scripts/bash/`, 템플릿들을 최신 규격으로 동기화합니다.
+- **스마트 파사드(Smart Facade)**: 원격에 새 버전이 있다면 전역 런타임(`forgeflow upgrade`)을 먼저 자동 실행하고, 이어서 현재 프로젝트의 로컬 거버넌스 갱신(`forgeflow update`)을 호출합니다.
 - 진행 중인 작업 내역(`tasks/in-progress/`, `tasks/completed/`)은 일절 변경 없이 안전하게 보존됩니다.
 
 ---

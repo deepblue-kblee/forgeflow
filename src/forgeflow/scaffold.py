@@ -834,11 +834,17 @@ class TemplateScaffolder:
                 existing = json.loads(config_file.read_text(encoding="utf-8"))
                 # Date-Based Amnesia: If not matching standard v0.1.0 or contains legacy fields, overwrite
                 if (
-                    force
-                    or existing.get("forgeflow_version") != "0.1.0"
-                    or "required_documents" in existing.get("governance", {})
+                    "required_documents" in existing.get("governance", {})
                     or "default_tier" in existing.get("governance", {})
                 ):
+                    needs_write = True
+                    updated_files.append(".forgeflow.json")
+                elif force:
+                    # Preserve existing version if valid during scaffold unless forced overwrite
+                    current_ver = existing.get("forgeflow_version", "0.1.0")
+                    config_data["forgeflow_version"] = current_ver
+                    config_data["governance"] = existing.get("governance", config_data["governance"])
+                    config_data["paths"] = existing.get("paths", config_data["paths"])
                     needs_write = True
                     updated_files.append(".forgeflow.json")
             except Exception:
@@ -970,4 +976,43 @@ class TemplateScaffolder:
             "created_dirs": sorted(list(set(created_dirs))),
             "created_files": created_files,
             "updated_files": updated_files,
+        }
+
+    @classmethod
+    def update_repo_governance(cls, root: Path) -> Dict[str, Any]:
+        """Update local repository governance specifications and Spec Kit assets to the current version.
+
+        Preserves all task packages in tasks/in-progress and tasks/completed while refreshing
+        .specify/ scripts (with 0o755 permission), templates, and .forgeflow.json version.
+        """
+        from ._version import __version__
+        root = root.resolve()
+        config_file = root / ".forgeflow.json"
+        if not config_file.exists() or not config_file.is_file():
+            raise ValueError(f"Target directory '{root}' is not a valid ForgeFlow repository (.forgeflow.json missing).")
+
+        try:
+            config_data = json.loads(config_file.read_text(encoding="utf-8"))
+        except Exception as e:
+            raise ValueError(f"Failed to parse .forgeflow.json: {e}")
+
+        previous_version = config_data.get("forgeflow_version", "unknown")
+        config_data["forgeflow_version"] = __version__
+        # Re-run hybrid scaffolding with force=True to refresh scripts, templates, extensions
+        scaffold_res = cls.scaffold_speckit_hybrid(root, force=True)
+
+        # Ensure final forgeflow_version is set to current version
+        config_data["forgeflow_version"] = __version__
+        config_file.write_text(json.dumps(config_data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+        updated_files = [".forgeflow.json"] + [f for f in scaffold_res.get("updated_files", []) if f != ".forgeflow.json"]
+        if ".forgeflow.json" not in updated_files:
+            updated_files.insert(0, ".forgeflow.json")
+
+        return {
+            "status": "success",
+            "previous_version": previous_version,
+            "current_version": __version__,
+            "target_dir": str(root),
+            "updated_files": sorted(list(set(updated_files))),
         }

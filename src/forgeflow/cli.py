@@ -355,6 +355,19 @@ def parse_forgeflow_args(args=None):
         help="Remote repository base URL",
     )
 
+    # Command: update
+    update_parser = subparsers.add_parser(
+        "update",
+        help="Update local repository governance specifications and Spec Kit assets to the latest version",
+    )
+    update_parser.add_argument(
+        "--path",
+        default=None,
+        help="Target project repository root (default: current directory or detected root)",
+    )
+    update_parser.add_argument("--json", action="store_true", help="Output machine-readable JSON")
+    update_parser.add_argument("--quiet", action="store_true", help="Suppress non-error output")
+
     # Command: migrate
     migrate_parser = subparsers.add_parser("migrate", help="Migrate legacy release structures to tasks architecture")
     migrate_parser.add_argument("--tasks", action="store_true", help="Migrate legacy docs/releases/ to root tasks/completed/")
@@ -726,6 +739,33 @@ def handle_upgrade(args):
     return 0
 
 
+def handle_update(args):
+    """Handle the forgeflow update command to refresh local repository governance specifications."""
+    target_dir = Path(args.path).resolve() if getattr(args, "path", None) else HierarchicalRootScanner.find_root()
+    as_json = getattr(args, "json", False)
+    quiet = getattr(args, "quiet", False)
+
+    try:
+        res = TemplateScaffolder.update_repo_governance(target_dir)
+    except Exception as e:
+        if as_json:
+            print(json.dumps({"status": "error", "message": str(e), "target_dir": str(target_dir)}))
+        else:
+            print(f"❌ ForgeFlow Update Error: {e}", file=sys.stderr)
+        return 1
+
+    if as_json:
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+    elif not quiet:
+        print(f"🎉 Successfully updated ForgeFlow repository governance specifications!")
+        print(f"   Project Root: {res['target_dir']}")
+        print(f"   Version:      v{res['previous_version']} ➔ v{res['current_version']}")
+        print(f"   Updated Files ({len(res['updated_files'])}):")
+        for f in res["updated_files"]:
+            print(f"     • {f}")
+    return 0
+
+
 def main(args=None):
     parsed = parse_forgeflow_args(args)
 
@@ -735,6 +775,10 @@ def main(args=None):
 
     if parsed.command == "upgrade":
         code = handle_upgrade(parsed)
+        sys.exit(code)
+
+    if parsed.command == "update":
+        code = handle_update(parsed)
         sys.exit(code)
 
     if parsed.command == "issue":

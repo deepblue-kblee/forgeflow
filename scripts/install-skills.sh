@@ -143,18 +143,13 @@ ForgeFlow 전역 런타임 최신화와 현재 리포지토리의 거버넌스 �
    - 이미 전역이 최신 버전인 경우(`"upgrade_available": false`), 불필요한 재설치를 건너뛰고 즉시 2단계로 직행합니다.
 
 ### 2단계: 현재 작업 리포지토리 사양 동기화 (Local Repo Governance Migration)
-1. 기존 데이터 보존:
-   - `tasks/in-progress/` 및 `tasks/completed/` 디렉터리의 진행 중/완료된 릴리즈 아티팩트는 일절 삭제하거나 덮어쓰지 않고 안전하게 보존합니다.
-2. 거버넌스 파일 동기화:
-   - `.forgeflow.json`의 스키마 및 버전을 최신 전역 CLI 버전으로 갱신합니다.
-   - `.specify/extensions.yml`의 훅 정의를 최신 규격으로 갱신합니다.
-   - `.specify/memory/constitution.md` 거버넌스 헌법 조항을 최신 규정으로 동기화합니다 (사용자 커스텀 규칙 보존).
-   - `.specify/scripts/bash/` 스크립트 6종을 전역 패키지(`~/.local/forgeflow/current/lib/forgeflow/templates/speckit/scripts/bash/`)에서 최신 버전으로 동기화하고 실행 권한(`chmod 755`)을 부여합니다.
-   - `.specify/templates/` 명세 템플릿 4종 및 커맨드 지침(`.specify/templates/commands/`)을 최신 버전으로 갱신합니다.
-3. 호환성 검증:
+1. 리포지토리 거버넌스 사양 갱신:
+   - `forgeflow update` 명령을 실행합니다 (`forgeflow update --json`).
+   - 이 명령은 `tasks/in-progress/` 및 `tasks/completed/` 내부의 모든 작업 산출물을 100% 보존하면서 `.forgeflow.json`, `.specify/scripts/bash/`(0o755 실행 권한 포함), 템플릿, 헌법 및 훅을 최신 표준으로 동기화합니다.
+2. 거버넌스 무결성 검증:
    - `forgeflow check --quiet` 명령을 실행하여 마이그레이션 후 거버넌스 무결성을 검증합니다.
-4. 결과 보고:
-   - 전역 런타임 갱신 여부, 현재 프로젝트 버전 갱신 정보, 정합성 검증 결과를 사용자에게 명확히 보고합니다.
+3. 결과 보고:
+   - 전역 런타임 업그레이드 여부, 로컬 리포지토리 사양 갱신 내역 및 버전 정보, 정합성 검증 결과를 사용자에게 명확히 보고합니다.
 EOF
 
 chmod +x "${SETUP_DIR}/SKILL.md" "${UPDATE_DIR}/SKILL.md" 2>/dev/null || true
