@@ -910,11 +910,13 @@ class TemplateScaffolder:
             "description: Execute task implementation with Gate 1 enforcement and autonomous healing loop\n"
             "---\n\n"
             "## Pre-Execution Checks\n"
-            "1. Gate 1 Approval: Verify `tasks/in-progress/<release-id>/GATE1_REVIEW.md` exists with status `APPROVED`.\n\n"
+            "1. Gate 1 Approval: Verify `tasks/in-progress/<release-id>/GATE1_REVIEW.md` exists with status `APPROVED`.\n"
+            "2. Workspace Isolation: Verify work is being conducted on branch `feat/<release-id>`.\n\n"
             "## Implementation Directives\n"
             "- Follow `tasks.md` sequentially in TDD fashion.\n"
-            "- Do not stop on test failures; autonomously analyze, fix, re-test, and commit (Loop 2).\n"
-            "- Respect loop budget of 5 remediation attempts per error fingerprint.\n"
+            "- Inner Loop (Loop 2): Autonomously analyze, fix, and re-test without stopping on failures (budget: 5 attempts).\n"
+            "- Checkpoint Commits: Create a clean git commit each time a discrete task (`- [ ] Task N.N`) and its tests 100% pass.\n"
+            "- Rollback: If code becomes corrupted during remediation, revert to the last clean task checkpoint.\n"
         )
         if not implement_cmd_file.exists() or force:
             implement_cmd_file.write_text(implement_cmd_content, encoding="utf-8")
