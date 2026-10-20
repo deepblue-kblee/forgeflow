@@ -146,7 +146,8 @@ description: Updates and migrates ForgeFlow governance configurations, constitut
    - `.forgeflow.json`의 스키마 필드를 신규 버전 규격에 맞추어 보정하고 버전을 갱신합니다.
    - `.specify/extensions.yml`의 훅 정의를 최신 CLI 서브커맨드 규격으로 갱신합니다.
    - `.specify/memory/constitution.md`의 거버넌스 헌법 조항을 최신 규정으로 동기화하되, 사용자가 수동으로 추가한 커스텀 규칙이 있을 경우 안전하게 보존·병합합니다.
-   - `.specify/templates/commands/` 템플릿을 최신 버전으로 갱신합니다.
+   - `.specify/scripts/bash/` 스크립트 6종(`check-prerequisites.sh`, `common.sh`, `create-new-feature.sh`, `resolve-template.sh`, `setup-plan.sh`, `setup-tasks.sh`)을 전역 패키지(`~/.local/forgeflow/current/lib/forgeflow/templates/speckit/scripts/bash/`)에서 최신 버전으로 덮어쓰고 실행 권한(`chmod 755`)을 부여합니다.
+   - `.specify/templates/` 명세 템플릿 4종(`spec-template.md`, `plan-template.md`, `tasks-template.md`, `checklist-template.md`) 및 커맨드 지침(`.specify/templates/commands/`)을 최신 버전으로 갱신합니다.
 
 4. 호환성 검증:
    - `forgeflow check --quiet` 명령을 실행하여 마이그레이션 후 거버넌스 정합성을 검증합니다.

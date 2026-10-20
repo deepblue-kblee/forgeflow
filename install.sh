@@ -200,19 +200,18 @@ PKG_DIR="$PREFIX/packages/$VERSION"
 PKG_LIB_DIR="$PKG_DIR/lib/forgeflow"
 PKG_BIN_DIR="$PKG_DIR/bin"
 
+# Detect existing active installation
+CURRENT_ACTIVE=""
+if [ -L "$PREFIX/current" ]; then
+  CURRENT_ACTIVE=$(basename "$(readlink "$PREFIX/current" 2>/dev/null || echo "")")
+fi
+
+if [ -n "$CURRENT_ACTIVE" ]; then
+  log_info "Detected existing active installation: $CURRENT_ACTIVE"
+fi
+
 if [ -d "$PKG_DIR" ] && [ "$FORCE" = false ]; then
-  log_warn "Version $VERSION already installed at $PKG_DIR. Use --force to overwrite."
-  cmd_run mkdir -p "$PREFIX/bin"
-  cmd_run ln -sfn "packages/$VERSION" "$PREFIX/current"
-  cmd_run ln -sfn "../current/bin/forgeflow" "$PREFIX/bin/forgeflow"
-  cmd_run ln -sfn "../current/bin/harness" "$PREFIX/bin/harness"
-
-  cmd_run mkdir -p "$BIN_DIR"
-  cmd_run ln -sfn "$PREFIX/bin/forgeflow" "$BIN_DIR/forgeflow"
-  cmd_run ln -sfn "$PREFIX/bin/harness" "$BIN_DIR/harness"
-
-  log_info "Active symlink updated to $VERSION. Skipping package file copy."
-  exit 0
+  log_info "Package version $VERSION already exists at $PKG_DIR. Synchronizing files to latest build..."
 fi
 
 log_info "Installing ForgeFlow $VERSION into $PREFIX..."
