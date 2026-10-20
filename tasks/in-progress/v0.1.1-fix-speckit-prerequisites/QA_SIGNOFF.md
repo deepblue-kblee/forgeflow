@@ -5,7 +5,7 @@
 **Risk Tier**: **Tier 3 (Critical / Core / Governance Control-Plane)**  
 **Target Specification**: [spec.md](spec.md)  
 **Target Implementation Plan**: [plan.md](plan.md)  
-**QA Commit SHA**: `69b34e0`  
+**QA Commit SHA**: `e9a9959`  
 **Gate 2 Verdict**: **APPROVED**
 
 ---
