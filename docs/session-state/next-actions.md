@@ -52,6 +52,10 @@
    - **배포 사양 및 버전 관리 정비**: `DISTRIBUTION_SPEC.md`에 전역 `upgrade`와 로컬 `update`, 스마트 파사드 `/update-forgeflow`의 명확한 역할 분리 반영. 과거 버전 번호(v0.22/v0.23 등)를 v0.1.x 표준으로 청산하고 `CHANGELOG.md` 릴리즈 이력 완비.
    - **테스트 및 거버넌스 무결성**: 264개 단위 테스트 100% 통과, 6개 릴리즈 전수 하네스 감사 `forgeflow check --all --strict` 🟢 ALL PASSED, `tasks/completed/v0.1.6-cleanup-legacy-spec-and-sha/` 패키지 밀봉 완료.
 
+9. **Spec Kit 주입 규범 및 훅 통합 공식 사양서 완비**:
+   - `docs/spec/SPECKIT_HOOKS_AND_NORMS.md`: Spec Kit 3대 거버넌스 주입 메커니즘, 전체 훅 라이프사이클 및 커밋 매핑, 거시 훅(Macro Hook) vs 미시 체크포인트(Micro Checkpoint) 역할 분담, 피쳐 브랜치 수명주기, 5대 헌법 조항 전문을 단독 문서로 완비.
+   - `.specify/templates/commands/implement.md` 및 `src/forgeflow/scaffold.py`: 개별 태스크 체크포인트 커밋 및 안전 롤백 지침 반영 완료.
+
 ## 다음 할 일 (Next Tasks)
 
 1. **Git 원격 반영 (Push)**:
