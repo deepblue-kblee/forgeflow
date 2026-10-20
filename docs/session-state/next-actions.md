@@ -36,12 +36,20 @@
    - **단일 표준 확립**: 전역 런타임 업그레이드는 `forgeflow upgrade`, 로컬 프로젝트 거버넌스 마이그레이션은 `/update-forgeflow` 스킬로 일원화.
    - **테스트 무결성**: 263개 테스트 100% Pass 및 `forgeflow check --all --strict` 4개 릴리즈 전수 🟢 ALL PASSED.
 
+7. **`forgeflow update` 로컬 거버넌스 동기화 명령 재정의 및 스킬 연동 (v0.1.5)**:
+   - **`forgeflow update` CLI 정식 도입**: 로컬 리포지토리의 거버넌스 사양(`.forgeflow.json`, `.specify/scripts/bash/`, 템플릿, 헌법, 훅)을 최신 규격으로 동기화하고 `tasks/` 작업 패키지 데이터를 100% 안전하게 보존.
+   - **스마트 파사드 `/update-forgeflow` 간결화**: 복잡한 파일 복사 지침 대신 전역 `forgeflow upgrade` ➔ 로컬 `forgeflow update`를 순차 호출하도록 DRY 원칙 기반 캡슐화 완성.
+   - **대칭 구조 확립**:
+     - 전역 런타임/스킬 판올림: `forgeflow upgrade`
+     - 현재 작업 repo 사양 갱신: `forgeflow update`
+     - 에이전트 통합 원스톱 파사드: `/update-forgeflow` 스킬
+   - **테스트 및 거버넌스 무결성**: 신규 단위 테스트 추가 (총 264개 테스트 100% Pass), 5개 릴리즈 전수 하네스 감사 `forgeflow check --all --strict` 🟢 ALL PASSED, `tasks/completed/v0.1.5-redefine-update-command-and-facade/` 패키지 밀봉 완료.
+
 ## 다음 할 일 (Next Tasks)
 
 1. **Git 원격 반영 (Push)**:
-   - 사용자가 원격 `git push origin main`을 진행하여 최신 배포본(v0.1.4)을 GitHub에 반영.
+   - `git push origin main`을 실행하여 최신 릴리즈(v0.1.5)를 GitHub 원격에 반영.
 2. **전역 런타임 최신화 (최초 1회 install.sh)**:
-   - `bash install.sh`를 실행하여 로컬 전역 CLI(`~/.local/bin/forgeflow`)를 `v0.1.4`로 승격.
-3. **외부 타깃 프로젝트 실전 적용 및 추가 도그푸딩**:
-   - 신규/외부 프로젝트에서 `install.sh` 및 `/setup-forgeflow` (또는 `/update-forgeflow`) 실행 테스트.
-   - `/speckit.specify`부터 `/speckit.implement`까지의 외부 프로젝트 사용자 경험 검증.
+   - 원격 푸시 후 `bash install.sh`를 실행하여 로컬 OS 전역 CLI(`~/.local/bin/forgeflow`)를 `v0.1.5`로 승격.
+3. **외부 타깃 프로젝트 실전 적용 및 검증**:
+   - 다중 저장소(Repo A, Repo B 등)에서 `forgeflow update` 또는 `/update-forgeflow` 스킬을 실행하여 전역 업그레이드와 로컬 사양 동기화의 유기적 동작 검증.
