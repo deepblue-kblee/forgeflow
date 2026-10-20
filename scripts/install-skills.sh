@@ -96,7 +96,7 @@ description: Sets up ForgeFlow governance and GitHub Spec Kit hybrid environment
    - `.specify/memory/constitution.md` 파일을 생성하여 5대 불변 거버넌스 헌법을 선언합니다:
      - 제1조 (무승인 구현 금지 - No Code Before Gate 1): `tasks/in-progress/<id>/GATE1_REVIEW.md` 승인 전 소스 코드 작성/수정 절대 금지.
      - 제2조 (가짜 멈춤 금지 - No False Stopping): 단순 테스트 실패, 린트 오류 시 사용자에게 턴을 넘기지 않고 내부 자가 치유 루프(Loop 2) 자율 완주.
-     - 제3조 (원자적 루프 정의 - Atomic Remediation Unit): 1회 루프는 `원인 식별 -> 1개 수정 -> 테스트 재실행 -> git commit`으로 완결.
+     - 제3조 (원자적 루프 정의 - Atomic Remediation Unit): 1회 루프는 `원인 식별 -> 1개 수정 -> 테스트 재실행`으로 완결하며, 구현 완료 시 최종 원자적 커밋 1개를 생성.
      - 제4조 (루프 예산 및 진짜 멈춤 - Loop Budget & True Stop): 동일 오류 5회 연속 무진전 시에만 작업 중단 및 사용자 에스컬레이션.
      - 제5조 (스펙 무단 하향 금지 - No Spec Downgrade): 구현 난항을 이유로 `spec.md` 무단 축소 금지, 필요 시 Gate 1 재승인(Loop 3) 수행.
    - `.specify/extensions.yml` 파일을 생성하여 `before_implement` 훅을 등록합니다:

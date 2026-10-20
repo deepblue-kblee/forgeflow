@@ -7,6 +7,67 @@ ForgeFlow 프레임워크의 모든 주요 변경 사항은 이 문서에 기록
 
 ---
 
+## [0.1.6] - 2026-10-21
+
+### 🧹 과거 유산 및 규격 불일치 전수 청산 (Comprehensive Legacy Cleanup)
+
+### Changed
+- **원자적 루프 정의 현대화**:
+  - 자가 치유(Loop 2) 루프마다 `git commit (새 SHA 발행)`을 강제하던 조항을 제거하고, 루프 중에는 로컬 수정-테스트를 반복하며 모든 테스트가 100% 통과된 최종 시점에 단일 원자적 커밋 1개를 생성하도록 단일화.
+- **Spec SHA-256 해시 바인딩 잔재 완전 제거**:
+  - `FLOW_SPEC.md` 스키마 및 `GATES_AND_LOOPS.md`, `README.md`에 남아있던 해시 바인딩 및 해시 재바인딩 설명 영구 삭제.
+- **거버넌스 용어 및 Stage 표기 단일화**:
+  - 모호한 '사전 심사' 표현을 'Gate 1: 명세 승인 (Spec Sign-Off)'으로 완전 통일.
+  - 하이브리드 워크플로우에 맞추어 구현 단계를 'Stage 3'으로 일치화.
+- **배포 사양 및 과거 버전 표기 교정**:
+  - `DISTRIBUTION_SPEC.md`에 `upgrade`(전역)와 `update`(로컬), `/update-forgeflow`(스마트 파사드)의 명확한 역할 분리 반영.
+  - 과거 버전 번호(v0.22/v0.23 등)를 v0.1.x 표준으로 교정.
+
+---
+
+## [0.1.5] - 2026-10-21
+
+### 🔄 `forgeflow update` 명령어 정식 도입 및 스마트 파사드 간결화
+
+### Added
+- **`forgeflow update` CLI 서브커맨드**:
+  - 로컬 리포지토리의 거버넌스 사양(`.forgeflow.json`, `.specify/scripts/bash/`, 템플릿, 헌법, 훅)을 최신 버전으로 갱신하는 단독 명령어 구현.
+  - `tasks/in-progress/` 및 `tasks/completed/`의 모든 작업 데이터 100% 보존.
+- **스마트 파사드 `/update-forgeflow` 간결화**:
+  - 내부 파일 복사 지침 대신 전역 `forgeflow upgrade` ➔ 로컬 `forgeflow update`를 순차 호출하도록 DRY 원칙 기반 캡슐화 완성.
+
+---
+
+## [0.1.4] - 2026-10-21
+
+### 🗑️ 레거시 `update` 및 구버전 카탈로그 완전 폐기
+
+### Removed
+- **과거 유산 삭제**:
+  - 2026-10-20 이전 v0.4.4~v0.22.0 시절의 구시대 정적 바이트 카탈로그(`bundle_catalog.py`, `catalog_oracles/`) 및 관련 모듈(`update.py`) 영구 삭제.
+
+---
+
+## [0.1.3] - 2026-10-21
+
+### ⚡ `forgeflow upgrade` CLI 및 전역 런타임 최신화
+
+### Added
+- **`forgeflow upgrade` 서브커맨드**:
+  - `--check` 무설치 버전 검사, Idempotency 보장, 원격 `install.sh` 자동 다운로드 및 전역 런타임/스킬 일괄 승격 지원.
+
+---
+
+## [0.1.2] - 2026-10-21
+
+### 🎯 Gate/Stage 분리 및 `spec.md` 해시 바인딩 제거
+
+### Changed
+- **`spec.md` 해시 바인딩(Spec SHA256) 완전 제거**: 사소한 텍스트/포맷 편집에도 해시가 깨져 Loop 3 무한 루프로 헛돌던 마찰 요인 원천 해소 (`cli.py`, `validator.py`, `scaffold.py`).
+- **Stage와 Gate 개념 완전 분리**: 작업 단계(Stage 1~3)와 승인 관문(Gate 1~3: Spec Sign-Off, QA Sign-Off, Release Sign-Off)의 위치, 주체, 승인 방법을 명확히 단일 진실 공급원(SSOT)으로 정비.
+
+---
+
 ## [0.1.1] - 2026-10-20
 
 ### 🚀 Spec Kit 런타임 자산 번들링 및 Date-Based Amnesia 적용

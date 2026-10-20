@@ -79,15 +79,29 @@ curl -sSL https://raw.githubusercontent.com/deepblue-kblee/forgeflow/main/instal
 
 ---
 
-## 4. 버전 관리 및 마이그레이션 (`update`)
+## 4. 버전 관리 및 마이그레이션 (`upgrade` & `update`)
 
-### 4.1 CLI 업데이트
-프레임워크 버전 업그레이드는 CLI 명령 또는 에이전트 스킬을 통해 비파괴적으로 수행된다:
+프레임워크 버전 관리와 거버넌스 사양 마이그레이션은 역할에 따라 명확히 분리된 대칭 CLI와 스마트 파사드 스킬을 통해 비파괴적으로 수행된다.
+
+### 4.1 전역 런타임 업그레이드 (`forgeflow upgrade`)
+사용자 OS 계정 전역의 CLI 바이너리, 순수 파이썬 라이브러리(`~/.local/forgeflow`), 및 에이전트 스킬(`~/.agents/skills/`)을 최신 공식 릴리즈로 판올림한다:
+```bash
+# 최신 버전 확인
+forgeflow upgrade --check
+
+# 전역 런타임 및 스킬 자동 업그레이드
+forgeflow upgrade
+```
+
+### 4.2 로컬 프로젝트 거버넌스 사양 동기화 (`forgeflow update`)
+- 현재 개발 프로젝트 루트에서 실행하여 `.forgeflow.json`, `.specify/scripts/bash/`(0o755 권한 부여), 템플릿, 헌법 및 훅을 현재 설치된 ForgeFlow 규격으로 원자적 갱신한다.
+- 현재 진행 중인 태스크(`tasks/in-progress/`)와 과거 완료 아카이브(`tasks/completed/`) 데이터는 100% 안전하게 보존된다:
 ```bash
 forgeflow update
 ```
-*(또는 에이전트 대화창에서 `/update-forgeflow` 호출)*
 
-### 4.2 프로젝트 거버넌스 헌법 마이그레이션
-- 기존 개발 프로젝트에서 `update`를 실행할 경우, 현재 진행 중인 태스크(`tasks/in-progress/`)와 과거 완료 아카이브(`tasks/completed/`) 데이터는 100% 안전하게 보존된다.
-- `.specify/memory/constitution.md` 및 `.specify/extensions.yml`의 강제 훅 설정만을 최신 프레임워크 규격으로 원자적 갱신한다.
+### 4.3 통합 스마트 파사드 스킬 (`/update-forgeflow`)
+AI 에이전트 대화창에서 원스톱으로 호출하여 1단계 전역 최신화 점검(`forgeflow upgrade`) ➔ 2단계 현재 프로젝트 거버넌스 갱신(`forgeflow update`)을 순차 실행한다:
+```text
+/update-forgeflow
+```

@@ -17,7 +17,7 @@
    - 명세서(`spec.md`), 아키텍처 계획(`plan.md`), 원자적 태스크(`tasks.md`)를 작성하고 순차적 TDD 구현을 주도한다.
 2. **거버넌스 엔진 (Supervisor / Macro-Governance Harness) — ForgeFlow**:
    - 릴리즈 패키지 단위(`tasks/in-progress/<release-id>`)의 수명주기 상태 기계를 관리한다.
-   - 사전 심사(Gate 1), QA Sign-off(Gate 2), 패키지 밀봉 및 릴리즈 승인(Gate 3)을 기계적으로 차단 및 승격한다.
+   - 명세 승인(Gate 1), QA 품질 승인(Gate 2), 패키지 밀봉 및 릴리즈 승인(Gate 3)을 기계적으로 차단 및 승격한다.
    - 테스트 커버리지, 골든 픽스처(QE-xx), 정적 분석(Strict Review), 커밋 SHA 무결성을 불변 장부로 바인딩한다.
 
 ### 1.3 핵심 설계 원칙
@@ -51,15 +51,15 @@
 │
 ├── tasks/                              # ForgeFlow 릴리즈 패키지 수명주기 보관소
 │   ├── in-progress/
-│   │   └── v0.5.0-cache-engine/        # 단일 활성 릴리즈 패키지
+│   │   └── v0.1.0-cache-engine/        # 단일 활성 릴리즈 패키지
 │   │       ├── spec.md                 # [Spec Kit] 기능 요구사항 및 대화 결정사항
-│   │       ├── GATE1_REVIEW.md         # [ForgeFlow] Gate 1 사전 심사 승인 증적
+│   │       ├── GATE1_REVIEW.md         # [ForgeFlow] Gate 1 명세 승인 증적
 │   │       ├── plan.md                 # [Spec Kit] 기술 아키텍처 및 데이터 모델
 │   │       ├── tasks.md                # [Spec Kit] 의존성 순서의 원자적 태스크 목록
 │   │       ├── QA_SIGNOFF.md           # [ForgeFlow] Gate 2 QA 승인 증적 (SHA 바인딩)
 │   │       └── RELEASE_SIGNOFF.md      # [ForgeFlow] Gate 3 릴리즈 승인 및 머지 준비
 │   └── completed/
-│       └── v0.4.1-query-engine/        # [ForgeFlow] 밀봉(Seal)된 과거 완료 패키지
+│       └── v0.1.1-query-engine/        # [ForgeFlow] 밀봉(Seal)된 과거 완료 패키지
 └── src/ ...                            # 실제 프로젝트 소스 코드
 ```
 
@@ -68,7 +68,7 @@
 #### 1. `.forgeflow.json`
 ```json
 {
-  "forgeflow_version": "0.23.0",
+  "forgeflow_version": "0.1.0",
   "governance": {
     "tasks_dir": "tasks",
     "strict_mode": true,
@@ -110,7 +110,7 @@ Spec Kit 공식 스펙상 모든 커맨드(`/specify`, `/plan`, `/implement` 등
 구현 중 발생하는 단순 단위 테스트 실패, 린트 오류, 사소한 컴파일 에러는 사용자에게 턴을 넘기거나 작업을 종료할 수 있는 사유가 아니다. 에이전트는 결함 원인을 스스로 분석하고 코드를 수정하는 내부 자가 치유 루프(Loop 2)를 자율적으로 완주해야 한다.
 
 ## 제3조 (원자적 루프 정의 - Atomic Remediation Unit)
-자가 치유의 1회 루프는 반드시 `결함 원인 식별 → 코드/테스트 1개 수정 → 테스트 재실행 → git commit (새 SHA 발행)`의 전 과정을 포괄해야 한다. 코드를 수정하지 않고 테스트 명령어만 반복 실행하는 행위는 루프로 인정하지 않는다.
+자가 치유의 1회 루프는 반드시 `결함 원인 식별 → 코드/테스트 1개 수정 → 테스트 재실행`의 전 과정을 포괄해야 한다. 코드를 수정하지 않고 테스트 명령어만 반복 실행하는 행위는 루프로 인정하지 않으며, 모든 테스트가 통과된 최종 시점에만 원자적 구현 커밋 1개를 생성한다.
 
 ## 제4조 (루프 예산 및 진짜 멈춤 - Loop Budget & True Stop)
 동일한 에러 핑거프린트로 5회 연속 코드 수정 및 테스트 통과에 실패한 경우에만 작업을 즉시 중지하고 사용자에게 에스컬레이션(진짜 멈춤)한다.
@@ -263,7 +263,7 @@ Stage 1의 `specify` 단계에서 다음 4대 지표 중 2개 이상 해당하�
 ```text
 tasks/in-progress/v1.0.0-auth-platform/         # Epic 릴리즈 패키지
 ├── EPIC_SPEC.md                              # [ForgeFlow] 마스터 에픽 명세 및 파트 분할 로드맵
-├── GATE1_REVIEW.md                           # [ForgeFlow] 에픽 전체 아키텍처 사전 심사 증적
+├── GATE1_REVIEW.md                           # [ForgeFlow] 에픽 전체 아키텍처 명세 승인 증적
 │
 ├── parts/                                    # [Spec Kit] 독립 실행 서브 파트 보관소
 │   ├── 01-user-schema/                       # Part 1 (독립 세션으로 실행)
@@ -325,7 +325,6 @@ tasks/in-progress/v1.0.0-auth-platform/         # Epic 릴리즈 패키지
 - Release ID: <release-id>
 - Risk Tier: Tier 1 | Tier 2 | Tier 3
 - Review Date: YYYY-MM-DD HH:MM:SS
-- Spec SHA256: <hash-of-spec.md>
 
 ## 2. Pre-Implementation Review Checklist
 - [x] Constitution boundaries respected
@@ -335,7 +334,7 @@ tasks/in-progress/v1.0.0-auth-platform/         # Epic 릴리즈 패키지
 ## 3. Verdict
 - Status: APPROVED
 - Approver: Panel (Security, Reliability, Maintainability) | Senior Reviewer
-- Proceed to Stage 4 Branch: feat/<release-id>
+- Proceed to Stage 3 Branch: feat/<release-id>
 ```
 
 ### 6.2 `QA_SIGNOFF.md` 스키마

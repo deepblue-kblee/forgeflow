@@ -16,16 +16,16 @@ ForgeFlow는 **GitHub Spec Kit**의 대화형 명세 기반 개발(Spec-Driven D
    - TDD 기반 순차 구현 주도
 2. **거버넌스 엔진 (Supervisor) — ForgeFlow**:
    - 릴리즈 수명주기 관리 (`tasks/in-progress/` ──► `tasks/completed/`)
-   - Gate 1 사전 심사(`GATE1_REVIEW.md`) 및 `spec.md` SHA-256 불변 바인딩
+   - Gate 1 명세 승인(`GATE1_REVIEW.md`)
    - 구현 시작 전 Gate 1 통과 여부를 기계적으로 차단하는 Fail-Closed 게이트키퍼 (`forgeflow check --stage 2`)
    - Gate 2 QA Sign-Off 및 커밋 SHA 바인딩 (`QA_SIGNOFF.md`)
    - Gate 3 릴리즈 승인 및 패키지 밀봉(Package Seal)
 
 ### 핵심 설계 원칙:
 - **Zero-Dependency 원칙**: 외부 서드파티 런타임 의존성 없이 Python 3.10+ 표준 라이브러리만으로 100% 동작합니다.
-- **Fail-Closed Gatekeeper 원칙**: Gate 1 승인 증적이 누락되었거나 `spec.md`가 변조된 경우 코드를 단 한 줄도 작성하지 못하도록 물리적으로 차단합니다.
+- **Fail-Closed Gatekeeper 원칙**: Gate 1 승인 증적이 누락된 경우 코드를 단 한 줄도 작성하지 못하도록 물리적으로 차단합니다.
 - **Progressive Disclosure 원칙**: 타겟 프로젝트에 무거운 프레임워크 문서를 주입하지 않고, 오직 `.forgeflow.json`, `.specify/`, `tasks/`만 최소한으로 유지합니다.
-- **Atomic Remediation Loop 원칙**: 단순 단위 테스트 실패는 중단 사유가 아니며, `원인 식별 ➔ 코드 수정 ➔ 테스트 성공 ➔ git commit` 단위를 에이전트가 최대 5회 자율 완주합니다.
+- **Atomic Remediation Loop 원칙**: 단순 단위 테스트 실패는 중단 사유가 아니며, `원인 식별 ➔ 코드 수정 ➔ 테스트 성공` 단위를 에이전트가 최대 5회 자율 완주하고, 구현 완료 시 원자적 커밋 1개를 생성합니다.
 
 ---
 

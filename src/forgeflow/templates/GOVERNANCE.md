@@ -1,6 +1,6 @@
 # ForgeFlow Governance
 
-- ForgeFlow bundle version: `0.22.0`
+- ForgeFlow bundle version: `0.1.0`
 
 이 문서는 이 프로젝트의 ForgeFlow 운영 규칙 단일 원본입니다. 모든 에이전트는 세션 시작 시 이 문서와 아래의 설치된 규격을 읽어야 합니다.
 
@@ -21,7 +21,7 @@ ForgeFlow는 프로젝트 루트의 `tasks/` (또는 `ff-tasks/`, 레거시 `doc
 
 1. **3단 칸반 구조**: `tasks/` 내부는 `backlog/` (기획), `in-progress/` (활성 구현/심사), `completed/` (동결 아카이브)로 구분됩니다.
 2. **비-행동지침 경계**: `tasks/` 내부의 파일들은 특정 릴리즈의 작업 산출물 및 증적일 뿐 프로젝트 거버넌스 행동 지침이 아닙니다. 에이전트는 규칙/지침 판단을 위해 `tasks/` (특히 `tasks/completed/`)를 참조하거나 인용해서는 안 되며, 모든 규칙의 단일 진실 공급원(SSOT)은 `docs/spec/`, `docs/forgeflow/GOVERNANCE.md`, 또는 `AGENTS.md`입니다.
-3. **레거시 마이그레이션**: v0.21.0 이하에서 생성된 `docs/releases/` 구조는 `forgeflow migrate --tasks`를 통해 `tasks/completed/`로 일괄 이동하여 현대화합니다.
+3. **레거시 마이그레이션**: 과거 생성된 `docs/releases/` 구조는 `forgeflow migrate --tasks`를 통해 `tasks/completed/`로 일괄 이동하여 현대화합니다.
 
 ## Triage와 Gate
 
