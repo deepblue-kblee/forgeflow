@@ -81,12 +81,23 @@ curl -sSL https://raw.githubusercontent.com/deepblue-kblee/forgeflow/main/instal
     └── completed/                      # 밀봉된 과거 릴리즈 아카이브
 ```
 
-### 2. 기존 프로젝트 업데이트 및 마이그레이션 (`/update-forgeflow`)
-ForgeFlow 판올림 시 기존 프로젝트에서 지시합니다:
+### 2. 전역 런타임 업그레이드 (`forgeflow upgrade`)
+터미널에서 언제든 OS 사용자 계정 전역의 ForgeFlow CLI 및 에이전트 스킬을 최신 버전으로 업그레이드할 수 있습니다:
+```bash
+# 최신 버전 확인 (설치하지 않고 확인만 수행)
+forgeflow upgrade --check
+
+# 전역 최신 버전으로 자동 업그레이드
+forgeflow upgrade
+```
+
+### 3. 작업 프로젝트 스마트 업데이트 (`/update-forgeflow`)
+어느 작업 리포지토리에서든 한 줄로 지시하면 전역 런타임 최신화와 현재 프로젝트 거버넌스 사양 갱신을 원스톱으로 처리합니다:
 ```text
 /update-forgeflow
 ```
-- 진행 중인 작업 내역을 안전하게 보존하면서 헌법과 훅 설정을 최신 규격으로 자동 마이그레이션합니다.
+- **스마트 파사드(Smart Facade)**: 원격에 새 버전이 있다면 전역 런타임(`forgeflow upgrade`)을 먼저 자동 실행하고, 이어서 현재 프로젝트의 `.forgeflow.json`, `.specify/scripts/bash/`, 템플릿들을 최신 규격으로 동기화합니다.
+- 진행 중인 작업 내역(`tasks/in-progress/`, `tasks/completed/`)은 일절 변경 없이 안전하게 보존됩니다.
 
 ---
 

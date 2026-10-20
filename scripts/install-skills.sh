@@ -126,34 +126,35 @@ mkdir -p "${UPDATE_DIR}"
 cat << 'EOF' > "${UPDATE_DIR}/SKILL.md"
 ---
 name: update-forgeflow
-description: Updates and migrates ForgeFlow governance configurations, constitution, and hooks in an existing repository.
+description: Updates ForgeFlow globally and migrates governance configurations, constitution, and hooks in an existing repository.
 ---
 
 # update-forgeflow
 
-기존 리포지토리의 ForgeFlow 설정(`.forgeflow.json`)과 Spec Kit 규범 주입 파일들을 최신 버전 규격에 맞게 갱신하고 마이그레이션합니다.
+ForgeFlow 전역 런타임 최신화와 현재 리포지토리의 거버넌스 사양 마이그레이션을 원스톱으로 수행하는 스마트 파사드(Smart Facade) 스킬입니다.
 
 ## 실행 절차
 
-1. 버전 차이 분석:
-   - 현재 프로젝트 루트의 `.forgeflow.json`에 명시된 버전과 설치된 전역 `forgeflow` CLI 버전을 대조합니다.
-   - 버전이 동일하고 파일 변경이 없으면 불필요한 갱신을 생략합니다.
+### 1단계: 전역 런타임 및 스킬 자동 최신화 (Global Upgrade Check)
+1. 원격 최신 릴리즈 점검:
+   - `forgeflow upgrade --check --json` 명령을 실행하여 현재 로컬 전역 설치 버전과 원격 공식 버전을 비교합니다.
+2. 조건부 전역 업그레이드:
+   - 원격에 새 버전이 존재할 경우(`"upgrade_available": true`), 즉시 `forgeflow upgrade`를 호출하여 OS 사용자 계정 전역 런타임(`~/.local/forgeflow`), CLI 바이너리(`~/.local/bin/forgeflow`), 및 `~/.agents/skills/`를 최신 버전으로 자동 판올림합니다.
+   - 이미 전역이 최신 버전인 경우(`"upgrade_available": false`), 불필요한 재설치를 건너뛰고 즉시 2단계로 직행합니다.
 
-2. 기존 데이터 보존 확인:
-   - `tasks/in-progress/` 및 `tasks/completed/` 디렉터리의 진행 중/완료된 릴리즈 아티팩트는 일절 삭제하거나 덮어쓰지 않습니다.
-
-3. 설정 및 스키마 마이그레이션:
-   - `.forgeflow.json`의 스키마 필드를 신규 버전 규격에 맞추어 보정하고 버전을 갱신합니다.
-   - `.specify/extensions.yml`의 훅 정의를 최신 CLI 서브커맨드 규격으로 갱신합니다.
-   - `.specify/memory/constitution.md`의 거버넌스 헌법 조항을 최신 규정으로 동기화하되, 사용자가 수동으로 추가한 커스텀 규칙이 있을 경우 안전하게 보존·병합합니다.
-   - `.specify/scripts/bash/` 스크립트 6종(`check-prerequisites.sh`, `common.sh`, `create-new-feature.sh`, `resolve-template.sh`, `setup-plan.sh`, `setup-tasks.sh`)을 전역 패키지(`~/.local/forgeflow/current/lib/forgeflow/templates/speckit/scripts/bash/`)에서 최신 버전으로 덮어쓰고 실행 권한(`chmod 755`)을 부여합니다.
-   - `.specify/templates/` 명세 템플릿 4종(`spec-template.md`, `plan-template.md`, `tasks-template.md`, `checklist-template.md`) 및 커맨드 지침(`.specify/templates/commands/`)을 최신 버전으로 갱신합니다.
-
-4. 호환성 검증:
-   - `forgeflow check --quiet` 명령을 실행하여 마이그레이션 후 거버넌스 정합성을 검증합니다.
-
-5. 마이그레이션 결과 보고:
-   - 갱신된 버전 정보, 수정된 설정 파일 목록, 검증 통과 여부를 사용자에게 간결히 보고합니다.
+### 2단계: 현재 작업 리포지토리 사양 동기화 (Local Repo Governance Migration)
+1. 기존 데이터 보존:
+   - `tasks/in-progress/` 및 `tasks/completed/` 디렉터리의 진행 중/완료된 릴리즈 아티팩트는 일절 삭제하거나 덮어쓰지 않고 안전하게 보존합니다.
+2. 거버넌스 파일 동기화:
+   - `.forgeflow.json`의 스키마 및 버전을 최신 전역 CLI 버전으로 갱신합니다.
+   - `.specify/extensions.yml`의 훅 정의를 최신 규격으로 갱신합니다.
+   - `.specify/memory/constitution.md` 거버넌스 헌법 조항을 최신 규정으로 동기화합니다 (사용자 커스텀 규칙 보존).
+   - `.specify/scripts/bash/` 스크립트 6종을 전역 패키지(`~/.local/forgeflow/current/lib/forgeflow/templates/speckit/scripts/bash/`)에서 최신 버전으로 동기화하고 실행 권한(`chmod 755`)을 부여합니다.
+   - `.specify/templates/` 명세 템플릿 4종 및 커맨드 지침(`.specify/templates/commands/`)을 최신 버전으로 갱신합니다.
+3. 호환성 검증:
+   - `forgeflow check --quiet` 명령을 실행하여 마이그레이션 후 거버넌스 무결성을 검증합니다.
+4. 결과 보고:
+   - 전역 런타임 갱신 여부, 현재 프로젝트 버전 갱신 정보, 정합성 검증 결과를 사용자에게 명확히 보고합니다.
 EOF
 
 chmod +x "${SETUP_DIR}/SKILL.md" "${UPDATE_DIR}/SKILL.md" 2>/dev/null || true
