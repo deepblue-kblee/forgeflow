@@ -25,10 +25,15 @@
    - **문서 내 미구현 CLI 명령어 정비**: `README.md` 및 사양 문서에서 존재하지 않던 `forgeflow gate1 review`, `forgeflow gate2 signoff` 등을 실제 명령어(`check --stage 2`, `review --strict`, `lifecycle package-review`, `lifecycle seal`)로 전면 교정.
    - **릴리즈 밀봉 및 테스트 무결성**: 269개 테스트 100% Pass 및 `forgeflow check --all --strict` 🟢 ALL PASSED 완료. Issue #2 공식 종결.
 
+5. **`forgeflow upgrade` 및 스마트 파사드 스킬 배포 (v0.1.3)**:
+   - **`forgeflow upgrade` CLI 서브커맨드 구현**: `--check`로 무설치 버전 확인, 최신 버전일 시 불필요한 재설치 방지(Idempotency), 원격 `install.sh` 자동 다운로드 및 전역 런타임/스킬 일괄 승격 지원.
+   - **`update-forgeflow` 스마트 파사드(Smart Facade) 개편**: 1단계 전역 최신화 점검(`forgeflow upgrade`) ➔ 2단계 현재 프로젝트 거버넌스 사양 갱신을 원스톱으로 연결. 다중 repo(A, B, C)에서 언제든 최신 환경으로 일괄 승격 보장.
+   - **테스트 무결성**: 신규 6개 단위 테스트 추가 (총 275개 테스트 100% Pass) 및 `forgeflow check --all --strict` 🟢 ALL PASSED 달성.
+
 ## 다음 할 일 (Next Tasks)
 
 1. **Git 원격 반영 (Push)**:
-   - 사용자가 원격 `git push origin main`을 진행하여 최신 배포본(v0.1.2)을 GitHub에 반영.
+   - 사용자가 원격 `git push origin main`을 진행하여 최신 배포본(v0.1.3)을 GitHub에 반영.
 2. **외부 타깃 프로젝트 실전 적용 및 추가 도그푸딩**:
    - 신규/외부 프로젝트에서 `install.sh` 및 `/setup-forgeflow` (또는 `/update-forgeflow`) 실행 테스트.
    - `/speckit.specify`부터 `/speckit.implement`까지의 외부 프로젝트 사용자 경험 검증.
