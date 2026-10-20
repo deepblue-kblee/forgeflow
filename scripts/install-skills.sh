@@ -48,6 +48,13 @@ description: Sets up ForgeFlow governance and GitHub Spec Kit hybrid environment
 
 이 스킬은 현재 작업 중인 리포지토리에 ForgeFlow 엔터프라이즈 거버넌스와 GitHub Spec Kit 환경을 초기 구성합니다.
 
+## 핵심 원칙: 과거 레거시 흔적 강제 폐기 (Date-Based Amnesia Policy)
+
+- **기준일**: **2026-10-20** (ForgeFlow v0.1.0 공식 첫 릴리즈일).
+- **레거시 폐기**: 2026-10-20 이전에 생성된 기존 `.forgeflow.json`, 과거 프로젝트 메모리, 이전 버전의 산출물(구버전 spec/PRD/DESIGN/tasks)은 모두 폐기 대상 레거시로 간주합니다.
+- **하위 호환성 배제**: 옛버전을 보존하거나 마이그레이션하려 하지 않고, 완전히 잊은 상태(Clean Break)에서 공식 v0.1.0 규격으로 새롭게 시작합니다.
+- **새 요구사항 작성**: 사용자 요구사항에 따라 `spec.md`를 v0.1.0 단일 기준으로 완전히 새롭게 작성합니다.
+
 ## 실행 절차
 
 1. 필수 도구 및 Spec Kit 스킬 자동 점검/설치:
@@ -58,8 +65,8 @@ description: Sets up ForgeFlow governance and GitHub Spec Kit hybrid environment
      npx -y skills add -g dceoy/speckit-agent-skills -s speckit-specify -s speckit-clarify -s speckit-plan -s speckit-tasks -s speckit-implement -s speckit-constitution -s speckit-analyze -y
      ```
 
-2. 거버넌스 설정 파일 생성:
-   - 프로젝트 루트에 `.forgeflow.json` 파일을 생성합니다.
+2. 레거시 정리 및 v0.1.0 거버넌스 설정 생성:
+   - 2026-10-20 이전의 구버전 `.forgeflow.json`이 존재하거나 이전 형식이면 새 v0.1.0 설정으로 교체합니다:
    ```json
    {
      "forgeflow_version": "0.1.0",
@@ -75,8 +82,18 @@ description: Sets up ForgeFlow governance and GitHub Spec Kit hybrid environment
    }
    ```
 
-3. Spec Kit 헌법 및 강제 훅 주입:
-   - `.specify/memory/constitution.md` 파일을 생성하여 5대 불변 거버넌스 헌법을 선언합니다.
+3. Spec Kit 로컬 실행 스크립트 및 템플릿 완비:
+   - 후속 Spec Kit 스킬(`/speckit-clarify`, `/speckit-plan`, `/speckit-tasks`, `/speckit-implement`)이 정상 동작할 수 있도록 프로젝트 로컬 전제조건을 구성합니다:
+     - `.specify/scripts/bash/check-prerequisites.sh` (실행 권한 부여 필수)
+     - `.specify/scripts/bash/setup-plan.sh`
+     - `.specify/scripts/bash/setup-tasks.sh`
+     - `.specify/templates/spec-template.md`
+     - `.specify/templates/plan-template.md`
+     - `.specify/templates/tasks-template.md`
+   - CLI를 통해 원스톱으로 구성할 경우 `forgeflow init --speckit`을 호출합니다.
+
+4. Spec Kit 헌법 및 강제 훅 주입:
+   - `.specify/memory/constitution.md` 파일을 생성하여 5대 불변 거버넌스 헌법을 선언합니다:
      - 제1조 (무승인 구현 금지 - No Code Before Gate 1): `tasks/in-progress/<id>/GATE1_REVIEW.md` 승인 전 소스 코드 작성/수정 절대 금지.
      - 제2조 (가짜 멈춤 금지 - No False Stopping): 단순 테스트 실패, 린트 오류 시 사용자에게 턴을 넘기지 않고 내부 자가 치유 루프(Loop 2) 자율 완주.
      - 제3조 (원자적 루프 정의 - Atomic Remediation Unit): 1회 루프는 `원인 식별 -> 1개 수정 -> 테스트 재실행 -> git commit`으로 완결.
@@ -94,12 +111,12 @@ description: Sets up ForgeFlow governance and GitHub Spec Kit hybrid environment
      ```
    - `.specify/templates/commands/implement.md`에 사전 게이트 검증 체크리스트를 주입합니다.
 
-4. 릴리즈 수명주기 디렉터리 스캐폴딩:
+5. 릴리즈 수명주기 디렉터리 스캐폴딩:
    - `tasks/in-progress/` 및 `tasks/completed/` 디렉터리를 생성합니다.
    - `tasks/README.md`에 비-행동지침 경계 선언을 작성합니다.
 
-5. 완료 보고:
-   - 셋업 완료 상태를 요약하고, 다음 시작 명령어(`/speckit.specify`)를 안내합니다.
+6. 완료 보고:
+   - 셋업 완료 상태를 요약하고, 다음 시작 명령어(`/speckit.specify "기능 설명"`)를 안내합니다.
 EOF
 
 # 2. update-forgeflow 스킬 설치

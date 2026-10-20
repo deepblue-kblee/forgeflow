@@ -73,7 +73,9 @@ curl -sSL https://raw.githubusercontent.com/deepblue-kblee/forgeflow/main/instal
 ├── .specify/                           # Spec Kit 연동 환경
 │   ├── memory/constitution.md          # 5대 불변 거버넌스 헌법
 │   ├── extensions.yml                  # before_implement 강제 차단 훅
-│   └── templates/commands/implement.md # 사전 검증 체크리스트
+│   ├── templates/commands/implement.md # 사전 검증 체크리스트
+│   ├── templates/                      # spec-template, plan-template, tasks-template
+│   └── scripts/bash/                   # check-prerequisites.sh, setup-plan.sh, setup-tasks.sh
 └── tasks/                              # 릴리즈 패키지 보관소
     ├── in-progress/                    # 현재 진행 중인 활성 패키지
     └── completed/                      # 밀봉된 과거 릴리즈 아카이브
@@ -104,5 +106,5 @@ ForgeFlow 판올림 시 기존 프로젝트에서 지시합니다:
    - Inner Loop (Loop 2): 테스트 실패 시 `분석 ➔ 수정 ➔ 테스트 성공 ➔ git commit` 자율 주행 (동일 결함 5회 한도)
    - `forgeflow gate2 signoff`: 엄격 리뷰, 커밋 SHA 바인딩 및 `QA_SIGNOFF.md` 발행
 5. **Stage 5 (Gate 3 릴리즈 승인 및 패키지 밀봉)**:
-   - `forgeflow release`: `RELEASE_SIGNOFF.md` 및 `COMPLETION_REPORT.md` 생성
+   - `forgeflow release`: `RELEASE_SIGNOFF.md` 생성 및 사용자 최종 승인 확인
    - 패키지를 `tasks/completed/`로 원자적 이동하여 안전하게 밀봉

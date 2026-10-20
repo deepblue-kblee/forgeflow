@@ -1,11 +1,13 @@
 # Next Actions
 
-## 다음 할 일 (Next Tasks)
+## 현재 진행 과업 (Current In-Progress Tasks)
 
-1. **외부 타깃 프로젝트 실전 적용 및 도그푸딩**:
-   - 실제 개발 대상 외부 저장소에서 `curl -sSL https://raw.githubusercontent.com/deepblue-kblee/forgeflow/main/install.sh | bash`를 실행하여 환경 구성.
-   - `/setup-forgeflow` 스킬을 호출하여 신규 프로젝트 스캐폴딩(`.forgeflow.json`, `.specify/`, `tasks/`) 검증.
-   - Spec Kit 인터뷰(`/speckit.specify`, `/speckit.clarify`)부터 `forgeflow check --stage 2` Fail-Closed 게이트키퍼 차단 및 구현 완주까지 실전 도그푸딩 수행.
+1. **마크다운 문서 전수 점검 및 최신화 (완료 단계)**:
+   - `AGENTS.md`: 옛버전 산출물(`PRD.md`, `DESIGN.md`) 제거 및 최신 Spec Kit 하이브리드 아키텍처(`spec.md`, `plan.md`, `tasks.md`, `GATE1_REVIEW.md`, `QA_SIGNOFF.md`, `RELEASE_SIGNOFF.md`) 반영.
+   - `AGENTS.md` & `SKILL.md`: 2026-10-20(v0.1.0 릴리즈일) 이전 과거 버전/흔적 강제 폐기 규범(Date-Based Amnesia Policy) 주입.
+   - `README.md`, `session-state`: 최신 규격과 상태로 동기화.
 
-2. **Spec Kit CLI 전역 툴체인(`uv tool install specify-cli`) 연동 고도화**:
-   - `specify-cli` 전역 툴체인 환경과의 추가 호환성 및 편의 기능 검토.
+2. **GitHub Issue #1 해결 (실전 Spec Kit 하이브리드 도그푸딩)**:
+   - Spec Kit 스킬 체인(`/speckit-specify` ➔ `/speckit-clarify` ➔ Gate 1 ➔ `/speckit-plan` ➔ `/speckit-tasks` ➔ `/speckit-implement`)으로 실제 피쳐/이슈 수명주기 직접 구동.
+   - `setup-forgeflow` 및 `scaffold_speckit_hybrid`에 누락된 `.specify/scripts/bash/*` 및 템플릿 번들링 구현.
+   - 하이브리드 워크플로우 실제 동작 검증 및 `install.sh`/스킬 배포 완결.

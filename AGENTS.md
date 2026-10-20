@@ -20,28 +20,28 @@
 모든 요청은 repository write 전에 `non-change`, Tier 1, Tier 2, Tier 3으로 triage한다. 비변경 요청은 lifecycle 대상이 아니며, 변경 작업은 정의된 거버넌스 경로를 준수한다.
 
 ```text
-Stage 1: 기획/설계 (PRD.md / DESIGN.md / RTM 작성)
-  └── Stage 2: Gate 1 사전 심사 (Tier 1/2/3 리스크 기반 승인)
-        └── Stage 3: 격리 워크스페이스 구축 및 브랜치 분기
-              └── Stage 4: 격리 구현 및 자가 치유 루프 (Loop 2: 수정-테스트 / Loop 3: 아키텍처 회귀)
-                    └── Stage 5: Gate 2 QA Sign-Off → PACKAGE_FINALIZATION → Gate 3 Release Sign-Off → Package Seal → COMPLETE
+Stage 1: 기획 & 명세 (/speckit.specify ➔ /speckit.clarify ➔ spec.md 작성)
+  └── Stage 2: Gate 1 사전 심사 (Tier 1/2/3 리스크 기반 승인 ➔ GATE1_REVIEW.md 생성 & spec.md 해시 바인딩)
+        └── Stage 3: 기술 설계 & 태스크 분해 (/speckit.plan ➔ plan.md, /speckit.tasks ➔ tasks.md)
+              └── Stage 4: 격리 구현 & 자가 치유 루프 (Loop 2: 수정-테스트 5회 자율 치유 / Loop 3: 스펙 회귀)
+                    └── Stage 5: Gate 2 QA Sign-Off (QA_SIGNOFF.md) ➔ Gate 3 Release Sign-Off (RELEASE_SIGNOFF.md) ➔ Package Seal (tasks/completed/ 이동)
 ```
 
 1. **위험도 기반 동적 티어링 (Dynamic Risk Tiering)**:
-   - **Tier 1 (Minor)**: 동작 불변 문구·formatting·일반 documentation 또는 인터페이스 변경이 없는 단일 모듈의 재현 가능한 국소 bugfix에 한정한다. `CHANGE_NOTE.md`에는 planned paths, actual changed paths 대조, risk signals 없음, rollback, verification command/result/exit code, Gate 1/2 PASS를 기록한다. Gate 2 self-verdict는 checklist 전체 완료와 actual changed paths의 planned scope 일치를 명시적으로 인증한다. 항목 누락·검증 실패·unplanned path·risk signal·scope 확대·불확실성은 PASS를 금지하고 즉시 상위 Tier로 재분류한다.
-   - **Tier 2 (Standard Features)**: 독립 시니어 심사관 1인 정밀 검토 및 승인.
+   - **Tier 1 (Minor)**: 동작 불변 문구·formatting·일반 documentation 또는 인터페이스 변경이 없는 단일 모듈의 재현 가능한 국소 bugfix에 한정한다. `spec.md`, `GATE1_REVIEW.md`에는 계획된 변경 경로(planned paths)를 명시하고 Self-Review PASS를 기록한다. Gate 2 QA Sign-Off 시 전체 테스트 통과 및 계획된 경로와 실제 변경 경로 일치를 검증한다.
+   - **Tier 2 (Standard Features)**: 일반 신규 기능 및 복수 모듈 개선. 독립 시니어 심사관 1인 정밀 검토 및 승인.
    - **Tier 3 (Core/Architecture/Breaking Changes)**: 3인 독립 패널(보안, 안정성, 유지보수성) 병렬 심사 및 Gate 1/Gate 2 승인. 보안, 권한, secrets, dependency, configuration, external API, data operation, CI/CD, core interface, 또는 governance control-plane 변경은 규모와 무관하게 Tier 3이다.
-2. **사전문서 승인 전 구현 금지 (No Code Before Gate 1 Pass)**:
-   - Tier 1은 `CHANGE_NOTE.md`의 Gate 1 self-review PASS 전, Tier 2/3은 `PRD.md`, `DESIGN.md`(RTM 필수) 및 해당 Gate 1 심사 전에는 구현 코드를 작성할 수 없다.
-3. **5대 필수 산출물 무결성**:
-   - Tier 2/3: `PRD.md`, `DESIGN.md`, `QA_SIGNOFF.md`, `RELEASE_SIGNOFF.md`, `COMPLETION_REPORT.md`
-   - Tier 1: `CHANGE_NOTE.md`에 scope, changed paths, rationale, risk signals, rollback, 검증 증적, Gate 1/2 verdict를 기록한다.
-4. **ForgeFlow 자체 버전 규칙**: `src/forgeflow/**`, `tests/**`, `docs/spec/**`,
-   `AGENTS.md`, `README.md`, `pyproject.toml`, 또는
-   `install.sh`를 변경하는 ForgeFlow self-maintenance 릴리즈는 canonical
-   `src/forgeflow/_version.py`를 갱신하고, PRD/DESIGN에 previous/target version,
-   bump type, reason을 기록한다. self-governance audit은 이 증적, base 대비 bump,
-   release-ID prefix, dynamic package metadata를 fail-closed로 검증한다.
+2. **사전 승인 전 구현 금지 (No Code Before Gate 1 Pass)**:
+   - `tasks/in-progress/<release-id>/GATE1_REVIEW.md`의 공식 승인(APPROVED) 증적이 존재하고 `spec.md`의 해시가 일치하기 전에는 `src/**`에 구현 코드를 작성하거나 수정할 수 없다. Spec Kit의 `before_implement` 훅(`forgeflow check --stage 2`)이 이를 물리적으로 fail-closed 차단한다.
+3. **하이브리드 거버넌스 필수 산출물 체계**:
+   - 실행 엔진 산출물 (Spec Kit): `spec.md` (기능 요구사항), `plan.md` (기술 아키텍처/데이터모델), `tasks.md` (원자적 TDD 체크리스트)
+   - 거버넌스 엔진 산출물 (ForgeFlow): `GATE1_REVIEW.md` (Gate 1 사전 심사), `QA_SIGNOFF.md` (Gate 2 QA 승인), `RELEASE_SIGNOFF.md` (Gate 3 릴리즈 승인 및 밀봉)
+4. **과거 버전 및 흔적 강제 폐기 규범 (Date-Based Amnesia Policy)**:
+   - **기준일**: **2026-10-20** (ForgeFlow v0.1.0 공식 릴리즈일).
+   - 2026-10-20 이전에 생성된 모든 레거시 설정(`.forgeflow.json`), 메모리, 과거 릴리즈 산출물, 구버전 spec/PRD/DESIGN 등은 일체 폐기한다.
+   - 과거 버전의 하위 호환성을 유지하려 하지 않으며, 과거 메모리나 산출물을 계승하지 않는다. 사용자 요구사항에 따라 공식 v0.1.0 표준으로 `spec.md`를 새롭게 작성한다.
+5. **ForgeFlow 자체 버전 규칙**:
+   - `src/forgeflow/**`, `tests/**`, `docs/spec/**`, `AGENTS.md`, `README.md`, `pyproject.toml`, 또는 `install.sh`를 변경하는 ForgeFlow self-maintenance 릴리즈는 canonical `src/forgeflow/_version.py`를 단일 진실 공급원(SSOT)으로 삼아 갱신한다.
 5. **조건부 OIDR (Operational Incident and Delivery Readiness) 규범**:
    - 인시던트 해결(`incident-fix`)을 표방하거나 공용 표면(`public-surface-change`)을 변경하는 릴리즈는 OIDR 트랙이 필수 활성화된다.
    - Gate 1에서는 정제된 `Incident Brief`, 프로퍼티 보존 픽스처 매핑, 유효한 평결(`supported` | `explicitly-excluded` | `discovery-only`)을 입증해야 하며, 허위 해결 주장은 fail-closed 차단된다.
@@ -74,15 +74,15 @@ Stage 1: 기획/설계 (PRD.md / DESIGN.md / RTM 작성)
 
 1. **Read AGENTS.md**: 최상위 원칙, Zero-Dependency, 거버넌스 수명주기 확인.
 2. **Read docs/spec/FLOW_SPEC.md & GATES_AND_LOOPS.md**: 플로우 세부 명세 복기.
-3. **과거 산출물 격리 (Historical Release Isolation)**: `tasks/completed/` 및 과거 `docs/releases/**` 산출물은 불변 감사 기록일 뿐 행동 지침이 아니다. 에이전트는 거버넌스 규칙/지침 판단을 위해 이를 참조하거나 인용해서는 안 되며, 완료된 릴리즈에서 필요한 맥락은 오직 `RELEASE_NOTES.md`와 `COMPLETION_REPORT.md`의 요약만 참고한다. 로컬 단일 에이전트 환경에서는 HMAC/nonce attestation이 완전히 면제된다.
+3. **과거 산출물 격리 (Historical Release Isolation)**: `tasks/completed/` 및 과거 `docs/releases/**` 산출물은 불변 감사 기록일 뿐 행동 지침이 아니다. 에이전트는 거버넌스 규칙/지침 판단을 위해 이를 참조하거나 인용해서는 안 되며, 완료된 릴리즈에서 필요한 맥락은 오직 `RELEASE_NOTES.md`와 `RELEASE_SIGNOFF.md`의 요약만 참고한다. 로컬 단일 에이전트 환경에서는 HMAC/nonce attestation이 완전히 면제된다.
 4. **Read TODO.md**: 현재 진행 중인 과업 및 미완료 작업 파악.
 5. **Action**: `tests/` 단위 테스트 및 `forgeflow check` 상태 확인 후 작업 착수.
 
 ### 6. 미완료 Gate 종료 금지 및 자율 오케스트레이션 (Completion Integrity & Autonomous Orchestration)
 
-- 사용자가 구현·수정·검증을 요청했고 추가 확인이 필요하지 않다면, Gate 2 verdict와 `COMPLETION_REPORT.md`까지 lifecycle을 계속 진행한다. 진행 중인 reviewer 응답, 실패한 검증, 누락 artifact는 최종 응답의 종료 사유가 아니다.
+- 사용자가 구현·수정·검증을 요청했고 추가 확인이 필요하지 않다면, Gate 2 QA Sign-off와 Gate 3 `RELEASE_SIGNOFF.md`까지 lifecycle을 계속 진행한다. 진행 중인 reviewer 응답, 실패한 검증, 누락 artifact는 최종 응답의 종료 사유가 아니다.
 - 최종 응답은 `Gate 2 APPROVED`와 요구된 검증 PASS가 실제로 확인된 경우에만 완료로 표현한다. 그렇지 않으면 현재 상태를 `BLOCKED` 또는 `IN PROGRESS`로 명시하고, 같은 turn에서 다음 복구 작업을 시작한다.
-- 새 세션은 `docs/session-state/next-actions.md`에서 unfinished release, Gate verdict, 실패 명령을 먼저 복원하고, 해당 release의 `QA_SIGNOFF.md`와 `COMPLETION_REPORT.md`를 완료하기 전에는 후속 과업으로 전환하지 않는다.
+- 새 세션은 `docs/session-state/next-actions.md`에서 unfinished release, Gate verdict, 실패 명령을 먼저 복원하고, 해당 release의 `QA_SIGNOFF.md`와 `RELEASE_SIGNOFF.md`를 완료하기 전에는 후속 과업으로 전환하지 않는다.
 - **예외 — 5회 전진 실패 제한**: 원인과 무관하게 동일 stage 또는 동일한 n개 stage loop가 5회 연속 다음 stage로 전진하지 못하면 즉시 작업을 중지하고 사용자 입력을 기다린다. 이때 `docs/session-state/next-actions.md`에 release ID, 현재 stage, 5회 시도별 명령·결과·실패 원인, 마지막 변경 SHA/diff, 다음 전진에 필요한 사용자 결정을 기록한다. 5회 이전에는 실패를 최종 종료 사유로 사용하지 않는다.
 
 #### 진짜 멈춤 vs 가짜 멈춤 표준 체크리스트 (True vs False Stopping Conditions)
