@@ -45,11 +45,18 @@
      - 에이전트 통합 원스톱 파사드: `/update-forgeflow` 스킬
    - **테스트 및 거버넌스 무결성**: 신규 단위 테스트 추가 (총 264개 테스트 100% Pass), 5개 릴리즈 전수 하네스 감사 `forgeflow check --all --strict` 🟢 ALL PASSED, `tasks/completed/v0.1.5-redefine-update-command-and-facade/` 패키지 밀봉 완료.
 
+8. **과거 유산 및 규격 불일치 전수 청산 (v0.1.6)**:
+   - **원자적 루프 정의 현대화**: 자가 치유(Loop 2) 루프마다 `git commit (새 SHA 발행)`을 강제하던 조항을 제거하고, 루프 중에는 로컬 수정-테스트를 반복하며 모든 테스트가 100% 통과된 최종 시점에 단일 원자적 커밋 1개를 생성하도록 단일화.
+   - **Spec SHA-256 해시 바인딩 잔재 완전 제거**: `FLOW_SPEC.md` 스키마 및 `GATES_AND_LOOPS.md`, `README.md`에 남아있던 해시 바인딩 및 해시 재바인딩 설명 영구 삭제.
+   - **거버넌스 용어 및 Stage 표기 단일화**: 모호한 '사전 심사' 표현을 'Gate 1: 명세 승인 (Spec Sign-Off)'으로 완전 통일하고, 구현 단계를 'Stage 3'으로 일치화.
+   - **배포 사양 및 버전 관리 정비**: `DISTRIBUTION_SPEC.md`에 전역 `upgrade`와 로컬 `update`, 스마트 파사드 `/update-forgeflow`의 명확한 역할 분리 반영. 과거 버전 번호(v0.22/v0.23 등)를 v0.1.x 표준으로 청산하고 `CHANGELOG.md` 릴리즈 이력 완비.
+   - **테스트 및 거버넌스 무결성**: 264개 단위 테스트 100% 통과, 6개 릴리즈 전수 하네스 감사 `forgeflow check --all --strict` 🟢 ALL PASSED, `tasks/completed/v0.1.6-cleanup-legacy-spec-and-sha/` 패키지 밀봉 완료.
+
 ## 다음 할 일 (Next Tasks)
 
 1. **Git 원격 반영 (Push)**:
-   - `git push origin main`을 실행하여 최신 릴리즈(v0.1.5)를 GitHub 원격에 반영.
+   - `git push origin main`을 실행하여 최신 릴리즈(v0.1.6)를 GitHub 원격에 반영.
 2. **전역 런타임 최신화 (최초 1회 install.sh)**:
-   - 원격 푸시 후 `bash install.sh`를 실행하여 로컬 OS 전역 CLI(`~/.local/bin/forgeflow`)를 `v0.1.5`로 승격.
-3. **외부 타깃 프로젝트 실전 적용 및 검증**:
-   - 다중 저장소(Repo A, Repo B 등)에서 `forgeflow update` 또는 `/update-forgeflow` 스킬을 실행하여 전역 업그레이드와 로컬 사양 동기화의 유기적 동작 검증.
+   - 원격 푸시 후 `bash install.sh`를 실행하여 로컬 OS 전역 CLI(`~/.local/bin/forgeflow`)를 `v0.1.6`으로 승격.
+3. **`update-forgeflow` 스킬 도그푸딩 검증**:
+   - 로컬 작업 저장소(현재 forgeflow 저장소 또는 외부 저장소)에서 `/update-forgeflow` 스킬(또는 `forgeflow update`)을 실행하여 전역 업그레이드와 로컬 사양 동기화의 유기적 동작 검증.
