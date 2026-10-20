@@ -1,8 +1,8 @@
-# Next Actions
+# Next Actions & Session Handover
 
 ## 완료된 과업 (Completed Tasks)
 
-1. **마크다운 문서 전수 점검 및 최신화 완료**:
+1. **마크다운 문서 전수 점검 및 최신화 완료 (v0.1.0)**:
    - `AGENTS.md`: 옛 산출물(`PRD.md`, `DESIGN.md`, `RTM`) 영구 삭제 및 최신 Spec Kit 하이브리드 아키텍처(`spec.md`, `plan.md`, `tasks.md`, `GATE1_REVIEW.md`, `QA_SIGNOFF.md`, `RELEASE_SIGNOFF.md`) 반영.
    - `AGENTS.md` & `SKILL.md`: 2026-10-20(v0.1.0 릴리즈일) 이전 과거 버전/흔적 강제 폐기 규범(Date-Based Amnesia Policy) 주입.
    - `README.md`, 세션 상태 문서 최신화 완료.
@@ -56,11 +56,49 @@
    - `docs/spec/SPECKIT_HOOKS_AND_NORMS.md`: Spec Kit 3대 거버넌스 주입 메커니즘, 전체 훅 라이프사이클 및 커밋 매핑, 거시 훅(Macro Hook) vs 미시 체크포인트(Micro Checkpoint) 역할 분담, 피쳐 브랜치 수명주기, 5대 헌법 조항 전문을 단독 문서로 완비.
    - `.specify/templates/commands/implement.md` 및 `src/forgeflow/scaffold.py`: 개별 태스크 체크포인트 커밋 및 안전 롤백 지침 반영 완료.
 
-## 다음 할 일 (Next Tasks)
+---
 
-1. **Git 원격 반영 (Push)**:
-   - `git push origin main`을 실행하여 최신 릴리즈(v0.1.6)를 GitHub 원격에 반영.
-2. **전역 런타임 최신화 (최초 1회 install.sh)**:
-   - 원격 푸시 후 `bash install.sh`를 실행하여 로컬 OS 전역 CLI(`~/.local/bin/forgeflow`)를 `v0.1.6`으로 승격.
-3. **`update-forgeflow` 스킬 도그푸딩 검증**:
-   - 로컬 작업 저장소(현재 forgeflow 저장소 또는 외부 저장소)에서 `/update-forgeflow` 스킬(또는 `forgeflow update`)을 실행하여 전역 업그레이드와 로컬 사양 동기화의 유기적 동작 검증.
+## 새 세션에서 바로 이어서 착수할 과업 (Next Actions: v0.1.7)
+
+### 🎯 릴리즈 목표: `v0.1.7-purge-legacy-templates-and-spec-discovery`
+
+사용자 질의 및 분석을 통해 도출된 핵심 문제 2가지를 해결합니다:
+1. **사양서 발견성(Spec Discovery) 부재**: 타깃 개발 프로젝트에서 AI 에이전트가 프레임워크 전역에 배포된 사양서(`FLOW_SPEC.md` 등 7종)의 위치를 스스로 찾고 참조할 수 있도록 헌법, 스킬, CLI에 탐색 인터페이스를 제공한다.
+2. **배포판 내 레거시 템플릿 잔재 청산**: Spec Kit 하이브리드 표준에서 전혀 쓰이지 않는 과거 v0.22 시절의 레거시 파일(`PRD.md`, `DESIGN.md`, `ROADMAP.md`, `GOVERNANCE.md`, `RELEASE_NOTES.md`)이 소스 및 전역 배포판(`~/.local/forgeflow/current/lib/forgeflow/templates/`)에 남아있으므로, 소스 정리와 함께 `install.sh` 및 `upgrade` 시 자동 정화(Purge)되도록 개선한다.
+
+### 📋 세부 실행 계획 및 작업 목록
+
+#### 1단계: 브랜치 분기 및 사전 준비
+- `git checkout -b feat/v0.1.7-purge-legacy-templates-and-spec-discovery` 분기
+- 이미 작성된 `tasks/in-progress/v0.1.7-purge-legacy-templates-and-spec-discovery/`의 `spec.md`, `GATE1_REVIEW.md`, `plan.md`, `tasks.md` 검토 확인
+
+#### 2단계: 사양서 발견성(Spec Discovery) 주입
+- `.specify/memory/constitution.md` 및 `src/forgeflow/scaffold.py` 내장 헌법:
+  - 하단에 `## 프레임워크 공식 사양서 참조 경로 (Framework Specifications)` 섹션을 추가하여 `~/.local/forgeflow/current/lib/forgeflow/templates/spec/` 경로와 7대 공식 사양서 목록 명시.
+- `scripts/install-skills.sh`, `~/.agents/skills/setup-forgeflow/SKILL.md`, `~/.agents/skills/update-forgeflow/SKILL.md`에 사양서 참조 안내 동기화.
+
+#### 3단계: `forgeflow doc` (또는 `spec`) CLI 서브커맨드 구현
+- `src/forgeflow/cli.py`:
+  - `doc` 서브커맨드 추가:
+    - `forgeflow doc list`: 배포된 사양서 목록 및 요약 표시.
+    - `forgeflow doc show <name>`: 지정한 사양서의 전체 경로 및 마크다운 내용 출력.
+    - `--json` 플래그: 기계 가독형 JSON 지원.
+- `tests/test_doc_cli.py` 작성 및 단위 테스트 100% 검증.
+
+#### 4단계: 배포판 레거시 템플릿 정화 로직 (`install.sh` & `upgrade`)
+- `install.sh`:
+  - `cp -R "$SRC_DIR/templates" "$PKG_LIB_DIR/"` 복사 전후로, `$PKG_LIB_DIR/templates/`에서 레거시 파일(`PRD.md`, `DESIGN.md`, `ROADMAP.md`, `GOVERNANCE.md`, `RELEASE_NOTES.md`)을 복사에서 제외하거나 설치 직후 강제 삭제(`rm -f`)하는 정화(Purge) 로직 탑재.
+  - 기존에 이미 설치되어 있는 전역 경로(`~/.local/forgeflow/current/lib/forgeflow/templates/`)의 레거시 잔재 파일들도 탐지하여 자동 삭제.
+- 소스 저장소 내 레거시 파일 정리:
+  - 과거 테스트 의존성(`test_scaffold.py` 등)을 해치지 않도록 필요 시 `src/forgeflow/templates/legacy/` 네임스페이스로 격리하거나, 최신 템플릿 검증으로 테스트를 현대화하여 배포 대상에서 완전히 제외.
+
+#### 5단계: 버전 판올림 및 거버넌스 감사
+- `src/forgeflow/_version.py`를 `0.1.7`로 판올림 및 `pip install -e .`
+- `pytest` 전체 테스트 스위트 100% Pass
+- `forgeflow check --stage 2` 및 `forgeflow check --all --strict` 🟢 ALL PASSED
+- Gate 2 `QA_SIGNOFF.md` 및 Gate 3 `RELEASE_SIGNOFF.md` 작성 및 밀봉
+- `main` 브랜치 머지 및 피쳐 브랜치 삭제 (Fast-Path Close)
+
+#### 6단계: 원격 푸시 및 도그푸딩
+- `git push origin main`
+- `bash install.sh`를 실행하여 로컬 머신 전역 배포판(`~/.local/forgeflow/`)의 템플릿이 깨끗하게 정화되고 `forgeflow doc` 명령어가 정상 동작하는지 실전 도그푸딩 검증.
