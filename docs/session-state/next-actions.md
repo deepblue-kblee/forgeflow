@@ -30,10 +30,18 @@
    - **`update-forgeflow` 스마트 파사드(Smart Facade) 개편**: 1단계 전역 최신화 점검(`forgeflow upgrade`) ➔ 2단계 현재 프로젝트 거버넌스 사양 갱신을 원스톱으로 연결. 다중 repo(A, B, C)에서 언제든 최신 환경으로 일괄 승격 보장.
    - **테스트 무결성**: 신규 6개 단위 테스트 추가 (총 275개 테스트 100% Pass) 및 `forgeflow check --all --strict` 🟢 ALL PASSED 달성.
 
+6. **레거시 `update` 명령어 및 구버전 카탈로그 완전 폐기 (v0.1.4)**:
+   - **`forgeflow update` 서브커맨드 영구 제거**: 2026-10-20 이전 v0.4.4~v0.22.0 시절의 구시대 잔재였던 `update` 명령어를 CLI 파서 및 디스패치에서 영구 삭제.
+   - **레거시 모듈 및 자산 청산**: `update.py`, `bundle_catalog.py`, `catalog_oracles/`, `tests/test_update.py` 등 약 660줄의 레거시 코드를 완전 삭제하여 Date-Based Amnesia Policy 완벽 관철.
+   - **단일 표준 확립**: 전역 런타임 업그레이드는 `forgeflow upgrade`, 로컬 프로젝트 거버넌스 마이그레이션은 `/update-forgeflow` 스킬로 일원화.
+   - **테스트 무결성**: 263개 테스트 100% Pass 및 `forgeflow check --all --strict` 4개 릴리즈 전수 🟢 ALL PASSED.
+
 ## 다음 할 일 (Next Tasks)
 
 1. **Git 원격 반영 (Push)**:
-   - 사용자가 원격 `git push origin main`을 진행하여 최신 배포본(v0.1.3)을 GitHub에 반영.
-2. **외부 타깃 프로젝트 실전 적용 및 추가 도그푸딩**:
+   - 사용자가 원격 `git push origin main`을 진행하여 최신 배포본(v0.1.4)을 GitHub에 반영.
+2. **전역 런타임 최신화 (최초 1회 install.sh)**:
+   - `bash install.sh`를 실행하여 로컬 전역 CLI(`~/.local/bin/forgeflow`)를 `v0.1.4`로 승격.
+3. **외부 타깃 프로젝트 실전 적용 및 추가 도그푸딩**:
    - 신규/외부 프로젝트에서 `install.sh` 및 `/setup-forgeflow` (또는 `/update-forgeflow`) 실행 테스트.
    - `/speckit.specify`부터 `/speckit.implement`까지의 외부 프로젝트 사용자 경험 검증.
