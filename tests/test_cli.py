@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 
 from forgeflow.scaffold import TemplateScaffolder
+from forgeflow._version import __version__
 
 
 class TestCliIntegration(unittest.TestCase):
@@ -52,8 +53,8 @@ class TestCliIntegration(unittest.TestCase):
         )
         self.assertEqual(forgeflow.returncode, 0, forgeflow.stderr)
         self.assertEqual(harness.returncode, 0, harness.stderr)
-        self.assertIn("v0.1.0", forgeflow.stdout)
-        self.assertIn("v0.1.0", harness.stdout)
+        self.assertIn(f"v{__version__}", forgeflow.stdout)
+        self.assertIn(f"v{__version__}", harness.stdout)
 
     def test_forgeflow_review_cli(self):
         repo_src = Path(__file__).resolve().parent.parent / "src"
