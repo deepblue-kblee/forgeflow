@@ -15,6 +15,7 @@ import importlib.resources as pkg_resources
 
 from .validator import TierRules
 from ._version import __version__
+from .legacy_templates import LEGACY_TEMPLATES
 
 
 class TemplateScaffolder:
@@ -36,13 +37,10 @@ class TemplateScaffolder:
         Path("docs/forgeflow/spec/CHANGELOG.md"): "spec/CHANGELOG.md",
         Path("docs/forgeflow/spec/FLOW_SPEC.md"): "spec/FLOW_SPEC.md",
         Path("docs/forgeflow/spec/GATES_AND_LOOPS.md"): "spec/GATES_AND_LOOPS.md",
+        Path("docs/forgeflow/spec/SPECKIT_HOOKS_AND_NORMS.md"): "spec/SPECKIT_HOOKS_AND_NORMS.md",
         Path("docs/forgeflow/templates/COMPLETION_REPORT.md"): "COMPLETION_REPORT.md",
-        Path("docs/forgeflow/templates/DESIGN.md"): "DESIGN.md",
-        Path("docs/forgeflow/templates/PRD.md"): "PRD.md",
         Path("docs/forgeflow/templates/QA_SIGNOFF.md"): "QA_SIGNOFF.md",
         Path("docs/forgeflow/templates/RELEASE_SIGNOFF.md"): "RELEASE_SIGNOFF.md",
-        Path("docs/forgeflow/templates/RELEASE_NOTES.md"): "RELEASE_NOTES.md",
-        Path("docs/forgeflow/templates/ROADMAP.md"): "ROADMAP.md",
     }
     LEGACY_BINDING = (
         "### ForgeFlow 거버넌스 및 라이프사이클 준수 규범 (ForgeFlow Governance Binding)\n"
@@ -415,13 +413,21 @@ class TemplateScaffolder:
             # Modern Python 3.9+ files() API
             files_ref = pkg_resources.files("forgeflow.templates")
             template_file = files_ref.joinpath(template_name)
-            return template_file.read_text(encoding="utf-8")
+            if template_file.is_file():
+                return template_file.read_text(encoding="utf-8")
         except Exception:
-            # Fallback to local path if running uninstalled from source tree
-            local_fallback = Path(__file__).resolve().parent / "templates" / template_name
-            if local_fallback.exists():
-                return local_fallback.read_text(encoding="utf-8")
-            raise FileNotFoundError(f"Template '{template_name}' not found in package resources.")
+            pass
+
+        # Fallback to local path if running uninstalled from source tree
+        local_fallback = Path(__file__).resolve().parent / "templates" / template_name
+        if local_fallback.is_file():
+            return local_fallback.read_text(encoding="utf-8")
+
+        # Fallback for deprecated legacy templates preserved for backwards compatibility
+        if template_name in LEGACY_TEMPLATES:
+            return LEGACY_TEMPLATES[template_name]
+
+        raise FileNotFoundError(f"Template '{template_name}' not found in package resources.")
 
     @staticmethod
     def render_template(content: str, variables: Dict[str, str]) -> str:

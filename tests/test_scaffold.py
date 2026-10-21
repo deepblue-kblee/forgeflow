@@ -171,13 +171,19 @@ class TestScaffolder(unittest.TestCase):
 
     def test_packaged_release_templates_match_source_templates(self):
         package_templates_root = Path(__file__).resolve().parent.parent / "src" / "forgeflow" / "templates"
-        for name in ("PRD.md", "DESIGN.md", "ROADMAP.md", "QA_SIGNOFF.md", "RELEASE_SIGNOFF.md", "COMPLETION_REPORT.md", "RELEASE_NOTES.md"):
+        # Active templates must exist in source and match
+        for name in ("QA_SIGNOFF.md", "RELEASE_SIGNOFF.md", "COMPLETION_REPORT.md"):
             content = TemplateScaffolder.get_template_content(name)
             self.assertTrue(len(content) > 0)
             self.assertEqual(
                 content,
                 (package_templates_root / name).read_text(encoding="utf-8"),
             )
+        # Purged legacy templates must NOT exist in templates directory, but fallback works
+        for legacy_name in ("PRD.md", "DESIGN.md", "ROADMAP.md", "GOVERNANCE.md", "RELEASE_NOTES.md"):
+            self.assertFalse((package_templates_root / legacy_name).exists())
+            legacy_content = TemplateScaffolder.get_template_content(legacy_name)
+            self.assertTrue(len(legacy_content) > 0)
 
     def test_release_notes_is_user_facing_and_not_core_artifact(self):
         rel_dir = self.temp_dir / "v0.1.0-notes"

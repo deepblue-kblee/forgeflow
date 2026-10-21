@@ -243,6 +243,12 @@ done
 
 if [ -d "$SRC_DIR/templates" ]; then
   cmd_run cp -R "$SRC_DIR/templates" "$PKG_LIB_DIR/"
+  # Purge legacy templates from new package
+  if [ "$DRY_RUN" = false ]; then
+    for legacy_tmpl in PRD.md DESIGN.md ROADMAP.md GOVERNANCE.md RELEASE_NOTES.md; do
+      rm -f "$PKG_LIB_DIR/templates/$legacy_tmpl"
+    done
+  fi
 fi
 
 if [ -d "$SRC_DIR/catalog_oracles" ]; then
