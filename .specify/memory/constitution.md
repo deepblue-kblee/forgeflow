@@ -14,3 +14,16 @@
 
 ## 제5조 (스펙 무단 하향 금지 - No Spec Downgrade)
 구현의 어려움을 이유로 사용자 승인 없이 `spec.md`의 요구사항이나 Acceptance Criteria를 축소·삭제·완화할 수 없다. 스펙 수정이 필요한 경우 반드시 공식 스펙 회귀(Loop 3) 절차를 거쳐 Gate 1 재승인을 획득해야 한다.
+
+## 프레임워크 공식 사양서 참조 경로 (Framework Specifications)
+에이전트는 세부 규범과 아키텍처 판단이 필요할 때 다음 공식 사양서(단일 진실 공급원)를 참조해야 한다:
+- 참조 인터페이스: `forgeflow doc list` 또는 `forgeflow doc show <spec-name>` CLI
+- 전역 템플릿 경로: `~/.local/forgeflow/current/lib/forgeflow/templates/spec/`
+- 7대 공식 사양서:
+  1. `FLOW_SPEC.md`: 5단계 폐루프 수명주기, 칸반 구조, 브랜치 전략
+  2. `GATES_AND_LOOPS.md`: 게이트 판정 기준, 3대 루프(Loop 1~3), 자가 치유 예산
+  3. `SPECKIT_HOOKS_AND_NORMS.md`: Spec Kit 3대 주입 메커니즘, 훅 라이프사이클, 체크포인트 커밋 규범
+  4. `DISTRIBUTION_SPEC.md`: 배포, 버전 관리, `upgrade` 및 `update` 사양
+  5. `PHILOSOPHY_AND_COMPASS.md`: 프레임워크 설계 철학 및 행동 지침
+  6. `REFACTORING_GUIDE.md`: 모듈 분리 및 클린 아키텍처 가이드라인
+  7. `CHANGELOG.md`: 릴리즈 이력 및 변경 사항

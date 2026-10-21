@@ -9,7 +9,7 @@ import stat
 import tempfile
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 import importlib.resources as pkg_resources
 
@@ -20,6 +20,19 @@ from .legacy_templates import LEGACY_TEMPLATES
 
 class TemplateScaffolder:
     """Loads templates from package resources and scaffolds release documents."""
+
+    BOOT_ANCHOR_START = "<!-- forgeflow:boot-anchor:start -->"
+    BOOT_ANCHOR_END = "<!-- forgeflow:boot-anchor:end -->"
+    BOOT_ANCHOR_TEMPLATE = (
+        "<!-- forgeflow:boot-anchor:start -->\n"
+        "## 🌊 ForgeFlow Session Boot Sequence (Harness Governance)\n\n"
+        "모든 작업 시작 전, AI 에이전트는 다음 규칙과 사양을 반드시 확인하고 준수해야 합니다:\n"
+        "1. **헌법 및 3대 메커니즘**: `.specify/memory/constitution.md` 및 `docs/spec/SPECKIT_HOOKS_AND_NORMS.md` 확인\n"
+        "2. **공식 사양서 참조**: `forgeflow doc list` 또는 `~/.local/forgeflow/current/lib/forgeflow/templates/spec/`의 7대 공식 사양서(`FLOW_SPEC.md` 등) 참조\n"
+        "3. **게이트 통제**: `tasks/in-progress/<id>/GATE1_REVIEW.md` 승인 전 소스 코드 작성/수정 절대 금지 (No Code Before Gate 1 Pass)\n"
+        "4. **원자적 루프 및 멈춤**: 단순 테스트 실패 시 자가 치유(Loop 2) 자율 완주, 5회 연속 실패 시 진짜 멈춤(True Stop)\n"
+        "<!-- forgeflow:boot-anchor:end -->"
+    )
 
     GOVERNANCE_PATH = Path("docs/forgeflow/GOVERNANCE.md")
     ROOT_GUIDES = ("AGENTS.md", "CLAUDE.md", "GEMINI.md")
@@ -883,7 +896,13 @@ class TemplateScaffolder:
             "동일한 에러 핑거프린트로 5회 연속 코드 수정 및 테스트 통과에 실패한 경우에만 작업을 즉시 중지하고 사용자에게 에스컬레이션(진짜 멈춤)한다.\n\n"
             "## 제5조 (스펙 무단 하향 금지 - No Spec Downgrade)\n"
             "구현의 어려움을 이유로 사용자 승인 없이 `spec.md`의 요구사항이나 Acceptance Criteria를 축소·삭제·완화할 수 없다. "
-            "스펙 수정이 필요한 경우 반드시 공식 스펙 회귀(Loop 3) 절차를 거쳐 Gate 1 재승인을 획득해야 한다.\n"
+            "스펙 수정이 필요한 경우 반드시 공식 스펙 회귀(Loop 3) 절차를 거쳐 Gate 1 재승인을 획득해야 한다.\n\n"
+            "## 프레임워크 공식 사양서 참조 경로 (Framework Specifications)\n"
+            "에이전트는 세부 규범과 아키텍처 판단이 필요할 때 다음 공식 사양서(단일 진실 공급원)를 참조해야 한다:\n"
+            "- 참조 인터페이스: `forgeflow doc list` 또는 `forgeflow doc show <spec-name>` CLI\n"
+            "- 전역 템플릿 경로: `~/.local/forgeflow/current/lib/forgeflow/templates/spec/`\n"
+            "- 7대 공식 사양서: FLOW_SPEC.md, GATES_AND_LOOPS.md, SPECKIT_HOOKS_AND_NORMS.md, "
+            "DISTRIBUTION_SPEC.md, PHILOSOPHY_AND_COMPASS.md, REFACTORING_GUIDE.md, CHANGELOG.md\n"
         )
         if not constitution_file.exists() or force:
             constitution_file.write_text(constitution_content, encoding="utf-8")
@@ -980,12 +999,112 @@ class TemplateScaffolder:
             gitignore_file.write_text(lock_entry, encoding="utf-8")
             created_files.append(".gitignore")
 
+        # 7. Non-destructive Session Boot Anchor in root guides (AGENTS.md / CLAUDE.md)
+        anchor_results = cls.bind_boot_anchor(root)
+        for fname, action in anchor_results.items():
+            if action == "created":
+                created_files.append(fname)
+            elif action == "updated":
+                updated_files.append(fname)
+
         return {
             "status": "success",
             "created_dirs": sorted(list(set(created_dirs))),
             "created_files": created_files,
             "updated_files": updated_files,
         }
+
+    @classmethod
+    def bind_boot_anchor(
+        cls, root: Path, target_names: Optional[Sequence[str]] = None
+    ) -> Dict[str, str]:
+        """In-place, non-destructive, idempotent boot anchor injector for root guides (AGENTS.md / CLAUDE.md).
+
+        Preserves 100% of existing user-defined content in the target file.
+        Returns a dict mapping relative filename to operation ('created', 'updated', 'unchanged', 'skipped').
+        """
+        root = root.resolve()
+        candidates = list(target_names) if target_names else ["AGENTS.md", "CLAUDE.md"]
+        # Find which target files exist
+        extant_targets = [name for name in candidates if (root / name).is_file()]
+        # If none exist, default to creating AGENTS.md
+        targets_to_process = extant_targets if extant_targets else ["AGENTS.md"]
+
+        results: Dict[str, str] = {}
+        anchor_block = cls.BOOT_ANCHOR_TEMPLATE.strip()
+
+        for filename in targets_to_process:
+            target_file = root / filename
+            if not target_file.exists():
+                target_file.write_text(anchor_block + "\n", encoding="utf-8")
+                results[filename] = "created"
+                continue
+
+            content = target_file.read_text(encoding="utf-8")
+            start_count = content.count(cls.BOOT_ANCHOR_START)
+            end_count = content.count(cls.BOOT_ANCHOR_END)
+
+            if start_count == 0 and end_count == 0:
+                # Safe prepend: insert at the beginning, preserving existing content completely
+                new_content = anchor_block + "\n\n" + content.lstrip("\n")
+                target_file.write_text(new_content, encoding="utf-8")
+                results[filename] = "updated"
+            elif start_count == 1 and end_count == 1:
+                start_idx = content.find(cls.BOOT_ANCHOR_START)
+                end_idx = content.find(cls.BOOT_ANCHOR_END) + len(cls.BOOT_ANCHOR_END)
+                if start_idx < end_idx:
+                    existing_block = content[start_idx:end_idx]
+                    if existing_block == anchor_block:
+                        results[filename] = "unchanged"
+                    else:
+                        new_content = content[:start_idx] + anchor_block + content[end_idx:]
+                        target_file.write_text(new_content, encoding="utf-8")
+                        results[filename] = "updated"
+                else:
+                    results[filename] = "skipped (corrupt marker ordering)"
+            else:
+                results[filename] = "skipped (duplicate or mismatched markers)"
+
+        return results
+
+    @classmethod
+    def unbind_boot_anchor(
+        cls, root: Path, target_names: Optional[Sequence[str]] = None
+    ) -> Dict[str, str]:
+        """Clean removal of the boot anchor block, restoring original content."""
+        root = root.resolve()
+        candidates = list(target_names) if target_names else ["AGENTS.md", "CLAUDE.md"]
+        results: Dict[str, str] = {}
+
+        for filename in candidates:
+            target_file = root / filename
+            if not target_file.is_file():
+                continue
+
+            content = target_file.read_text(encoding="utf-8")
+            start_count = content.count(cls.BOOT_ANCHOR_START)
+            end_count = content.count(cls.BOOT_ANCHOR_END)
+
+            if start_count == 1 and end_count == 1:
+                start_idx = content.find(cls.BOOT_ANCHOR_START)
+                end_idx = content.find(cls.BOOT_ANCHOR_END) + len(cls.BOOT_ANCHOR_END)
+                if start_idx < end_idx:
+                    before = content[:start_idx].rstrip("\n")
+                    after = content[end_idx:].lstrip("\n")
+                    if before and after:
+                        restored = before + "\n\n" + after + "\n"
+                    elif before:
+                        restored = before + "\n"
+                    elif after:
+                        restored = after + "\n"
+                    else:
+                        restored = ""
+                    target_file.write_text(restored, encoding="utf-8")
+                    results[filename] = "unbound"
+            else:
+                results[filename] = "skipped"
+
+        return results
 
     @classmethod
     def update_repo_governance(cls, root: Path) -> Dict[str, Any]:

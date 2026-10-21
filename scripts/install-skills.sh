@@ -99,6 +99,7 @@ description: Sets up ForgeFlow governance and GitHub Spec Kit hybrid environment
      - 제3조 (원자적 루프 정의 - Atomic Remediation Unit): 1회 루프는 `원인 식별 -> 1개 수정 -> 테스트 재실행`으로 완결하며, 구현 완료 시 최종 원자적 커밋 1개를 생성.
      - 제4조 (루프 예산 및 진짜 멈춤 - Loop Budget & True Stop): 동일 오류 5회 연속 무진전 시에만 작업 중단 및 사용자 에스컬레이션.
      - 제5조 (스펙 무단 하향 금지 - No Spec Downgrade): 구현 난항을 이유로 `spec.md` 무단 축소 금지, 필요 시 Gate 1 재승인(Loop 3) 수행.
+   - 헌법 하단에 공식 사양서(단일 진실 공급원) 참조 경로를 명시합니다 (`forgeflow doc list` 또는 `~/.local/forgeflow/current/lib/forgeflow/templates/spec/` 7대 사양서).
    - `.specify/extensions.yml` 파일을 생성하여 `before_implement` 훅을 등록합니다:
      ```yaml
      version: "1.0"
@@ -115,7 +116,10 @@ description: Sets up ForgeFlow governance and GitHub Spec Kit hybrid environment
    - `tasks/in-progress/` 및 `tasks/completed/` 디렉터리를 생성합니다.
    - `tasks/README.md`에 비-행동지침 경계 선언을 작성합니다.
 
-6. 완료 보고:
+6. 세션 진입점 앵커(AGENTS.md / CLAUDE.md) 비파괴적 주입:
+   - 리포지토리 루트의 `AGENTS.md` (또는 `CLAUDE.md`)에 `<!-- forgeflow:boot-anchor:start -->` 주석 마커 블록으로 부팅 시퀀스를 주입하여 AI 에이전트가 작업 전 헌법과 공식 사양서를 자동 인지하도록 합니다. 기존 사용자 내용은 100% 보존됩니다.
+
+7. 완료 보고:
    - 셋업 완료 상태를 요약하고, 다음 시작 명령어(`/speckit.specify "기능 설명"`)를 안내합니다.
 EOF
 
@@ -145,7 +149,7 @@ ForgeFlow 전역 런타임 최신화와 현재 리포지토리의 거버넌스 �
 ### 2단계: 현재 작업 리포지토리 사양 동기화 (Local Repo Governance Migration)
 1. 리포지토리 거버넌스 사양 갱신:
    - `forgeflow update` 명령을 실행합니다 (`forgeflow update --json`).
-   - 이 명령은 `tasks/in-progress/` 및 `tasks/completed/` 내부의 모든 작업 산출물을 100% 보존하면서 `.forgeflow.json`, `.specify/scripts/bash/`(0o755 실행 권한 포함), 템플릿, 헌법 및 훅을 최신 표준으로 동기화합니다.
+   - 이 명령은 `tasks/in-progress/` 및 `tasks/completed/` 내부의 모든 작업 산출물을 100% 보존하면서 `.forgeflow.json`, `.specify/scripts/bash/`(0o755 실행 권한 포함), 템플릿, 헌법, 훅, 및 `AGENTS.md` 세션 진입점 앵커를 최신 표준으로 동기화합니다.
 2. 거버넌스 무결성 검증:
    - `forgeflow check --quiet` 명령을 실행하여 마이그레이션 후 거버넌스 무결성을 검증합니다.
 3. 결과 보고:
