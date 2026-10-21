@@ -101,6 +101,71 @@ class TestUpgradeCLI(unittest.TestCase):
             output = json.loads(mock_print.call_args[0][0])
             self.assertEqual(output["status"], "error")
 
+    @patch("builtins.input")
+    @patch("subprocess.run")
+    @patch("urllib.request.urlopen")
+    def test_upgrade_interactive_prompt_yes(self, mock_urlopen, mock_subproc, mock_input):
+        mock_input.return_value = "y"
+        v_resp = MagicMock()
+        v_resp.read.return_value = b'__version__ = "99.0.0"'
+        v_resp.__enter__.return_value = v_resp
+
+        inst_resp = MagicMock()
+        inst_resp.read.return_value = b'#!/usr/bin/env bash\necho "installed"'
+        inst_resp.__enter__.return_value = inst_resp
+
+        mock_urlopen.side_effect = [v_resp, inst_resp]
+        mock_subproc.return_value = MagicMock(returncode=0)
+
+        args = parse_forgeflow_args(["upgrade"])
+        with patch("builtins.print"):
+            code = handle_upgrade(args)
+            self.assertEqual(code, 0)
+            mock_input.assert_called_once()
+            self.assertIn("upgrade to v99.0.0", mock_input.call_args[0][0])
+            mock_subproc.assert_called_once()
+
+    @patch("builtins.input")
+    @patch("subprocess.run")
+    @patch("urllib.request.urlopen")
+    def test_upgrade_interactive_prompt_no_cancels(self, mock_urlopen, mock_subproc, mock_input):
+        mock_input.return_value = "n"
+        v_resp = MagicMock()
+        v_resp.read.return_value = b'__version__ = "99.0.0"'
+        v_resp.__enter__.return_value = v_resp
+
+        mock_urlopen.side_effect = [v_resp]
+
+        args = parse_forgeflow_args(["upgrade"])
+        with patch("builtins.print") as mock_print:
+            code = handle_upgrade(args)
+            self.assertEqual(code, 0)
+            mock_input.assert_called_once()
+            mock_subproc.assert_not_called()
+            mock_print.assert_any_call("Upgrade cancelled.")
+
+    @patch("builtins.input")
+    @patch("subprocess.run")
+    @patch("urllib.request.urlopen")
+    def test_upgrade_force_skips_prompt(self, mock_urlopen, mock_subproc, mock_input):
+        v_resp = MagicMock()
+        v_resp.read.return_value = b'__version__ = "99.0.0"'
+        v_resp.__enter__.return_value = v_resp
+
+        inst_resp = MagicMock()
+        inst_resp.read.return_value = b'#!/usr/bin/env bash\necho "installed"'
+        inst_resp.__enter__.return_value = inst_resp
+
+        mock_urlopen.side_effect = [v_resp, inst_resp]
+        mock_subproc.return_value = MagicMock(returncode=0)
+
+        args = parse_forgeflow_args(["upgrade", "--force"])
+        with patch("builtins.print"):
+            code = handle_upgrade(args)
+            self.assertEqual(code, 0)
+            mock_input.assert_not_called()
+            mock_subproc.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()

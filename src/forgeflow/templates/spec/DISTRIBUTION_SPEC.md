@@ -89,8 +89,11 @@ curl -sSL https://raw.githubusercontent.com/deepblue-kblee/forgeflow/main/instal
 # 최신 버전 확인
 forgeflow upgrade --check
 
-# 전역 런타임 및 스킬 자동 업그레이드
+# 전역 런타임 및 스킬 대화형 업그레이드 (버전 비교 후 y/n 확인)
 forgeflow upgrade
+
+# 확인 프롬프트 없이 즉시 강제 업그레이드/재설치
+forgeflow upgrade --force
 ```
 
 ### 4.2 로컬 프로젝트 거버넌스 사양 동기화 (`forgeflow update`)

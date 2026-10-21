@@ -7,6 +7,20 @@ ForgeFlow 프레임워크의 모든 주요 변경 사항은 이 문서에 기록
 
 ---
 
+## [0.1.9] - 2026-10-21
+
+### 💬 `forgeflow upgrade` 대화형 확인 프롬프트 및 `--force` 옵션 도입 (Interactive Upgrade Prompt & Force Option)
+
+### Added
+- **버전 비교 사전 안내**:
+  - `forgeflow upgrade` 실행 시, 업그레이드 전 현재 로컬 버전과 원격 최신 버전을 터미널에 비교 출력.
+- **대화형 승인 프롬프트 (`y/n`)**:
+  - 업그레이드 대상이 발견되었을 때 `Do you want to upgrade to v{remote_version}? [y/N]: ` 프롬프트를 통해 사용자 동의를 수렴. `y` 입력 시에만 설치를 진행하고 그 외에는 취소.
+- **`--force` 바이패스 플래그**:
+  - `--force` 지정 시 대화형 프롬프트를 건너뛰고 즉시 업그레이드/재설치를 수행하도록 지원.
+
+---
+
 ## [0.1.8] - 2026-10-21
 
 ### ⚓ 부팅 앵커 기존 주석 삭제 및 파일 맨 마지막 추가 개선 (Append Boot Anchor to End)

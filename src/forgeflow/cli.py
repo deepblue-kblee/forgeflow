@@ -347,7 +347,7 @@ def parse_forgeflow_args(args=None):
     # Command: upgrade
     upgrade_parser = subparsers.add_parser("upgrade", help="Upgrade global ForgeFlow installation to the latest version")
     upgrade_parser.add_argument("--check", action="store_true", help="Check for available updates without installing")
-    upgrade_parser.add_argument("--force", action="store_true", help="Force re-install even if version is current")
+    upgrade_parser.add_argument("--force", action="store_true", help="Force upgrade/reinstall without confirmation prompt")
     upgrade_parser.add_argument("--json", action="store_true", help="Output machine-readable JSON")
     upgrade_parser.add_argument(
         "--repo-url",
@@ -685,6 +685,12 @@ def handle_upgrade(args):
     remote_tuple = parse_version_tuple(remote_version)
     is_upgrade_available = remote_tuple > current_tuple
 
+    if not as_json:
+        print("🔍 Checking ForgeFlow version...")
+        print(f"• Current version: v{__version__}")
+        print(f"• Latest version:  v{remote_version}")
+        print()
+
     if check_only:
         payload = {
             "status": "success",
@@ -715,8 +721,21 @@ def handle_upgrade(args):
             print(f"✅ ForgeFlow is already up to date (v{__version__}). (Use --force to reinstall)")
         return 0
 
+    if not force and not as_json:
+        action_label = "upgrade to" if is_upgrade_available else "reinstall"
+        try:
+            answer = input(f"Do you want to {action_label} v{remote_version}? [y/N]: ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print("\nUpgrade cancelled.")
+            return 0
+
+        if answer not in ("y", "yes"):
+            print("Upgrade cancelled.")
+            return 0
+
     if not as_json:
-        print(f"📦 Upgrading ForgeFlow: v{__version__} ➔ v{remote_version}...")
+        action_ing = "Upgrading ForgeFlow" if is_upgrade_available else "Reinstalling ForgeFlow"
+        print(f"📦 {action_ing}: v{__version__} ➔ v{remote_version}...")
 
     try:
         req = urllib.request.Request(install_url, headers={"User-Agent": "ForgeFlow-CLI"})
