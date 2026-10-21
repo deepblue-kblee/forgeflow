@@ -5,6 +5,7 @@ Scaffolding Engine for Initializing Projects and Creating Release Boilerplates
 import datetime
 import json
 import os
+import re
 import stat
 import tempfile
 import uuid
@@ -1020,7 +1021,9 @@ class TemplateScaffolder:
     ) -> Dict[str, str]:
         """In-place, non-destructive, idempotent boot anchor injector for root guides (AGENTS.md / CLAUDE.md).
 
-        Preserves 100% of existing user-defined content in the target file.
+        Deletes any pre-existing boot anchor comments anywhere in the file,
+        preserves 100% of existing user-defined content, and appends the latest boot anchor
+        block at the very end of the file.
         Returns a dict mapping relative filename to operation ('created', 'updated', 'unchanged', 'skipped').
         """
         root = root.resolve()
@@ -1032,6 +1035,10 @@ class TemplateScaffolder:
 
         results: Dict[str, str] = {}
         anchor_block = cls.BOOT_ANCHOR_TEMPLATE.strip()
+        anchor_pattern = re.compile(
+            rf"\n*{re.escape(cls.BOOT_ANCHOR_START)}.*?{re.escape(cls.BOOT_ANCHOR_END)}\n*",
+            re.DOTALL,
+        )
 
         for filename in targets_to_process:
             target_file = root / filename
@@ -1044,26 +1051,23 @@ class TemplateScaffolder:
             start_count = content.count(cls.BOOT_ANCHOR_START)
             end_count = content.count(cls.BOOT_ANCHOR_END)
 
-            if start_count == 0 and end_count == 0:
-                # Safe prepend: insert at the beginning, preserving existing content completely
-                new_content = anchor_block + "\n\n" + content.lstrip("\n")
-                target_file.write_text(new_content, encoding="utf-8")
-                results[filename] = "updated"
-            elif start_count == 1 and end_count == 1:
-                start_idx = content.find(cls.BOOT_ANCHOR_START)
-                end_idx = content.find(cls.BOOT_ANCHOR_END) + len(cls.BOOT_ANCHOR_END)
-                if start_idx < end_idx:
-                    existing_block = content[start_idx:end_idx]
-                    if existing_block == anchor_block:
-                        results[filename] = "unchanged"
-                    else:
-                        new_content = content[:start_idx] + anchor_block + content[end_idx:]
-                        target_file.write_text(new_content, encoding="utf-8")
-                        results[filename] = "updated"
-                else:
-                    results[filename] = "skipped (corrupt marker ordering)"
-            else:
+            if start_count != end_count:
                 results[filename] = "skipped (duplicate or mismatched markers)"
+                continue
+
+            # Strip any pre-existing anchor blocks cleanly
+            clean_content = anchor_pattern.sub("\n\n", content).strip()
+
+            if clean_content:
+                desired_content = clean_content + "\n\n" + anchor_block + "\n"
+            else:
+                desired_content = anchor_block + "\n"
+
+            if content == desired_content:
+                results[filename] = "unchanged"
+            else:
+                target_file.write_text(desired_content, encoding="utf-8")
+                results[filename] = "updated"
 
         return results
 
@@ -1075,6 +1079,10 @@ class TemplateScaffolder:
         root = root.resolve()
         candidates = list(target_names) if target_names else ["AGENTS.md", "CLAUDE.md"]
         results: Dict[str, str] = {}
+        anchor_pattern = re.compile(
+            rf"\n*{re.escape(cls.BOOT_ANCHOR_START)}.*?{re.escape(cls.BOOT_ANCHOR_END)}\n*",
+            re.DOTALL,
+        )
 
         for filename in candidates:
             target_file = root / filename
@@ -1085,24 +1093,18 @@ class TemplateScaffolder:
             start_count = content.count(cls.BOOT_ANCHOR_START)
             end_count = content.count(cls.BOOT_ANCHOR_END)
 
-            if start_count == 1 and end_count == 1:
-                start_idx = content.find(cls.BOOT_ANCHOR_START)
-                end_idx = content.find(cls.BOOT_ANCHOR_END) + len(cls.BOOT_ANCHOR_END)
-                if start_idx < end_idx:
-                    before = content[:start_idx].rstrip("\n")
-                    after = content[end_idx:].lstrip("\n")
-                    if before and after:
-                        restored = before + "\n\n" + after + "\n"
-                    elif before:
-                        restored = before + "\n"
-                    elif after:
-                        restored = after + "\n"
-                    else:
-                        restored = ""
-                    target_file.write_text(restored, encoding="utf-8")
-                    results[filename] = "unbound"
-            else:
+            if start_count == 0 and end_count == 0:
                 results[filename] = "skipped"
+                continue
+
+            if start_count != end_count:
+                results[filename] = "skipped"
+                continue
+
+            clean_content = anchor_pattern.sub("\n\n", content).strip()
+            restored = (clean_content + "\n") if clean_content else ""
+            target_file.write_text(restored, encoding="utf-8")
+            results[filename] = "unbound"
 
         return results
 

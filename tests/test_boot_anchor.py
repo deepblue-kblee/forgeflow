@@ -27,7 +27,7 @@ class TestBootAnchor(unittest.TestCase):
         self.assertIn(TemplateScaffolder.BOOT_ANCHOR_END, content)
         self.assertIn("ForgeFlow Session Boot Sequence", content)
 
-    def test_bind_prepends_to_existing_agents_md_preserving_content(self):
+    def test_bind_appends_to_existing_agents_md_preserving_content(self):
         agents_file = self.temp_dir / "AGENTS.md"
         user_content = "# Project Custom Rules\n\n- Rule 1: Always test code.\n- Rule 2: Never break production.\n"
         agents_file.write_text(user_content, encoding="utf-8")
@@ -38,8 +38,20 @@ class TestBootAnchor(unittest.TestCase):
         new_content = agents_file.read_text(encoding="utf-8")
         self.assertIn(TemplateScaffolder.BOOT_ANCHOR_START, new_content)
         self.assertIn(TemplateScaffolder.BOOT_ANCHOR_END, new_content)
-        # Original content must be 100% preserved
-        self.assertIn(user_content.strip(), new_content)
+        # Original content must be 100% preserved at the top
+        self.assertTrue(new_content.startswith(user_content.strip()))
+        # Anchor must be appended at the end
+        self.assertTrue(new_content.rstrip().endswith(TemplateScaffolder.BOOT_ANCHOR_END))
+
+    def test_bind_appends_to_whitespace_file_cleanly(self):
+        agents_file = self.temp_dir / "AGENTS.md"
+        agents_file.write_text("   \n\n  \n", encoding="utf-8")
+
+        result = TemplateScaffolder.bind_boot_anchor(self.temp_dir)
+        self.assertEqual(result.get("AGENTS.md"), "updated")
+
+        new_content = agents_file.read_text(encoding="utf-8")
+        self.assertEqual(new_content, TemplateScaffolder.BOOT_ANCHOR_TEMPLATE.strip() + "\n")
 
     def test_bind_is_idempotent_on_repeated_calls(self):
         agents_file = self.temp_dir / "AGENTS.md"
@@ -60,7 +72,7 @@ class TestBootAnchor(unittest.TestCase):
         self.assertEqual(content2.count(TemplateScaffolder.BOOT_ANCHOR_START), 1)
         self.assertEqual(content2.count(TemplateScaffolder.BOOT_ANCHOR_END), 1)
 
-    def test_bind_updates_in_place_when_anchor_modified(self):
+    def test_bind_relocates_existing_anchor_to_end(self):
         agents_file = self.temp_dir / "AGENTS.md"
         before_text = "# Header\n\n"
         old_anchor = (
@@ -75,10 +87,33 @@ class TestBootAnchor(unittest.TestCase):
         self.assertEqual(result.get("AGENTS.md"), "updated")
 
         new_content = agents_file.read_text(encoding="utf-8")
-        self.assertTrue(new_content.startswith(before_text))
-        self.assertTrue(new_content.endswith(after_text))
+        self.assertTrue(new_content.startswith("# Header"))
+        self.assertIn("# Footer\n\nUser custom footer section.", new_content)
         self.assertNotIn("Old anchor text to be replaced", new_content)
         self.assertIn("ForgeFlow Session Boot Sequence", new_content)
+        self.assertTrue(new_content.rstrip().endswith(TemplateScaffolder.BOOT_ANCHOR_END))
+        self.assertEqual(new_content.count(TemplateScaffolder.BOOT_ANCHOR_START), 1)
+
+    def test_bind_relocates_existing_anchor_from_top_to_bottom(self):
+        agents_file = self.temp_dir / "AGENTS.md"
+        old_anchor = (
+            f"{TemplateScaffolder.BOOT_ANCHOR_START}\n"
+            "Old anchor text on top\n"
+            f"{TemplateScaffolder.BOOT_ANCHOR_END}\n\n"
+        )
+        user_body = "# Main Title\n\nProject guidelines here.\n"
+        agents_file.write_text(old_anchor + user_body, encoding="utf-8")
+
+        result = TemplateScaffolder.bind_boot_anchor(self.temp_dir)
+        self.assertEqual(result.get("AGENTS.md"), "updated")
+
+        new_content = agents_file.read_text(encoding="utf-8")
+        # Top of the file must now be user's original title, not the anchor
+        self.assertTrue(new_content.startswith("# Main Title"))
+        self.assertNotIn("Old anchor text on top", new_content)
+        self.assertIn("ForgeFlow Session Boot Sequence", new_content)
+        # Anchor must be at the very bottom
+        self.assertTrue(new_content.rstrip().endswith(TemplateScaffolder.BOOT_ANCHOR_END))
         self.assertEqual(new_content.count(TemplateScaffolder.BOOT_ANCHOR_START), 1)
 
     def test_unbind_removes_anchor_restoring_original(self):

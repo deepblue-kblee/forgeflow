@@ -7,6 +7,36 @@ ForgeFlow 프레임워크의 모든 주요 변경 사항은 이 문서에 기록
 
 ---
 
+## [0.1.8] - 2026-10-21
+
+### ⚓ 부팅 앵커 기존 주석 삭제 및 파일 맨 마지막 추가 개선 (Append Boot Anchor to End)
+
+### Changed
+- **부팅 앵커 주입 위치 개선**:
+  - `AGENTS.md` / `CLAUDE.md` 등에 ForgeFlow 부팅 앵커 주입 시, 기존 상단/중간에 위치하던 주석 마커 블록을 완전히 삭제하고 문서 맨 마지막(하단)으로 이동하여 안전하게 추가하도록 개선 (`bind_boot_anchor`).
+  - 프로젝트 고유 타이틀 및 본문 컨텍스트를 최상위에 온전히 보존.
+  - 정규식 기반 클린징을 통해 멱등성 및 원본 텍스트 100% 보존 보장.
+- **테스트 스위트 강화**:
+  - 상단/중간 위치 기존 주석 삭제 및 파일 끝 이동 검증 단위 테스트 추가 (`tests/test_boot_anchor.py`).
+
+---
+
+## [0.1.7] - 2026-10-21
+
+### 🧹 레거시 템플릿 정화 및 사양서 발견성 강화 (Purge Legacy Templates & Spec Discovery)
+
+### Added
+- **`forgeflow doc` (호환 별칭 `spec`) CLI**:
+  - 터미널에서 프레임워크 7대 공식 사양서를 손쉽게 열람할 수 있는 목록 조회(`doc list`) 및 개별 사양 출력(`doc show <spec>`) 명령어 제공.
+- **비파괴적 세션 진입점 앵커 주입 (`bind_boot_anchor`)**:
+  - 고유 마커를 통해 `AGENTS.md` / `CLAUDE.md`의 기존 사용자 고유 지침을 100% 보존하면서 부팅 시퀀스 앵커를 인플레이스 주입 및 해제 지원.
+
+### Removed
+- **레거시 템플릿 5종 영구 삭제**:
+  - `src/forgeflow/templates/` 최상위에서 2026-10-20 이전 산출물(`PRD.md`, `DESIGN.md`, `ROADMAP.md`, `GOVERNANCE.md`, `RELEASE_NOTES.md`)을 완전히 삭제.
+
+---
+
 ## [0.1.6] - 2026-10-21
 
 ### 🧹 과거 유산 및 규격 불일치 전수 청산 (Comprehensive Legacy Cleanup)
