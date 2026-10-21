@@ -368,6 +368,28 @@ def parse_forgeflow_args(args=None):
     update_parser.add_argument("--json", action="store_true", help="Output machine-readable JSON")
     update_parser.add_argument("--quiet", action="store_true", help="Suppress non-error output")
 
+    # Command: doc (alias: spec)
+    doc_parser = subparsers.add_parser(
+        "doc",
+        aliases=["spec"],
+        help="Inspect and display official ForgeFlow specifications",
+    )
+    doc_parser.add_argument(
+        "name",
+        nargs="?",
+        default=None,
+        help="Specification document name (e.g. FLOW_SPEC, GATES_AND_LOOPS, SPECKIT_HOOKS_AND_NORMS)",
+    )
+    doc_parser.add_argument(
+        "extra",
+        nargs="?",
+        default=None,
+        help="Optional second argument (e.g. when calling 'forgeflow doc show FLOW_SPEC')",
+    )
+    doc_parser.add_argument("--list", action="store_true", help="List all available official specifications")
+    doc_parser.add_argument("--path", type=str, default=None, help="Explicit specification directory or repository path")
+    doc_parser.add_argument("--json", action="store_true", help="Output machine-readable JSON")
+
     # Command: migrate
     migrate_parser = subparsers.add_parser("migrate", help="Migrate legacy release structures to tasks architecture")
     migrate_parser.add_argument("--tasks", action="store_true", help="Migrate legacy docs/releases/ to root tasks/completed/")
@@ -766,6 +788,200 @@ def handle_update(args):
     return 0
 
 
+OFFICIAL_SPECS = [
+    {
+        "id": "FLOW_SPEC",
+        "filename": "FLOW_SPEC.md",
+        "title": "5-Stage Closed-Loop Lifecycle & Branch Strategy",
+        "description": "5단계 폐루프 수명주기, 3단 칸반 구조, 브랜치 격리 및 전진 규칙",
+    },
+    {
+        "id": "GATES_AND_LOOPS",
+        "filename": "GATES_AND_LOOPS.md",
+        "title": "Gate 1/2/3 Criteria & Remediation Loops",
+        "description": "게이트 판정 기준, 3대 루프(Loop 1~3), 자가 치유 예산(5회 한도)",
+    },
+    {
+        "id": "SPECKIT_HOOKS_AND_NORMS",
+        "filename": "SPECKIT_HOOKS_AND_NORMS.md",
+        "title": "GitHub Spec Kit Hooks & Governance Injection",
+        "description": "Spec Kit 3대 주입 메커니즘, 훅 라이프사이클 및 TDD 체크포인트 커밋 규범",
+    },
+    {
+        "id": "DISTRIBUTION_SPEC",
+        "filename": "DISTRIBUTION_SPEC.md",
+        "title": "Distribution, Packaging & Upgrade Specification",
+        "description": "OS 계정 레벨 배포, 버전 관리, forgeflow upgrade 및 update 규격",
+    },
+    {
+        "id": "PHILOSOPHY_AND_COMPASS",
+        "filename": "PHILOSOPHY_AND_COMPASS.md",
+        "title": "Philosophy & Architecture Compass",
+        "description": "프레임워크 핵심 설계 철학, SSOT 경계 및 에이전트 행동 지침",
+    },
+    {
+        "id": "REFACTORING_GUIDE",
+        "filename": "REFACTORING_GUIDE.md",
+        "title": "Modular Decomposition & Refactoring Guide",
+        "description": "모듈 분리, 클린 아키텍처 및 복잡도 제어 가이드라인",
+    },
+    {
+        "id": "CHANGELOG",
+        "filename": "CHANGELOG.md",
+        "title": "Release History & Evolution",
+        "description": "프레임워크 릴리즈 이력 및 변경 사항 일람",
+    },
+]
+
+
+def resolve_spec_directory(custom_path: Optional[str] = None) -> Optional[Path]:
+    """Find the directory containing official specifications."""
+    if custom_path:
+        cp = Path(custom_path).resolve()
+        for candidate in [cp, cp / "docs" / "spec", cp / "spec", cp / "templates" / "spec"]:
+            if candidate.is_dir() and (candidate / "FLOW_SPEC.md").is_file():
+                return candidate
+
+    # 1. Local workspace docs/spec/
+    try:
+        root = HierarchicalRootScanner.find_root()
+        local_spec = root / "docs" / "spec"
+        if local_spec.is_dir() and (local_spec / "FLOW_SPEC.md").is_file():
+            return local_spec
+    except Exception:
+        pass
+
+    # 2. Package templates/spec/
+    try:
+        pkg_spec = Path(__file__).resolve().parent / "templates" / "spec"
+        if pkg_spec.is_dir() and (pkg_spec / "FLOW_SPEC.md").is_file():
+            return pkg_spec
+    except Exception:
+        pass
+
+    # 3. Global user installation ~/.local/forgeflow/current/lib/forgeflow/templates/spec
+    global_spec = Path.home() / ".local" / "forgeflow" / "current" / "lib" / "forgeflow" / "templates" / "spec"
+    if global_spec.is_dir() and (global_spec / "FLOW_SPEC.md").is_file():
+        return global_spec
+
+    return None
+
+
+def handle_doc(args):
+    """Handle forgeflow doc (or spec) command to display specifications."""
+    as_json = getattr(args, "json", False)
+    spec_dir = resolve_spec_directory(getattr(args, "path", None))
+
+    if not spec_dir:
+        msg = "Official specifications directory not found."
+        if as_json:
+            print(json.dumps({"status": "error", "message": msg}))
+        else:
+            print(f"❌ Error: {msg}", file=sys.stderr)
+        return 1
+
+    # Normalize name argument
+    name = getattr(args, "name", None)
+    extra = getattr(args, "extra", None)
+    if name == "show" and extra:
+        name = extra
+    elif name == "list":
+        name = None
+
+    show_list = getattr(args, "list", False) or not name
+
+    if show_list:
+        specs_data = []
+        for s in OFFICIAL_SPECS:
+            file_path = spec_dir / s["filename"]
+            specs_data.append({
+                "id": s["id"],
+                "filename": s["filename"],
+                "title": s["title"],
+                "description": s["description"],
+                "path": str(file_path),
+                "exists": file_path.is_file(),
+            })
+
+        if as_json:
+            print(json.dumps({
+                "status": "success",
+                "spec_dir": str(spec_dir),
+                "count": len(specs_data),
+                "specifications": specs_data,
+            }, indent=2, ensure_ascii=False))
+        else:
+            print(f"🌊 ForgeFlow Official Specifications (SSOT)")
+            print(f"   Directory: {spec_dir}\n")
+            print(f"   {'#':<3} {'Specification ID':<25} {'Title':<45} {'Filename'}")
+            print(f"   {'-'*3} {'-'*25} {'-'*45} {'-'*25}")
+            for i, s in enumerate(specs_data, 1):
+                print(f"   {i:<3} {s['id']:<25} {s['title']:<45} {s['filename']}")
+                print(f"       └─ {s['description']}")
+            print(f"\n💡 View full specification: forgeflow doc <id|filename> (e.g. forgeflow doc FLOW_SPEC)")
+        return 0
+
+    # Query single spec
+    norm_name = name.strip()
+    if norm_name.lower().endswith(".md"):
+        norm_name = norm_name[:-3]
+    norm_id = norm_name.upper().replace("-", "_")
+
+    matched = None
+    for s in OFFICIAL_SPECS:
+        if s["id"] == norm_id or s["filename"].upper() == f"{norm_id}.MD":
+            matched = s
+            break
+
+    if not matched:
+        # Fallback: check if exact file exists in spec_dir
+        candidate_file = spec_dir / name
+        if not candidate_file.is_file():
+            candidate_file = spec_dir / f"{name}.md"
+        if candidate_file.is_file():
+            matched = {
+                "id": candidate_file.stem.upper(),
+                "filename": candidate_file.name,
+                "title": candidate_file.stem,
+                "description": "",
+            }
+
+    if not matched:
+        msg = f"Specification '{name}' not found."
+        valid_ids = [s["id"] for s in OFFICIAL_SPECS]
+        if as_json:
+            print(json.dumps({"status": "error", "message": msg, "available": valid_ids}))
+        else:
+            print(f"❌ Error: {msg}", file=sys.stderr)
+            print(f"   Available specifications: {', '.join(valid_ids)}", file=sys.stderr)
+            print(f"   Run 'forgeflow doc --list' to see all specifications.", file=sys.stderr)
+        return 1
+
+    file_path = spec_dir / matched["filename"]
+    if not file_path.is_file():
+        msg = f"Specification file not found at: {file_path}"
+        if as_json:
+            print(json.dumps({"status": "error", "message": msg}))
+        else:
+            print(f"❌ Error: {msg}", file=sys.stderr)
+        return 1
+
+    content = file_path.read_text(encoding="utf-8")
+    if as_json:
+        print(json.dumps({
+            "status": "success",
+            "id": matched["id"],
+            "filename": matched["filename"],
+            "title": matched["title"],
+            "path": str(file_path),
+            "content": content,
+        }, indent=2, ensure_ascii=False))
+    else:
+        print(f"<!-- ForgeFlow Specification: {matched['id']} ({file_path}) -->\n")
+        print(content)
+    return 0
+
+
 def main(args=None):
     parsed = parse_forgeflow_args(args)
 
@@ -779,6 +995,10 @@ def main(args=None):
 
     if parsed.command == "update":
         code = handle_update(parsed)
+        sys.exit(code)
+
+    if parsed.command in ("doc", "spec"):
+        code = handle_doc(parsed)
         sys.exit(code)
 
     if parsed.command == "issue":
