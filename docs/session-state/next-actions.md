@@ -58,47 +58,21 @@
 
 ---
 
-## 새 세션에서 바로 이어서 착수할 과업 (Next Actions: v0.1.7)
+10. **레거시 템플릿 정화, 사양서 발견성 및 비파괴적 부팅 앵커 완비 (v0.1.7)**:
+    - **레거시 템플릿 5종 영구 삭제**: `src/forgeflow/templates/` 최상위에서 2026-10-20 이전 산출물(`PRD.md`, `DESIGN.md`, `ROADMAP.md`, `GOVERNANCE.md`, `RELEASE_NOTES.md`)을 완전히 삭제하여 Date-Based Amnesia 정책을 철저히 관철. `scaffold.py`에 `LEGACY_TEMPLATES` 분리 및 인라인 fallback을 제공하여 기존 테스트 하위 호환성을 100% 보존.
+    - **인스톨러 정화 로직 탑재 (`install.sh`)**: 패키지 배포 시 대상 라이브러리 디렉토리(`$PKG_LIB_DIR/templates/`)에서 구버전 레거시 파일들을 자동으로 정리(Purge)하도록 개선.
+    - **사양서 발견성(Spec Discovery) 아키텍처 완비**: `.specify/memory/constitution.md` 및 `scaffold.py` 내장 헌법에 7대 공식 사양서 단일 진실 공급원(SSOT) 참조 경로를 주입하고 `setup-forgeflow`, `update-forgeflow` 스킬 문서 동기화.
+    - **비파괴적 세션 진입점 앵커 주입 (`bind_boot_anchor`)**: 고유 식별 마커(`<!-- forgeflow:boot-anchor:start -->` / `end`)를 통해 `AGENTS.md` / `CLAUDE.md`의 기존 사용자 고유 지침을 100% 보존하면서 부팅 시퀀스 앵커를 인플레이스 갱신 및 안전하게 주입/해제하는 엔진 구현 (`tests/test_boot_anchor.py` 7개 테스트 100% Pass).
+    - **`forgeflow doc` (및 호환 별칭 `spec`) CLI 구현**: 터미널에서 7대 공식 사양서를 손쉽게 열람할 수 있는 목록 조회(`doc list`) 및 개별 사양 출력(`doc show <spec>`) 인터페이스 제공. 기계 가독형 `--json` 및 커스텀 경로 `--path` 완비 (`tests/test_doc_cli.py` 11개 테스트 100% Pass).
+    - **테스트 및 거버넌스 무결성**: 총 282개 테스트 100% Pass, 7개 릴리즈 전수 하네스 감사 `forgeflow check --all --strict` 🟢 ALL PASSED 달성, `tasks/completed/v0.1.7-purge-legacy-templates-and-spec-discovery/` 밀봉 완료.
 
-### 🎯 릴리즈 목표: `v0.1.7-purge-legacy-templates-and-spec-discovery`
+---
 
-사용자 질의 및 분석을 통해 도출된 핵심 문제 2가지를 해결합니다:
-1. **사양서 발견성(Spec Discovery) 부재**: 타깃 개발 프로젝트에서 AI 에이전트가 프레임워크 전역에 배포된 사양서(`FLOW_SPEC.md` 등 7종)의 위치를 스스로 찾고 참조할 수 있도록 헌법, 스킬, CLI에 탐색 인터페이스를 제공한다.
-2. **배포판 내 레거시 템플릿 잔재 청산**: Spec Kit 하이브리드 표준에서 전혀 쓰이지 않는 과거 v0.22 시절의 레거시 파일(`PRD.md`, `DESIGN.md`, `ROADMAP.md`, `GOVERNANCE.md`, `RELEASE_NOTES.md`)이 소스 및 전역 배포판(`~/.local/forgeflow/current/lib/forgeflow/templates/`)에 남아있으므로, 소스 정리와 함께 `install.sh` 및 `upgrade` 시 자동 정화(Purge)되도록 개선한다.
+## 새 세션에서 바로 이어서 착수할 과업 (Next Actions)
 
-### 📋 세부 실행 계획 및 작업 목록
-
-#### 1단계: 브랜치 분기 및 사전 준비
-- `git checkout -b feat/v0.1.7-purge-legacy-templates-and-spec-discovery` 분기
-- 이미 작성된 `tasks/in-progress/v0.1.7-purge-legacy-templates-and-spec-discovery/`의 `spec.md`, `GATE1_REVIEW.md`, `plan.md`, `tasks.md` 검토 확인
-
-#### 2단계: 사양서 발견성(Spec Discovery) 주입
-- `.specify/memory/constitution.md` 및 `src/forgeflow/scaffold.py` 내장 헌법:
-  - 하단에 `## 프레임워크 공식 사양서 참조 경로 (Framework Specifications)` 섹션을 추가하여 `~/.local/forgeflow/current/lib/forgeflow/templates/spec/` 경로와 7대 공식 사양서 목록 명시.
-- `scripts/install-skills.sh`, `~/.agents/skills/setup-forgeflow/SKILL.md`, `~/.agents/skills/update-forgeflow/SKILL.md`에 사양서 참조 안내 동기화.
-
-#### 3단계: `forgeflow doc` (또는 `spec`) CLI 서브커맨드 구현
-- `src/forgeflow/cli.py`:
-  - `doc` 서브커맨드 추가:
-    - `forgeflow doc list`: 배포된 사양서 목록 및 요약 표시.
-    - `forgeflow doc show <name>`: 지정한 사양서의 전체 경로 및 마크다운 내용 출력.
-    - `--json` 플래그: 기계 가독형 JSON 지원.
-- `tests/test_doc_cli.py` 작성 및 단위 테스트 100% 검증.
-
-#### 4단계: 배포판 레거시 템플릿 정화 로직 (`install.sh` & `upgrade`)
-- `install.sh`:
-  - `cp -R "$SRC_DIR/templates" "$PKG_LIB_DIR/"` 복사 전후로, `$PKG_LIB_DIR/templates/`에서 레거시 파일(`PRD.md`, `DESIGN.md`, `ROADMAP.md`, `GOVERNANCE.md`, `RELEASE_NOTES.md`)을 복사에서 제외하거나 설치 직후 강제 삭제(`rm -f`)하는 정화(Purge) 로직 탑재.
-  - 기존에 이미 설치되어 있는 전역 경로(`~/.local/forgeflow/current/lib/forgeflow/templates/`)의 레거시 잔재 파일들도 탐지하여 자동 삭제.
-- 소스 저장소 내 레거시 파일 정리:
-  - 과거 테스트 의존성(`test_scaffold.py` 등)을 해치지 않도록 필요 시 `src/forgeflow/templates/legacy/` 네임스페이스로 격리하거나, 최신 템플릿 검증으로 테스트를 현대화하여 배포 대상에서 완전히 제외.
-
-#### 5단계: 버전 판올림 및 거버넌스 감사
-- `src/forgeflow/_version.py`를 `0.1.7`로 판올림 및 `pip install -e .`
-- `pytest` 전체 테스트 스위트 100% Pass
-- `forgeflow check --stage 2` 및 `forgeflow check --all --strict` 🟢 ALL PASSED
-- Gate 2 `QA_SIGNOFF.md` 및 Gate 3 `RELEASE_SIGNOFF.md` 작성 및 밀봉
-- `main` 브랜치 머지 및 피쳐 브랜치 삭제 (Fast-Path Close)
-
-#### 6단계: 원격 푸시 및 도그푸딩
-- `git push origin main`
-- `bash install.sh`를 실행하여 로컬 머신 전역 배포판(`~/.local/forgeflow/`)의 템플릿이 깨끗하게 정화되고 `forgeflow doc` 명령어가 정상 동작하는지 실전 도그푸딩 검증.
+### 🎯 다음 작업 방향
+1. **GitHub Issues 모니터링 및 추가 개선 사항 접수**:
+   - `forgeflow issue list`를 통한 추가 이슈 확인 및 처리.
+2. **도그푸딩 및 원격 동기화**:
+   - `git push origin main`을 통해 원격 저장소에 v0.1.7 배포.
+   - 필요 시 타깃 프로젝트에서 `/update-forgeflow`를 실행하여 사양서 발견성과 비파괴적 부팅 앵커가 정상 반영되는지 검증.
