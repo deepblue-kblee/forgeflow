@@ -42,7 +42,8 @@ Stage 1: 기획 & 명세 (/speckit.specify ➔ /speckit.clarify ➔ spec.md 작�
    - 과거 버전의 하위 호환성을 유지하려 하지 않으며, 과거 메모리나 산출물을 계승하지 않는다. 사용자 요구사항에 따라 공식 v0.1.0 표준으로 `spec.md`를 새롭게 작성한다.
 5. **ForgeFlow 자체 버전 규칙**:
    - `src/forgeflow/**`, `tests/**`, `docs/spec/**`, `AGENTS.md`, `README.md`, `pyproject.toml`, 또는 `install.sh`를 변경하는 ForgeFlow self-maintenance 릴리즈는 canonical `src/forgeflow/_version.py`를 단일 진실 공급원(SSOT)으로 삼아 갱신한다.
-5. **조건부 OIDR (Operational Incident and Delivery Readiness) 규범**:
+   - **패치 버전 승격 정책**: 당분간은 `0.1.X` 체계에서 `X`(패치 버전, 예: 0.1.9 ➔ 0.1.10) 부분만 1씩 증가시킨다. 마이너 버전(`0.2.0` 등)은 프레임워크의 대규모 아키텍처 변화 시 사용자와 사전 상의하여 합의된 시점에만 승격한다.
+6. **조건부 OIDR (Operational Incident and Delivery Readiness) 규범**:
    - 인시던트 해결(`incident-fix`)을 표방하거나 공용 표면(`public-surface-change`)을 변경하는 릴리즈는 OIDR 트랙이 필수 활성화된다.
    - Gate 1에서는 정제된 `Incident Brief`, 프로퍼티 보존 픽스처 매핑, 유효한 평결(`supported` | `explicitly-excluded` | `discovery-only`)을 입증해야 하며, 허위 해결 주장은 fail-closed 차단된다.
    - Gate 2에서는 소스 체크아웃이 아닌 격리 설치 환경에서 비파괴 프로브를 실행하여 런타임 전달성을 증명해야 하며, 활성 타깃 미검증 시 명시적 waiver(`delivery ready; active target unverified`)를 요구한다.
