@@ -92,11 +92,20 @@
 
 ---
 
+14. **진단 엔진 오탐 제거 및 패키지 전용 변경 QA 재바인딩 방지 (v0.1.11)**:
+    - **`forgeflow doctor` LEGACY_CONFIG_DETECTED 오탐 제거 (Issue #4)**: `diagnostics.py`의 `forgeflow_version != "0.1.0"` 하드코딩 검사를 버전 튜플 비교(`parse_version_tuple(v) < (0, 1, 0)`)로 교정하여, `0.1.1` 이상의 최신 버전으로 정상 갱신된 환경에서 레거시 경고가 발생하는 오탐 결함 해소.
+    - **하네스 게이트 패키지 문서 화이트리스트 확장 (Issue #3)**: `harness.py`의 `_candidate_disallowed_paths`에 최신 Spec Kit 하이브리드 표준 문서(`spec.md`, `plan.md`, `tasks.md`, `GATE1_REVIEW.md`, `CHANGE_NOTE.md`, `checklist.md`, `status.md`)를 전수 반영하여, Gate 2 이후 릴리즈 부기 작업 시 QA 바인딩이 안전하게 보존되도록 개선.
+    - **릴리즈 ID 조기 사전 검증 (Preflight Check)**: `forgeflow check --stage 2` 시점에 `validate_release_id`를 선제 검증하여 유효하지 않은 릴리즈 ID 형식을 조기 차단, 사후 디렉토리 변경 마찰을 원천 예방.
+    - **거버넌스 승인 권한 경계 명문화**: `FLOW_SPEC.md` 및 `GATES_AND_LOOPS.md`에 Gate 2(기술적 품질 검증에 따른 에이전트/QA 자동 승인)와 Gate 3(사용자 최종 배포 패키지 Go/No-Go 인간 승인)의 역할 책임을 단일 진실 공급원(SSOT)으로 분리 명시.
+    - **테스트 및 거버넌스 무결성**: 신규 4개 단위 테스트 추가 (총 294개 단위 테스트 100% Pass), 11개 릴리즈 전수 거버넌스 감사 `forgeflow check --all --strict` 🟢 ALL PASSED 달성, Tier 3 3인 독립 패널 심사 완료, `tasks/completed/v0.1.11-fix-doctor-false-positive-and-qa-rebind/` 패키지 밀봉 완료, GitHub Issue #3 및 #4 공식 종결.
+
+---
+
 ## 새 세션에서 바로 이어서 착수할 과업 (Next Actions)
 
 ### 🎯 다음 작업 방향 및 버전 정책
 1. **버전 정책 준수 (0.1.X 패치 증가 원칙)**:
-   - 당분간 버전 판올림은 `0.1.X` 체계에서 `X`(패치 버전, 예: 0.1.10 ➔ 0.1.11)만 증가시킨다.
+   - 당분간 버전 판올림은 `0.1.X` 체계에서 `X`(패치 버전, 예: 0.1.11 ➔ 0.1.12)만 증가시킨다.
    - 마이너 판올림(`0.2.0` 등)은 프레임워크의 대규모 아키텍처 변화 시 사용자와 사전 상의 후 결정한다.
 2. **GitHub Issues 모니터링 및 추가 개선 사항 접수**:
    - `forgeflow issue list`를 통한 추가 이슈 확인 및 처리.
