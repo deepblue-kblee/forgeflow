@@ -125,15 +125,22 @@
     - `README.md` 최상단 제목에 구버전으로 남아있던 `v0.1.0`을 프레임워크 SSOT 기준 버전인 `v0.1.13`으로 동기화 완료.
     - 297개 전체 단위 테스트 100% Pass 및 커밋 완료.
 
+18. **`forgeflow update` CHANGELOG 프리뷰 1줄 요약 단순화 (v0.1.14)**:
+    - **`forgeflow update`의 `changelog_summary` 포맷 간소화**: `CHANGELOG.md` 전문 대신 버전 헤더(`[<version>] - <date>`)와 1줄 대표 요약(`- <title>`)만 출력하도록 정제하여 터미널 가독성 대폭 향상.
+    - **마크다운 섹션 1줄 요약 파서 탑재 (`TemplateScaffolder.summarize_changelog_section`)**:
+      - 릴리즈 섹션에서 대표 타이틀 또는 첫 번째 핵심 변경 불릿을 지능적으로 감지하여 단일 요약 라인으로 변환.
+      - `extract_changelog_range(..., summary=True)` 기본값 연동으로 다중 버전 판올림 시에도 버전별 1줄 블록을 순차 제공.
+    - **테스트 및 거버넌스 무결성**: 신규 단위 테스트 추가, 전체 298개 단위 테스트 100% Pass, 14개 릴리즈 전수 거버넌스 감사 `forgeflow check --all --strict` 🟢 ALL PASSED 달성, `tasks/completed/v0.1.14-simplify-update-changelog-preview/` 패키지 밀봉 완료.
+
 ---
 
 ## 새 세션에서 바로 이어서 착수할 과업 (Next Actions)
 
 ### 🎯 다음 작업 방향 및 버전 정책
 1. **버전 정책 준수 (0.1.X 패치 증가 원칙)**:
-   - 당분간 버전 판올림은 `0.1.X` 체계에서 `X`(패치 버전, 예: 0.1.13 ➔ 0.1.14)만 증가시킨다.
+   - 당분간 버전 판올림은 `0.1.X` 체계에서 `X`(패치 버전, 예: 0.1.14 ➔ 0.1.15)만 증가시킨다.
    - 마이너 판올림(`0.2.0` 등)은 프레임워크의 대규모 아키텍처 변화 시 사용자와 사전 상의 후 결정한다.
 2. **GitHub Issues 모니터링 및 추가 개선 사항 접수**:
    - `forgeflow issue list`를 통한 추가 이슈 확인 및 처리.
 3. **도그푸딩 및 원격 동기화**:
-   - `git push origin main`을 통해 원격 저장소에 최신 버전 배포.
+   - `git push origin main --tags`를 통해 원격 저장소에 최신 버전 배포.
