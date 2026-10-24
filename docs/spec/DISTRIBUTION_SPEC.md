@@ -85,6 +85,8 @@ curl -sSL https://raw.githubusercontent.com/deepblue-kblee/forgeflow/main/instal
 
 ### 4.1 전역 런타임 업그레이드 (`forgeflow upgrade`)
 사용자 OS 계정 전역의 CLI 바이너리, 순수 파이썬 라이브러리(`~/.local/forgeflow`), 및 에이전트 스킬(`~/.agents/skills/`)을 최신 공식 릴리즈로 판올림한다:
+- **Cache-Busting & Inversion Guard**: GitHub Raw CDN의 기본 300초 캐시로 인한 구버전 반환 문제를 방지하기 위해 `Cache-Control: no-cache` 헤더 및 타임스탬프 쿼리(`?t=...`)를 적용하며, 캐시 전파 지연으로 원격 버전이 로컬 버전보다 낮을 경우 이상 감지 경고를 출력한다.
+- **실설치 버전 검증**: 업그레이드 완료 후 실제 설치/활성화된 패키지 버전을 직접 재검증하여 성공 메시지를 출력한다.
 ```bash
 # 최신 버전 확인
 forgeflow upgrade --check

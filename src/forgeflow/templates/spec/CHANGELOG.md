@@ -7,6 +7,21 @@ ForgeFlow 프레임워크의 모든 주요 변경 사항은 이 문서에 기록
 
 ---
 
+## [0.1.10] - 2026-10-22
+
+### 🛡️ `forgeflow upgrade` CDN 캐시 우회, 역전 감지 및 실설치 버전 검증 (Cache Busting, Inversion Guard & Verification)
+
+### Added
+- **Cache-Busting 헤더 및 쿼리 파라미터**:
+  - `raw.githubusercontent.com` 요청 시 Fastly/Varnish CDN 300초 강제 캐시를 우회하기 위해 `Cache-Control: no-cache, no-store, must-revalidate` 및 `Pragma: no-cache` 헤더 부여.
+  - 버전 확인(`_version.py`) 및 인스톨러(`install.sh`) URL에 타임스탬프 쿼리(`?t={int(time.time())}`) 추가.
+- **원격 버전 역전 감지 (Inverted Version Guard)**:
+  - 원격 버전이 현재 로컬 버전보다 낮게 조회될 경우(`remote_tuple < current_tuple`), CDN 캐시 갱신 지연 가능성을 안내하는 경고 문구(`⚠️ Warning: ... CDN cache may still be updating.`) 출력 및 JSON 모드 payload warning 필드 제공.
+- **설치 완료 후 실설치 버전 재검증**:
+  - `install.sh` 실행 성공 후, 사전에 파싱했던 원격 변수 대신 실제 로컬에 설치/활성화된 패키지 버전을 확인하여 정확한 업그레이드 완료 메시지(`🎉 Successfully upgraded ForgeFlow to v{installed_version}!`) 출력.
+
+---
+
 ## [0.1.9] - 2026-10-21
 
 ### 💬 `forgeflow upgrade` 대화형 확인 프롬프트 및 `--force` 옵션 도입 (Interactive Upgrade Prompt & Force Option)

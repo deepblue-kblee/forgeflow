@@ -166,6 +166,82 @@ class TestUpgradeCLI(unittest.TestCase):
             mock_input.assert_not_called()
             mock_subproc.assert_called_once()
 
+    @patch("urllib.request.urlopen")
+    def test_upgrade_cache_busting_and_headers(self, mock_urlopen):
+        from forgeflow._version import __version__
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = f'__version__ = "{__version__}"'.encode("utf-8")
+        mock_resp.__enter__.return_value = mock_resp
+        mock_urlopen.return_value = mock_resp
+
+        args = parse_forgeflow_args(["upgrade", "--check", "--json"])
+        with patch("builtins.print"):
+            code = handle_upgrade(args)
+            self.assertEqual(code, 0)
+
+        mock_urlopen.assert_called_once()
+        req = mock_urlopen.call_args[0][0]
+        self.assertIn("t=", req.full_url)
+        self.assertEqual(req.headers.get("Cache-control"), "no-cache, no-store, must-revalidate")
+        self.assertEqual(req.headers.get("Pragma"), "no-cache")
+
+    @patch("urllib.request.urlopen")
+    def test_upgrade_remote_older_warning_json_and_stdout(self, mock_urlopen):
+        # When remote version is older than current version (e.g. CDN cache delay)
+        v_resp = MagicMock()
+        v_resp.read.return_value = b'__version__ = "0.1.7"'
+        v_resp.__enter__.return_value = v_resp
+        mock_urlopen.return_value = v_resp
+
+        # Check JSON output
+        args_json = parse_forgeflow_args(["upgrade", "--check", "--json"])
+        with patch("builtins.print") as mock_print:
+            code = handle_upgrade(args_json)
+            self.assertEqual(code, 0)
+            output = json.loads(mock_print.call_args[0][0])
+            self.assertIn("warning", output)
+            self.assertIn("older than", output["warning"])
+
+        # Check stdout terminal output
+        args_stdout = parse_forgeflow_args(["upgrade", "--check"])
+        with patch("builtins.print") as mock_print:
+            code = handle_upgrade(args_stdout)
+            self.assertEqual(code, 0)
+            printed_texts = " ".join(call[0][0] for call in mock_print.call_args_list if call[0])
+            self.assertIn("⚠️  Warning:", printed_texts)
+            self.assertIn("older than local version", printed_texts)
+
+    @patch("pathlib.Path.home")
+    @patch("subprocess.run")
+    @patch("urllib.request.urlopen")
+    def test_upgrade_verified_installed_version(self, mock_urlopen, mock_subproc, mock_home):
+        import tempfile
+        from pathlib import Path
+
+        v_resp = MagicMock()
+        v_resp.read.return_value = b'__version__ = "0.1.7"'  # Stale CDN returned 0.1.7
+        v_resp.__enter__.return_value = v_resp
+
+        inst_resp = MagicMock()
+        inst_resp.read.return_value = b'#!/usr/bin/env bash\necho "installed"'
+        inst_resp.__enter__.return_value = inst_resp
+
+        mock_urlopen.side_effect = [v_resp, inst_resp]
+        mock_subproc.return_value = MagicMock(returncode=0)
+
+        with tempfile.TemporaryDirectory() as tmp_home:
+            mock_home.return_value = Path(tmp_home)
+            version_file = Path(tmp_home) / ".local" / "forgeflow" / "current" / "lib" / "forgeflow" / "_version.py"
+            version_file.parent.mkdir(parents=True, exist_ok=True)
+            # Actually installed version by install.sh was 0.1.10
+            version_file.write_text('__version__ = "0.1.10"\n', encoding="utf-8")
+
+            args = parse_forgeflow_args(["upgrade", "--force"])
+            with patch("builtins.print") as mock_print:
+                code = handle_upgrade(args)
+                self.assertEqual(code, 0)
+                mock_print.assert_any_call("🎉 Successfully upgraded ForgeFlow to v0.1.10!")
+
 
 if __name__ == "__main__":
     unittest.main()

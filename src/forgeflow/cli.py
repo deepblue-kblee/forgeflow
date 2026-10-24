@@ -648,6 +648,7 @@ def handle_upgrade(args):
     import re
     import subprocess
     import tempfile
+    import time
     import urllib.error
     import urllib.request
 
@@ -656,12 +657,20 @@ def handle_upgrade(args):
     force = getattr(args, "force", False)
     as_json = getattr(args, "json", False)
 
-    version_url = f"{repo_url}/src/forgeflow/_version.py"
-    install_url = f"{repo_url}/install.sh"
+    timestamp = int(time.time())
+    delim = "&" if "?" in repo_url else "?"
+    version_url = f"{repo_url}/src/forgeflow/_version.py{delim}t={timestamp}"
+    install_url = f"{repo_url}/install.sh{delim}t={timestamp}"
+
+    http_headers = {
+        "User-Agent": "ForgeFlow-CLI",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+    }
 
     remote_version = None
     try:
-        req = urllib.request.Request(version_url, headers={"User-Agent": "ForgeFlow-CLI"})
+        req = urllib.request.Request(version_url, headers=http_headers)
         with urllib.request.urlopen(req, timeout=5) as resp:
             content = resp.read().decode("utf-8")
             match = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', content)
@@ -684,11 +693,21 @@ def handle_upgrade(args):
     current_tuple = parse_version_tuple(__version__)
     remote_tuple = parse_version_tuple(remote_version)
     is_upgrade_available = remote_tuple > current_tuple
+    is_remote_older = remote_tuple < current_tuple
+
+    warning_msg = None
+    if is_remote_older:
+        warning_msg = (
+            f"Remote version (v{remote_version}) is older than local version (v{__version__}). "
+            "GitHub CDN cache may still be updating."
+        )
 
     if not as_json:
         print("🔍 Checking ForgeFlow version...")
         print(f"• Current version: v{__version__}")
         print(f"• Latest version:  v{remote_version}")
+        if warning_msg:
+            print(f"⚠️  Warning: {warning_msg}")
         print()
 
     if check_only:
@@ -698,6 +717,8 @@ def handle_upgrade(args):
             "remote_version": remote_version,
             "upgrade_available": is_upgrade_available,
         }
+        if warning_msg:
+            payload["warning"] = warning_msg
         if as_json:
             print(json.dumps(payload))
         else:
@@ -710,13 +731,16 @@ def handle_upgrade(args):
 
     if not is_upgrade_available and not force:
         if as_json:
-            print(json.dumps({
+            payload = {
                 "status": "success",
                 "message": f"ForgeFlow is already up to date (v{__version__}).",
                 "current_version": __version__,
                 "remote_version": remote_version,
                 "upgraded": False,
-            }))
+            }
+            if warning_msg:
+                payload["warning"] = warning_msg
+            print(json.dumps(payload))
         else:
             print(f"✅ ForgeFlow is already up to date (v{__version__}). (Use --force to reinstall)")
         return 0
@@ -738,7 +762,7 @@ def handle_upgrade(args):
         print(f"📦 {action_ing}: v{__version__} ➔ v{remote_version}...")
 
     try:
-        req = urllib.request.Request(install_url, headers={"User-Agent": "ForgeFlow-CLI"})
+        req = urllib.request.Request(install_url, headers=http_headers)
         with urllib.request.urlopen(req, timeout=10) as resp:
             installer_code = resp.read().decode("utf-8")
     except Exception as e:
@@ -767,16 +791,29 @@ def handle_upgrade(args):
         except Exception:
             pass
 
+    # Verify actual installed version from ~/.local/forgeflow/current/lib/forgeflow/_version.py if available
+    installed_version = remote_version
+    try:
+        active_version_file = Path.home() / ".local" / "forgeflow" / "current" / "lib" / "forgeflow" / "_version.py"
+        if active_version_file.exists():
+            v_match = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', active_version_file.read_text(encoding="utf-8"))
+            if v_match:
+                active_ver = v_match.group(1).strip()
+                if parse_version_tuple(active_ver) >= parse_version_tuple(remote_version):
+                    installed_version = active_ver
+    except Exception:
+        pass
+
     if as_json:
         print(json.dumps({
             "status": "success",
-            "message": f"Successfully upgraded ForgeFlow to v{remote_version}.",
+            "message": f"Successfully upgraded ForgeFlow to v{installed_version}.",
             "previous_version": __version__,
-            "current_version": remote_version,
+            "current_version": installed_version,
             "upgraded": True,
         }))
     else:
-        print(f"🎉 Successfully upgraded ForgeFlow to v{remote_version}!")
+        print(f"🎉 Successfully upgraded ForgeFlow to v{installed_version}!")
     return 0
 
 
