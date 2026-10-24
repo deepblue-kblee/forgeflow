@@ -121,6 +121,10 @@
       - 번들 템플릿 최우선 참조를 통해 설치 전/후 환경 어디서나 안정적으로 마크다운 섹션 추출 보장.
     - **테스트 및 거버넌스 무결성**: 신규 단위 테스트 2종 추가, 전체 297개 단위 테스트 100% Pass, 13개 릴리즈 전수 하네스 감사 `forgeflow check --all --strict` 🟢 ALL PASSED 달성, `tasks/completed/v0.1.13-changelog-distribution-and-update-preview/` 패키지 밀봉 완료.
 
+17. **README.md 메인 타이틀 버전 최신화 (`v0.1.0` ➔ `v0.1.13`)**:
+    - `README.md` 최상단 제목에 구버전으로 남아있던 `v0.1.0`을 프레임워크 SSOT 기준 버전인 `v0.1.13`으로 동기화 완료.
+    - 297개 전체 단위 테스트 100% Pass 및 커밋 완료.
+
 ---
 
 ## 새 세션에서 바로 이어서 착수할 과업 (Next Actions)
