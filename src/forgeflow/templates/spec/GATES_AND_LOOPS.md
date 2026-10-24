@@ -82,6 +82,7 @@ ForgeFlow는 실행과 통제를 분리하는 이중 엔진 모델을 채택한�
   1. `RELEASE_SIGNOFF.md` 및 `COMPLETION_REPORT.md` (또는 `RELEASE_NOTES.md`) 작성.
   2. 사용자 최종 승인(Go/No-Go) 확인.
   3. `tasks/in-progress/<release-id>` 디렉토리를 `tasks/completed/<release-id>`로 원자적 이동(Atomic Move)하여 패키지 영구 밀봉.
+  4. **Gate 3 최종 단일 릴리즈 바인딩**: Gate 2 이후의 문서 정리(부기)가 모두 완비된 최종 커밋 스냅샷을 단일 Release-SHA로 최종 결속하여 불필요한 중간 SHA 마찰 없이 패키지 무결성(Provenance)을 영구 보존.
 
 ---
 

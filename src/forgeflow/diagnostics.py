@@ -228,7 +228,7 @@ class DiagnosticAnalyzer:
                         )
                     )
 
-        # 5. Legacy Configuration & Amnesia Policy Check
+        # 5. Legacy Configuration & Amnesia Policy Check (Baseline Date: 2026-10-20)
         config_file = self.repo_root / ".forgeflow.json"
         if config_file.is_file():
             try:
@@ -236,10 +236,19 @@ class DiagnosticAnalyzer:
                 version_str = cfg.get("forgeflow_version", "")
                 v_tuple = _parse_version_tuple(version_str) if version_str else (0,)
                 gov = cfg.get("governance", {}) if isinstance(cfg.get("governance"), dict) else {}
+                has_speckit = (self.repo_root / ".specify" / "memory" / "constitution.md").is_file()
+
+                # Amnesia epoch: 2026-10-20 00:00:00 KST
+                amnesia_epoch = 1792422000
+                mtime = config_file.stat().st_mtime
+
+                # Detect 2026-10-20 pre-reset legacy configurations
                 is_legacy = (
                     v_tuple < (0, 1, 0)
                     or "required_documents" in gov
                     or "default_tier" in gov
+                    or mtime < (amnesia_epoch - 86400)
+                    or ((0, 21, 0) <= v_tuple <= (0, 23, 99) and not has_speckit)
                 )
                 if is_legacy:
                     anomalies.append(
@@ -247,7 +256,7 @@ class DiagnosticAnalyzer:
                             anomaly_type="LEGACY_CONFIG_DETECTED",
                             severity="WARNING",
                             message="2026-10-20 이전의 구버전 거버넌스 설정이 감지되었습니다 (하위 호환 미지원).",
-                            remedy="'forgeflow init --speckit'을 실행하여 최신 표준 설정으로 교체하세요.",
+                            remedy="'forgeflow init --speckit'을 실행하여 v0.1.0+ 최신 표준 설정으로 교체하세요.",
                             context={"current_version": cfg.get("forgeflow_version")},
                         )
                     )

@@ -156,7 +156,15 @@ class TestDoctorCLI(unittest.TestCase):
 
     def test_doctor_detects_legacy_config_amnesia(self):
         config_file = self.root / ".forgeflow.json"
+        # 1. Version < 0.1.0
         config_file.write_text(json.dumps({"forgeflow_version": "0.0.9"}), encoding="utf-8")
+        analyzer = DiagnosticAnalyzer(repo_root=self.root)
+        anomalies = analyzer.analyze()
+        types = [a.anomaly_type for a in anomalies]
+        self.assertIn("LEGACY_CONFIG_DETECTED", types)
+
+        # 2. Past pre-reset version (0.22.1 / 0.23.0) without constitution.md
+        config_file.write_text(json.dumps({"forgeflow_version": "0.22.1"}), encoding="utf-8")
         analyzer = DiagnosticAnalyzer(repo_root=self.root)
         anomalies = analyzer.analyze()
         types = [a.anomaly_type for a in anomalies]
@@ -164,12 +172,25 @@ class TestDoctorCLI(unittest.TestCase):
 
     def test_doctor_allows_newer_forgeflow_version(self):
         config_file = self.root / ".forgeflow.json"
-        for ver in ("0.1.0", "0.1.9", "0.1.10", "0.1.11", "0.2.0"):
+        for ver in ("0.1.0", "0.1.9", "0.1.10", "0.1.11", "0.1.12", "0.2.0"):
             config_file.write_text(json.dumps({"forgeflow_version": ver}), encoding="utf-8")
             analyzer = DiagnosticAnalyzer(repo_root=self.root)
             anomalies = analyzer.analyze()
             types = [a.anomaly_type for a in anomalies]
             self.assertNotIn("LEGACY_CONFIG_DETECTED", types)
+
+    def test_doctor_allows_future_high_version_with_speckit(self):
+        # When future framework naturally reaches 0.22.0+, constitution.md exists
+        config_file = self.root / ".forgeflow.json"
+        config_file.write_text(json.dumps({"forgeflow_version": "0.22.0"}), encoding="utf-8")
+        constitution = self.root / ".specify" / "memory" / "constitution.md"
+        constitution.parent.mkdir(parents=True, exist_ok=True)
+        constitution.write_text("# Constitution\n", encoding="utf-8")
+
+        analyzer = DiagnosticAnalyzer(repo_root=self.root)
+        anomalies = analyzer.analyze()
+        types = [a.anomaly_type for a in anomalies]
+        self.assertNotIn("LEGACY_CONFIG_DETECTED", types)
 
     def test_doctor_detects_legacy_governance_fields(self):
         config_file = self.root / ".forgeflow.json"

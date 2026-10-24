@@ -7,6 +7,21 @@ ForgeFlow 프레임워크의 모든 주요 변경 사항은 이 문서에 기록
 
 ---
 
+## [0.1.12] - 2026-10-24
+
+### ⏳ Date-Based Amnesia 검증 완비 및 Gate 3 최종 단일 바인딩 확립 (Date-Based Amnesia & Gate 3 Single-Binding)
+
+### Added & Improved
+- **Date-Based Amnesia (2026-10-20 기준일) 정밀 판별 로직 탑재**:
+  - `diagnostics.py`에 파일 수정 시각(`mtime`), 기준일(`2026-10-20`), 및 Spec Kit 하이브리드 표준 자산(`.specify/memory/constitution.md`) 존재 여부를 교차 검증하는 로직 구현.
+  - 과거 2026-10-20 이전의 구버전 ForgeFlow(v0.4.4 ~ v0.23.0) 환경을 확실히 레거시로 감지하면서, 미래에 정당하게 판올림될 최신 버전(`0.22.0+`)과의 버전 번호 충돌 및 오탐을 원천 해소.
+- **Gate 3 최종 단일 릴리즈 바인딩 및 사양 간소화**:
+  - Gate 2는 테스트 100% Pass 및 정적 분석 통과에 대한 기술적 품질 합격 체크포인트로 작동.
+  - Gate 2 이후의 패키지 부기(Bookkeeping: `tasks.md` 완료 체크, `RELEASE_NOTES.md`, `RELEASE_SIGNOFF.md` 작성)는 중간 QA-SHA 마찰 없이 자유롭게 수행되도록 허용.
+  - 사용자 최종 Go/No-Go 승인을 거쳐 Gate 3 패키지 밀봉 시점에 최종 커밋 스냅샷을 단일 Release-SHA로 묶어 영구 보존.
+
+---
+
 ## [0.1.11] - 2026-10-24
 
 ### 🩺 진단 엔진 오탐 제거 및 패키지 전용 변경 QA 재바인딩 방지 (Doctor Fix & Package-Only QA Preservation)
