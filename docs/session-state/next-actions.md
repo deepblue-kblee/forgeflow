@@ -84,11 +84,19 @@
 
 ---
 
+13. **`forgeflow upgrade` CDN 캐시 우회, 역전 감지 및 실설치 버전 검증 (v0.1.10)**:
+    - **Cache-Busting 헤더 및 쿼리 파라미터**: `raw.githubusercontent.com` 요청 시 Fastly/Varnish CDN 300초 강제 캐시 우회를 위해 `Cache-Control: no-cache, no-store, must-revalidate` 및 `Pragma: no-cache` 헤더 부여, URL에 `?t={timestamp}` 타임스탬프 쿼리 적용.
+    - **원격 버전 역전 감지 (Inverted Version Guard)**: 원격 버전이 로컬 버전보다 낮게 반환될 경우(`remote < current`), 이상 감지 경고(`⚠️ Warning: ... CDN cache may still be updating.`) 출력 및 JSON `warning` 필드 제공.
+    - **실설치 버전 재검증**: `install.sh` 실행 완료 후 사전 변수 대신 실제 설치된 패키지 버전을 확인하여 정확한 업그레이드 완료 메시지(`🎉 Successfully upgraded ForgeFlow to v{installed_version}!`) 출력.
+    - **테스트 및 거버넌스 무결성**: 신규 3개 단위 테스트 추가 (총 12개 업그레이드 테스트 100% Pass), 전체 290개 단위 테스트 100% Pass, 10개 릴리즈 전수 거버넌스 감사 `forgeflow check --all --strict` 🟢 ALL PASSED 달성, `tasks/completed/v0.1.10-upgrade-cache-and-version-verification/` 패키지 밀봉 완료.
+
+---
+
 ## 새 세션에서 바로 이어서 착수할 과업 (Next Actions)
 
 ### 🎯 다음 작업 방향 및 버전 정책
 1. **버전 정책 준수 (0.1.X 패치 증가 원칙)**:
-   - 당분간 버전 판올림은 `0.1.X` 체계에서 `X`(패치 버전, 예: 0.1.9 ➔ 0.1.10)만 증가시킨다.
+   - 당분간 버전 판올림은 `0.1.X` 체계에서 `X`(패치 버전, 예: 0.1.10 ➔ 0.1.11)만 증가시킨다.
    - 마이너 판올림(`0.2.0` 등)은 프레임워크의 대규모 아키텍처 변화 시 사용자와 사전 상의 후 결정한다.
 2. **GitHub Issues 모니터링 및 추가 개선 사항 접수**:
    - `forgeflow issue list`를 통한 추가 이슈 확인 및 처리.
