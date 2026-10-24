@@ -242,6 +242,47 @@ class TestUpgradeCLI(unittest.TestCase):
                 self.assertEqual(code, 0)
                 mock_print.assert_any_call("🎉 Successfully upgraded ForgeFlow to v0.1.10!")
 
+    @patch("subprocess.run")
+    @patch("urllib.request.urlopen")
+    def test_upgrade_includes_release_highlights(self, mock_urlopen, mock_subproc):
+        v_resp = MagicMock()
+        v_resp.read.return_value = b'__version__ = "0.1.13"'
+        v_resp.__enter__.return_value = v_resp
+
+        inst_resp = MagicMock()
+        inst_resp.read.return_value = b'#!/usr/bin/env bash\necho "installed"'
+        inst_resp.__enter__.return_value = inst_resp
+
+        mock_urlopen.side_effect = [v_resp, inst_resp]
+        mock_subproc.return_value = MagicMock(returncode=0)
+
+        # JSON mode
+        args_json = parse_forgeflow_args(["upgrade", "--force", "--json"])
+        with patch("builtins.print") as mock_print:
+            code = handle_upgrade(args_json)
+            self.assertEqual(code, 0)
+            output = json.loads(mock_print.call_args[0][0])
+            self.assertTrue(output["upgraded"])
+            self.assertIn("release_highlights", output)
+
+        # Re-mock urlopen
+        v_resp2 = MagicMock()
+        v_resp2.read.return_value = b'__version__ = "0.1.13"'
+        v_resp2.__enter__.return_value = v_resp2
+        inst_resp2 = MagicMock()
+        inst_resp2.read.return_value = b'#!/usr/bin/env bash\necho "installed"'
+        inst_resp2.__enter__.return_value = inst_resp2
+        mock_urlopen.side_effect = [v_resp2, inst_resp2]
+
+        # Stdout mode
+        args_stdout = parse_forgeflow_args(["upgrade", "--force"])
+        with patch("builtins.print") as mock_print:
+            code = handle_upgrade(args_stdout)
+            self.assertEqual(code, 0)
+            printed = " ".join(call[0][0] for call in mock_print.call_args_list if call[0])
+            self.assertIn("Release Highlights", printed)
+            self.assertIn("forgeflow doc show changelog", printed)
+
 
 if __name__ == "__main__":
     unittest.main()

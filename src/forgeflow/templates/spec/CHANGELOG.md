@@ -7,6 +7,23 @@ ForgeFlow 프레임워크의 모든 주요 변경 사항은 이 문서에 기록
 
 ---
 
+## [0.1.13] - 2026-10-24
+
+### 📢 CHANGELOG 배포 연동 및 upgrade/update 변경 내역 자동 프리뷰 (Changelog Preview & Distribution)
+
+### Added
+- **`forgeflow update` 실행 시 거버넌스 사양 변경 내역(What's Changed) 자동 출력**:
+  - `previous_version`에서 `current_version`으로 판올림되면서 도입된 주요 거버넌스 규범 변경 사항을 번들된 `CHANGELOG.md`에서 파싱하여 터미널에 요약 출력.
+  - `--json` 모드 응답 객체에 `changelog_summary` 필드를 함께 제공하여, AI 에이전트가 새 거버넌스 규칙을 프롬프트 컨텍스트로 즉각 흡수하도록 지원.
+  - 전체 변경 이력 열람 안내(`💡 전체 세부 사양서 열람: 'forgeflow doc show changelog'`) 제공.
+- **`forgeflow upgrade` 완료 시 최신 릴리즈 하이라이트 출력**:
+  - 전역 런타임 업그레이드 완료 성공 메시지 하단에, 방금 설치된 신규 버전의 주요 변경점(Highlights: Added, Changed, Fixed)을 터미널에 자동 프리뷰 출력.
+  - `--json` 모드 응답 객체에 `release_highlights` 필드 포함.
+- **CHANGELOG 마크다운 추출 엔진 탑재 (`src/forgeflow/scaffold.py`)**:
+  - `extract_changelog_section(version)` 및 `extract_changelog_range(prev_ver, curr_ver)` 헬퍼 구현.
+
+---
+
 ## [0.1.12] - 2026-10-24
 
 ### ⏳ Date-Based Amnesia 검증 완비 및 Gate 3 최종 단일 바인딩 확립 (Date-Based Amnesia & Gate 3 Single-Binding)

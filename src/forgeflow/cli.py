@@ -814,16 +814,32 @@ def handle_upgrade(args):
     except Exception:
         pass
 
+    highlights = None
+    try:
+        from .scaffold import TemplateScaffolder
+        highlights = TemplateScaffolder.extract_changelog_section(installed_version)
+    except Exception:
+        pass
+
     if as_json:
-        print(json.dumps({
+        payload = {
             "status": "success",
             "message": f"Successfully upgraded ForgeFlow to v{installed_version}.",
             "previous_version": __version__,
             "current_version": installed_version,
             "upgraded": True,
-        }))
+        }
+        if highlights:
+            payload["release_highlights"] = highlights
+        print(json.dumps(payload))
     else:
         print(f"🎉 Successfully upgraded ForgeFlow to v{installed_version}!")
+        if highlights:
+            print("\n------------------------------------------------------------")
+            print(f"📋 Release Highlights for v{installed_version}:")
+            print(highlights)
+            print("------------------------------------------------------------")
+            print("💡 전체 세부 사양서 열람: 'forgeflow doc show changelog'")
     return 0
 
 
@@ -851,6 +867,12 @@ def handle_update(args):
         print(f"   Updated Files ({len(res['updated_files'])}):")
         for f in res["updated_files"]:
             print(f"     • {f}")
+        if res.get("changelog_summary"):
+            print("\n------------------------------------------------------------")
+            print("📋 What's Changed in this update:")
+            print(res["changelog_summary"])
+            print("------------------------------------------------------------")
+            print("💡 전체 세부 사양서 열람: 'forgeflow doc show changelog'")
     return 0
 
 

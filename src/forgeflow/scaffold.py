@@ -1139,10 +1139,89 @@ class TemplateScaffolder:
         if ".forgeflow.json" not in updated_files:
             updated_files.insert(0, ".forgeflow.json")
 
+        changelog_summary = cls.extract_changelog_range(previous_version, __version__, changelog_file=cls.find_changelog_file(root))
+
         return {
             "status": "success",
             "previous_version": previous_version,
             "current_version": __version__,
             "target_dir": str(root),
             "updated_files": sorted(list(set(updated_files))),
+            "changelog_summary": changelog_summary,
         }
+
+    @classmethod
+    def find_changelog_file(cls, root: Optional[Path] = None) -> Optional[Path]:
+        """Locate CHANGELOG.md from installed package or source tree."""
+        candidates = []
+        if root:
+            candidates.append(root / "docs" / "spec" / "CHANGELOG.md")
+            candidates.append(root / "src" / "forgeflow" / "templates" / "spec" / "CHANGELOG.md")
+
+        # 1. Directly packaged with current python module
+        candidates.append(Path(__file__).parent / "templates" / "spec" / "CHANGELOG.md")
+
+        # 2. Local workspace repository
+        try:
+            repo_root = HierarchicalRootScanner.find_root()
+            candidates.append(repo_root / "docs" / "spec" / "CHANGELOG.md")
+            candidates.append(repo_root / "src" / "forgeflow" / "templates" / "spec" / "CHANGELOG.md")
+        except Exception:
+            pass
+
+        # 3. Global installed packages
+        candidates.append(Path.home() / ".local" / "forgeflow" / "current" / "lib" / "forgeflow" / "templates" / "spec" / "CHANGELOG.md")
+
+        for c in candidates:
+            if c.is_file():
+                return c
+        return None
+
+    @classmethod
+    def extract_changelog_section(cls, version: str, changelog_file: Optional[Path] = None) -> Optional[str]:
+        """Extract a single release section from CHANGELOG.md."""
+        target_file = changelog_file or cls.find_changelog_file()
+        if not target_file or not target_file.is_file():
+            return None
+
+        clean_v = version.lstrip("v").strip()
+        try:
+            text = target_file.read_text(encoding="utf-8")
+        except Exception:
+            return None
+
+        pattern = re.compile(
+            rf"(?ms)^##\s*\[\s*{re.escape(clean_v)}\s*\].*?(?=^##\s*\[|\Z)"
+        )
+        match = pattern.search(text)
+        if match:
+            return match.group(0).strip()
+        return None
+
+    @classmethod
+    def extract_changelog_range(cls, prev_ver: str, curr_ver: str, changelog_file: Optional[Path] = None) -> Optional[str]:
+        """Extract release sections between previous and current versions."""
+        target_file = changelog_file or cls.find_changelog_file()
+        if not target_file or not target_file.is_file():
+            return None
+
+        try:
+            text = target_file.read_text(encoding="utf-8")
+        except Exception:
+            return None
+
+        from .cli import parse_version_tuple
+        prev_tuple = parse_version_tuple(prev_ver)
+        curr_tuple = parse_version_tuple(curr_ver)
+
+        section_pattern = re.compile(r"(?ms)^##\s*\[\s*([^\]]+)\s*\].*?(?=^##\s*\[|\Z)")
+        matched_sections = []
+        for match in section_pattern.finditer(text):
+            ver_str = match.group(1).strip()
+            v_tuple = parse_version_tuple(ver_str)
+            if prev_tuple < v_tuple <= curr_tuple:
+                matched_sections.append(match.group(0).strip())
+
+        if matched_sections:
+            return "\n\n".join(matched_sections)
+        return cls.extract_changelog_section(curr_ver, changelog_file=target_file)
