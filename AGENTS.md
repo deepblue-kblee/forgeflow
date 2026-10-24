@@ -120,3 +120,13 @@ Stage 1: 기획 & 명세 (/speckit.specify ➔ /speckit.clarify ➔ spec.md 작�
   2. 잔여 로컬/원격 작업 브랜치가 있다면 삭제(`git branch -d` 등).
   3. 완료 상태 요약 및 최종 종료 보고 (0.5초 이내 완결).
 - **브랜치 맥락 준수**: `check --self-governance` 등의 사전 개발 검증 명령은 `feat/...` 격리 브랜치 개발 단계(Stage 4) 전용이므로, `main` 브랜치나 이미 완료된 릴리즈 상태에서 호출해서는 안 된다.
+
+<!-- forgeflow:boot-anchor:start -->
+## 🌊 ForgeFlow Session Boot Sequence (Harness Governance)
+
+모든 작업 시작 전, AI 에이전트는 다음 규칙과 사양을 반드시 확인하고 준수해야 합니다:
+1. **헌법 및 3대 메커니즘**: `.specify/memory/constitution.md` 및 `docs/spec/SPECKIT_HOOKS_AND_NORMS.md` 확인
+2. **공식 사양서 참조**: `forgeflow doc list` 또는 `~/.local/forgeflow/current/lib/forgeflow/templates/spec/`의 7대 공식 사양서(`FLOW_SPEC.md` 등) 참조
+3. **게이트 통제**: `tasks/in-progress/<id>/GATE1_REVIEW.md` 승인 전 소스 코드 작성/수정 절대 금지 (No Code Before Gate 1 Pass)
+4. **원자적 루프 및 멈춤**: 단순 테스트 실패 시 자가 치유(Loop 2) 자율 완주, 5회 연속 실패 시 진짜 멈춤(True Stop)
+<!-- forgeflow:boot-anchor:end -->

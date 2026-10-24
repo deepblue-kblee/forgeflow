@@ -1,5 +1,5 @@
 {
-  "forgeflow_version": "0.1.5",
+  "forgeflow_version": "0.1.13",
   "governance": {
     "tasks_dir": "tasks",
     "strict_mode": true,
