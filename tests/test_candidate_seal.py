@@ -80,6 +80,44 @@ class CandidateSealTests(unittest.TestCase):
         self.assertIsNotNone(disallowed)
         self.assertIn("src/code.py", disallowed)
 
+    def test_candidate_allows_speckit_hybrid_documents(self):
+        engine = HarnessEngine(repo_root=self.repo_root)
+
+        pkg_dir = self.repo_root / "tasks" / "in-progress" / self.release_id
+        pkg_dir.mkdir(parents=True, exist_ok=True)
+        (pkg_dir / "spec.md").write_text("# Spec\n", encoding="utf-8")
+        (pkg_dir / "GATE1_REVIEW.md").write_text("# Gate 1\n", encoding="utf-8")
+        (pkg_dir / "plan.md").write_text("# Plan\n", encoding="utf-8")
+        (pkg_dir / "tasks.md").write_text("# Tasks\n- [ ] task 1\n", encoding="utf-8")
+        (pkg_dir / "QA_SIGNOFF.md").write_text("# QA\n", encoding="utf-8")
+
+        subprocess.run(["git", "add", "."], cwd=self.repo_root, capture_output=True, check=True)
+        subprocess.run(["git", "commit", "-m", "QA commit with speckit docs"], cwd=self.repo_root, capture_output=True, check=True)
+        qa_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=self.repo_root, capture_output=True, text=True, check=True).stdout.strip()
+
+        # Update tasks.md to completed checklist and add CHANGE_NOTE.md
+        (pkg_dir / "tasks.md").write_text("# Tasks\n- [x] task 1\n", encoding="utf-8")
+        (pkg_dir / "CHANGE_NOTE.md").write_text("# Change Note\n", encoding="utf-8")
+        (pkg_dir / "RELEASE_SIGNOFF.md").write_text("# Release Signoff\n", encoding="utf-8")
+
+        subprocess.run(["git", "add", "."], cwd=self.repo_root, capture_output=True, check=True)
+        subprocess.run(["git", "commit", "-m", "Candidate commit with updated tasks and change note"], cwd=self.repo_root, capture_output=True, check=True)
+        candidate_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=self.repo_root, capture_output=True, text=True, check=True).stdout.strip()
+
+        disallowed = engine._candidate_disallowed_paths(self.release_id, qa_sha=qa_sha, candidate=candidate_sha)
+        self.assertEqual(disallowed, [], f"Disallowed paths found: {disallowed}")
+        self.assertTrue(engine._has_v2_candidate_binding(self.release_id, qa_sha=qa_sha, candidate=candidate_sha))
+
+    def test_verify_stage2_gatekeeper_rejects_unsafe_release_id(self):
+        from forgeflow.cli import verify_stage2_gatekeeper
+
+        unsafe_pkg = self.repo_root / "tasks" / "in-progress" / "unsafe_id_without_semver"
+        unsafe_pkg.mkdir(parents=True, exist_ok=True)
+        (unsafe_pkg / "GATE1_REVIEW.md").write_text("APPROVED", encoding="utf-8")
+
+        res = verify_stage2_gatekeeper(repo_root=self.repo_root, quiet=True)
+        self.assertEqual(res, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

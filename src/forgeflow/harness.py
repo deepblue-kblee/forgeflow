@@ -1527,7 +1527,11 @@ class HarnessEngine:
                 ["git", "-C", str(self.repo_root), "diff", "--name-only", "--no-renames", "-z", f"{qa_sha}..{candidate}"],
                 capture_output=True, text=True, check=False,
             )
-            doc_names = ("PRD.md", "DESIGN.md", "QA_SIGNOFF.md", "RELEASE_SIGNOFF.md", "COMPLETION_REPORT.md", "RELEASE_NOTES.md", "ROADMAP.md")
+            doc_names = (
+                "spec.md", "plan.md", "tasks.md", "GATE1_REVIEW.md", "QA_SIGNOFF.md",
+                "RELEASE_SIGNOFF.md", "RELEASE_NOTES.md", "CHANGE_NOTE.md", "checklist.md", "status.md",
+                "PRD.md", "DESIGN.md", "COMPLETION_REPORT.md", "ROADMAP.md"
+            )
             allowed = {f"docs/releases/{release_id}/{name}" for name in doc_names}
             rel_dir = self._release_rel_path(release_id)
             allowed.update({f"{rel_dir}/{name}" for name in doc_names})
@@ -1536,13 +1540,29 @@ class HarnessEngine:
                     base = f"{pfx}/{sub}/{release_id}" if sub else f"{pfx}/{release_id}"
                     allowed.update({f"{base}/{name}" for name in doc_names})
             allowed.add(f".forgeflow/lifecycle/{release_id}.json")
+
+            def _is_allowed(p: str) -> bool:
+                if not p:
+                    return True
+                if p in allowed or p.startswith("docs/session-state/"):
+                    return True
+                if p.endswith(".lock") and (".forgeflow/lifecycle" in p or p.startswith(".forgeflow/")):
+                    return True
+                parts = Path(p).parts
+                if len(parts) >= 2:
+                    if parts[0] in ("tasks", "ff-tasks") and (parts[-1] in doc_names or parts[-1].endswith(".md")):
+                        return True
+                    if parts[0] == "docs" and len(parts) >= 3 and parts[1] == "releases" and (parts[-1] in doc_names or parts[-1].endswith(".md")):
+                        return True
+                    if parts[0] == ".forgeflow" and len(parts) >= 3 and parts[1] == "lifecycle" and parts[-1].endswith(".json"):
+                        return True
+                return False
+
             disallowed: List[str] = []
             for path in changed.stdout.split("\0"):
                 if not path:
                     continue
-                if path in allowed or path.startswith("docs/session-state/"):
-                    continue
-                if path.endswith(".lock") and (".forgeflow/lifecycle" in path or path.startswith(".forgeflow/")):
+                if _is_allowed(path):
                     continue
                 disallowed.append(path)
 

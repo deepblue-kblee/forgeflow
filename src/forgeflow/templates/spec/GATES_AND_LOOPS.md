@@ -66,17 +66,20 @@ ForgeFlow는 실행과 통제를 분리하는 이중 엔진 모델을 채택한�
 
 ### Gate 2: QA 품질 승인 게이트 (QA Sign-Off Gate)
 - **위치**: Stage 3 구현 완료 후, Gate 3 릴리즈 승격 전
+- **승인 주체**: QA 엔지니어 또는 AI 에이전트 (기술적 품질 검증에 따른 자율 서명, 사용자 인간 승인 불필요)
 - **통과 요건**:
   1. `spec.md`에 명시된 모든 인수 조건 충족.
   2. 단위 및 통합 테스트 100% Pass (Fail = 0, Error = 0).
   3. Linter 및 정적 분석(`forgeflow review --strict`) 오류 0건 (인지 복잡도 ≤ 15, 함수 LOC ≤ 50).
   4. 테스트가 통과된 최종 커밋 SHA를 `QA_SIGNOFF.md`에 결속 및 서명 발급.
   5. Tier 3 변경의 경우 격리 환경에서의 비파괴 런타임 프로브(Non-mutating probe) 전달성 검증 완료.
+- **패키지 전용 변경 면제 (Verified Package-Only Exemption)**: Gate 2 통과 후 실제 코드/테스트 diff가 전혀 없는 순수 패키지 메타데이터 정리(`tasks.md` 완료 체크, 릴리즈 노트 작성 등)는 QA 바인딩을 깨뜨리지 않고 안전하게 보존된다.
 
 ### Gate 3: 릴리즈 승인 및 패키지 밀봉 게이트 (Release & Package Seal Gate)
 - **위치**: 최종 배포 및 운영 승격 시점 (Stage 3 및 Gate 2 통과 후)
+- **승인 주체**: 사용자 (인간 최종 승인자, Go/No-Go 결정권자)
 - **통과 요건**:
-  1. `RELEASE_SIGNOFF.md` 및 `COMPLETION_REPORT.md` 작성.
+  1. `RELEASE_SIGNOFF.md` 및 `COMPLETION_REPORT.md` (또는 `RELEASE_NOTES.md`) 작성.
   2. 사용자 최종 승인(Go/No-Go) 확인.
   3. `tasks/in-progress/<release-id>` 디렉토리를 `tasks/completed/<release-id>`로 원자적 이동(Atomic Move)하여 패키지 영구 밀봉.
 

@@ -616,6 +616,16 @@ def verify_stage2_gatekeeper(repo_root: Path, target: Optional[str] = None, quie
         return 1
 
     for pkg in active_packages:
+        # Preflight: validate release ID format (vX.Y.Z-something) early
+        try:
+            from .lifecycle import validate_release_id
+            validate_release_id(pkg.name)
+        except Exception as e:
+            if not quiet:
+                print(f"❌ ForgeFlow Gatekeeper Error: Invalid release ID format for '{pkg.name}': {e}", file=sys.stderr)
+                print("   Release ID must follow pattern: vX.Y.Z-<short-name> (e.g., v0.1.0-feature-name)", file=sys.stderr)
+            return 1
+
         gate1_file = pkg / "GATE1_REVIEW.md"
         if not gate1_file.exists():
             if not quiet:

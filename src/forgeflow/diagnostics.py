@@ -15,6 +15,12 @@ from ._version import __version__
 from .scanner import HierarchicalRootScanner
 
 
+def _parse_version_tuple(v_str: Any) -> tuple:
+    import re
+    nums = re.findall(r"\d+", str(v_str))
+    return tuple(map(int, nums)) if nums else (0,)
+
+
 @dataclass
 class DiagnosticAnomaly:
     anomaly_type: str  # REPEATED_FAILURE, REDUNDANT_CHECK, HIGH_LATENCY, WORKTREE_LOCK
@@ -227,13 +233,21 @@ class DiagnosticAnalyzer:
         if config_file.is_file():
             try:
                 cfg = json.loads(config_file.read_text(encoding="utf-8"))
-                if cfg.get("forgeflow_version") != "0.1.0" or "required_documents" in cfg.get("governance", {}):
+                version_str = cfg.get("forgeflow_version", "")
+                v_tuple = _parse_version_tuple(version_str) if version_str else (0,)
+                gov = cfg.get("governance", {}) if isinstance(cfg.get("governance"), dict) else {}
+                is_legacy = (
+                    v_tuple < (0, 1, 0)
+                    or "required_documents" in gov
+                    or "default_tier" in gov
+                )
+                if is_legacy:
                     anomalies.append(
                         DiagnosticAnomaly(
                             anomaly_type="LEGACY_CONFIG_DETECTED",
                             severity="WARNING",
                             message="2026-10-20 이전의 구버전 거버넌스 설정이 감지되었습니다 (하위 호환 미지원).",
-                            remedy="'forgeflow init --speckit'을 실행하여 v0.1.0 표준 설정으로 교체하세요.",
+                            remedy="'forgeflow init --speckit'을 실행하여 최신 표준 설정으로 교체하세요.",
                             context={"current_version": cfg.get("forgeflow_version")},
                         )
                     )

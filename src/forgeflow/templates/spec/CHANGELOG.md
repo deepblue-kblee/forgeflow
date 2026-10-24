@@ -7,6 +7,25 @@ ForgeFlow 프레임워크의 모든 주요 변경 사항은 이 문서에 기록
 
 ---
 
+## [0.1.11] - 2026-10-24
+
+### 🩺 진단 엔진 오탐 제거 및 패키지 전용 변경 QA 재바인딩 방지 (Doctor Fix & Package-Only QA Preservation)
+
+### Fixed
+- **`forgeflow doctor` LEGACY_CONFIG_DETECTED 오탐 제거 (Issue #4)**:
+  - `diagnostics.py`의 `forgeflow_version != "0.1.0"` 하드코딩 검사를 버전 튜플 비교(`parse_version_tuple(v) < (0, 1, 0)`)로 교정하여, `0.1.1` 이상의 최신 버전으로 정상 갱신된 환경에서 레거시 경고가 발생하는 오탐 결함 해소.
+
+### Added & Improved
+- **하네스 게이트 패키지 문서 화이트리스트 확장 (Issue #3)**:
+  - `harness.py`의 `_candidate_disallowed_paths`에 최신 Spec Kit 하이브리드 표준 문서(`spec.md`, `plan.md`, `tasks.md`, `GATE1_REVIEW.md`, `CHANGE_NOTE.md`, `checklist.md`, `status.md`)를 전수 반영.
+  - 패키지 디렉토리(`tasks/...`) 내의 문서 변경 및 릴리즈 노트 작성이 QA-SHA 바인딩을 깨뜨리지 않고 안전하게 보존되도록 개선.
+- **릴리즈 ID 조기 검증 (Preflight Validation)**:
+  - `forgeflow check --stage 2` 시점에 `validate_release_id`를 선제 검증하여 유효하지 않은 릴리즈 ID 형식을 조기 차단, 사후 패키지 경로 변경 마찰을 원천 예방.
+- **거버넌스 승인 권한 경계 명문화**:
+  - `FLOW_SPEC.md` 및 `GATES_AND_LOOPS.md`에 Gate 2(테스트 통과 및 하네스 감사에 따른 기술적 QA 자동 보증)와 Gate 3(사용자 최종 배포 패키지 Go/No-Go 인간 승인)의 역할 책임을 단일 진실 공급원(SSOT)으로 분리 명시.
+
+---
+
 ## [0.1.10] - 2026-10-22
 
 ### 🛡️ `forgeflow upgrade` CDN 캐시 우회, 역전 감지 및 실설치 버전 검증 (Cache Busting, Inversion Guard & Verification)
