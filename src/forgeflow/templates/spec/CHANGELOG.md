@@ -7,6 +7,18 @@ ForgeFlow 프레임워크의 모든 주요 변경 사항은 이 문서에 기록
 
 ---
 
+## [0.1.14] - 2026-10-24
+
+### 📋 forgeflow update 시 CHANGELOG 요약 한 줄 출력 개선 (Changelog Summary Simplification)
+
+### Changed
+- **`forgeflow update`의 `changelog_summary` 출력 간결화**:
+  - `CHANGELOG.md` 전문 대신 버전 헤더(`[<version>] - <date>`)와 대표 타이틀 1줄(`- <title>`)만 출력하도록 간소화하여 터미널 가독성 대폭 향상.
+  - 다중 버전 판올림 시 버전별 1줄 요약 블록을 순차 출력하고, 전체 변경 이력은 기존과 동일하게 `forgeflow doc show changelog`로 안내.
+  - 마크다운 섹션 1줄 요약 파서 `summarize_changelog_section` 엔진 탑재 및 `extract_changelog_range(..., summary=True)` 기본값 연동.
+
+---
+
 ## [0.1.13] - 2026-10-24
 
 ### 📢 CHANGELOG 배포 연동 및 upgrade/update 변경 내역 자동 프리뷰 (Changelog Preview & Distribution)

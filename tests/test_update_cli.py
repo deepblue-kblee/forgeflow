@@ -77,6 +77,10 @@ class TestUpdateCLI(unittest.TestCase):
             output = json.loads(mock_print.call_args[0][0])
             self.assertIn("changelog_summary", output)
             self.assertIsNotNone(output["changelog_summary"])
+            # Summary should be concise, not contain raw markdown '## ' header or '### Added'
+            summary_text = output["changelog_summary"]
+            self.assertFalse(summary_text.startswith("## "))
+            self.assertIn("- ", summary_text)
 
         # 3. Terminal stdout mode check
         config_data["forgeflow_version"] = "0.1.10"
@@ -89,6 +93,42 @@ class TestUpdateCLI(unittest.TestCase):
             printed = " ".join(call[0][0] for call in mock_print.call_args_list if call[0])
             self.assertIn("What's Changed in this update", printed)
             self.assertIn("forgeflow doc show changelog", printed)
+
+    def test_summarize_changelog_section(self):
+        # Case 1: Standard section with custom release title
+        section_with_title = (
+            "## [0.1.13] - 2026-10-24\n\n"
+            "### 📢 CHANGELOG 배포 연동 및 upgrade/update 변경 내역 자동 프리뷰 (Changelog Preview & Distribution)\n\n"
+            "### Added\n"
+            "- Some detail"
+        )
+        res1 = TemplateScaffolder.summarize_changelog_section(section_with_title)
+        self.assertEqual(
+            res1,
+            "[0.1.13] - 2026-10-24\n"
+            "- 📢 CHANGELOG 배포 연동 및 upgrade/update 변경 내역 자동 프리뷰 (Changelog Preview & Distribution)"
+        )
+
+        # Case 2: Standard section without custom title (category only)
+        section_category_only = (
+            "## [0.1.99] - 2026-10-25\n\n"
+            "### Added\n"
+            "- **New Feature**: Added sample feature.\n"
+            "- Another feature"
+        )
+        res2 = TemplateScaffolder.summarize_changelog_section(section_category_only)
+        self.assertEqual(
+            res2,
+            "[0.1.99] - 2026-10-25\n"
+            "- **New Feature**: Added sample feature."
+        )
+
+        # Case 3: Empty / minimal
+        self.assertEqual(TemplateScaffolder.summarize_changelog_section(""), "")
+        self.assertEqual(
+            TemplateScaffolder.summarize_changelog_section("## [0.1.1] - 2026-10-20"),
+            "[0.1.1] - 2026-10-20\n- (세부 변경 사항 없음)"
+        )
 
 
 if __name__ == "__main__":

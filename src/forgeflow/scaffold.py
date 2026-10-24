@@ -1178,7 +1178,56 @@ class TemplateScaffolder:
         return None
 
     @classmethod
-    def extract_changelog_section(cls, version: str, changelog_file: Optional[Path] = None) -> Optional[str]:
+    def summarize_changelog_section(cls, section: str) -> str:
+        """Summarize a single release markdown section into:
+        [<version>] - <date>
+        - <title or first bullet>
+        """
+        if not section:
+            return ""
+
+        lines = [line.strip() for line in section.strip().splitlines() if line.strip()]
+        if not lines:
+            return ""
+
+        header = lines[0]
+        if header.startswith("## "):
+            header = header[3:].strip()
+
+        standard_categories = {
+            "added", "changed", "fixed", "removed", "deprecated", "security",
+            "added & improved", "improved", "breaking changes"
+        }
+
+        summary_line = ""
+        # 1. Look for a custom title line under ###
+        for line in lines[1:]:
+            if line.startswith("### "):
+                title_text = line[4:].strip()
+                clean_title = re.sub(r"^[^\w\s]+", "", title_text).strip().lower()
+                if clean_title not in standard_categories and title_text.lower() not in standard_categories:
+                    summary_line = f"- {title_text}"
+                    break
+
+        # 2. If no custom title line, find the first bullet point
+        if not summary_line:
+            for line in lines[1:]:
+                if line.startswith("- "):
+                    summary_line = line
+                    break
+
+        # 3. Fallback to first non-empty line after header
+        if not summary_line:
+            if len(lines) > 1:
+                cand = lines[1].lstrip("#").strip()
+                summary_line = f"- {cand}"
+            else:
+                summary_line = "- (세부 변경 사항 없음)"
+
+        return f"{header}\n{summary_line}"
+
+    @classmethod
+    def extract_changelog_section(cls, version: str, changelog_file: Optional[Path] = None, summary: bool = False) -> Optional[str]:
         """Extract a single release section from CHANGELOG.md."""
         target_file = changelog_file or cls.find_changelog_file()
         if not target_file or not target_file.is_file():
@@ -1195,11 +1244,12 @@ class TemplateScaffolder:
         )
         match = pattern.search(text)
         if match:
-            return match.group(0).strip()
+            raw = match.group(0).strip()
+            return cls.summarize_changelog_section(raw) if summary else raw
         return None
 
     @classmethod
-    def extract_changelog_range(cls, prev_ver: str, curr_ver: str, changelog_file: Optional[Path] = None) -> Optional[str]:
+    def extract_changelog_range(cls, prev_ver: str, curr_ver: str, changelog_file: Optional[Path] = None, summary: bool = True) -> Optional[str]:
         """Extract release sections between previous and current versions."""
         target_file = changelog_file or cls.find_changelog_file()
         if not target_file or not target_file.is_file():
@@ -1220,8 +1270,9 @@ class TemplateScaffolder:
             ver_str = match.group(1).strip()
             v_tuple = parse_version_tuple(ver_str)
             if prev_tuple < v_tuple <= curr_tuple:
-                matched_sections.append(match.group(0).strip())
+                raw_sec = match.group(0).strip()
+                matched_sections.append(cls.summarize_changelog_section(raw_sec) if summary else raw_sec)
 
         if matched_sections:
             return "\n\n".join(matched_sections)
-        return cls.extract_changelog_section(curr_ver, changelog_file=target_file)
+        return cls.extract_changelog_section(curr_ver, changelog_file=target_file, summary=summary)
