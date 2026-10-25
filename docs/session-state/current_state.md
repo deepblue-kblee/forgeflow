@@ -1,34 +1,29 @@
 # ForgeFlow Current System State
 
-- **종료 상태 (Exit Status)**: 🟢 정상 종료 (Graceful Exit, 2026-10-21 16:18 KST)
-- **현재 버전**: `v0.1.7` (Purge Legacy Templates & Spec Discovery)
+- **종료 상태 (Exit Status)**: 🟢 정상 종료 (Graceful Exit, 2026-10-25 22:42 KST)
+- **현재 버전**: `v0.1.14` (Simplify Update Changelog Preview)
 - **상태 판정**: 🟢 HEALTHY (모든 테스트 및 거버넌스 검증 통과)
-- **배포 상태**: 사용자 계정 로컬(`~/.local/forgeflow`, `~/.local/bin`) v0.1.7 배포 완료
+- **배포 상태**: 사용자 계정 로컬(`~/.local/forgeflow`, `~/.local/bin`) v0.1.14 배포 완료
 
 ---
 
 ## 검증 및 정비 요약
 
-- **단위/통합 테스트**: 282개 전원 통과 (Failure = 0, Error = 0)
-- **하네스 게이트 감사**: `forgeflow check --all --strict` 7개 릴리즈 전수 🟢 ALL PASSED
+- **단위/통합 테스트**: 298개 전원 통과 (Failure = 0, Error = 0)
+- **하네스 게이트 감사**: `forgeflow check --all --strict` 14개 릴리즈 전수 🟢 ALL PASSED
 - **코드 스멜 검사**: `forgeflow review --strict` 🟢 PASSED (결함 0건)
-- **최신 밀봉 패키지**: `tasks/completed/v0.1.7-purge-legacy-templates-and-spec-discovery/`
+- **최신 밀봉 패키지**: `tasks/completed/v0.1.14-simplify-update-changelog-preview/`
+- **최근 분석 보고서**: [`docs/session-state/speckit_skills_and_clarify_analysis.md`](file:///Users/deepblue/work/repo/forgeflow/docs/session-state/speckit_skills_and_clarify_analysis.md)
 
 ---
 
-## 핵심 완수 기능 (v0.1.7)
+## 핵심 완수 기능 (v0.1.14 및 세션 분석)
 
-1. **레거시 템플릿 5종 영구 삭제**:
-   - `src/forgeflow/templates/` 최상위에서 2026-10-20 이전 산출물(`PRD.md`, `DESIGN.md`, `ROADMAP.md`, `GOVERNANCE.md`, `RELEASE_NOTES.md`) 완전 제거.
-   - `src/forgeflow/legacy_templates.py` 및 인라인 fallback으로 테스트 호환성 보존.
-2. **배포판 템플릿 정화 로직 탑재**:
-   - `install.sh` 실행 시 전역 패키지 디렉토리(`$PKG_LIB_DIR/templates/`)의 과거 잔재 파일 자동 삭제.
-3. **사양서 발견성(Spec Discovery) 아키텍처 주입**:
-   - `.specify/memory/constitution.md` 및 `scaffold.py` 내장 헌법, 스킬 문서에 7대 공식 사양서 단일 진실 공급원(SSOT) 참조 경로 주입.
-4. **비파괴적 세션 진입점 앵커 엔진**:
-   - `scaffold.py`에 `bind_boot_anchor` 및 `unbind_boot_anchor` 구현 (`AGENTS.md` / `CLAUDE.md` 사용자 내용 100% 보존, 멱등 갱신).
-5. **`forgeflow doc` (호환 별칭 `spec`) CLI 구현**:
-   - 터미널에서 7대 사양서 목록 및 상세 내용 조회(`doc list`, `doc show <spec>`, `--json`, `--path`).
+1. **`forgeflow update` CHANGELOG 프리뷰 1줄 요약 단순화 (v0.1.14)**:
+   - `CHANGELOG.md` 전문 대신 버전 헤더와 1줄 대표 요약만 출력하도록 정제하여 터미널 가독성 향상.
+2. **Spec Kit 스킬 선별 및 Clarify 자율 실행 분석 보고서 작성**:
+   - Spec Kit 공식 7종 스킬 중 5종 채택, 2종(`speckit-constitution`, `speckit-analyze`) 배제 근거 정립.
+   - Stage 1 `clarify` 단계의 AI 내부적 최적해 채택, 조기 종료 규칙, 적응형 거버넌스 메커니즘 규명 및 문서화.
 
 ---
 

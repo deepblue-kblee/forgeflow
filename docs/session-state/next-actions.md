@@ -132,6 +132,13 @@
       - `extract_changelog_range(..., summary=True)` 기본값 연동으로 다중 버전 판올림 시에도 버전별 1줄 블록을 순차 제공.
     - **테스트 및 거버넌스 무결성**: 신규 단위 테스트 추가, 전체 298개 단위 테스트 100% Pass, 14개 릴리즈 전수 거버넌스 감사 `forgeflow check --all --strict` 🟢 ALL PASSED 달성, `tasks/completed/v0.1.14-simplify-update-changelog-preview/` 패키지 밀봉 완료.
 
+19. **Spec Kit 스킬 선별 및 Clarify 자율 실행 분석 보고서 작성**:
+    - **이중 엔진 역할 분담 명문화**: Spec Kit 공식 7종 스킬 중 채택 5종(`specify`, `clarify`, `plan`, `tasks`, `implement`)과 배제 2종(`constitution`, `analyze`)의 기술적/거버넌스적 사유 체계화.
+    - **Clarify 자율 실행 메커니즘 규명**: AI 내부 최적해 채택(Recommended Option 반영), 스킬 자체 Early Exit 규칙, 적응형 거버넌스 원칙 규명.
+    - **영구 산출물 아카이빙**:
+      - 리포지토리 세션 문서: [`docs/session-state/speckit_skills_and_clarify_analysis.md`](file:///Users/deepblue/work/repo/forgeflow/docs/session-state/speckit_skills_and_clarify_analysis.md)
+      - BlueVault 하네스 영구 노트: [`~/work/repo/bluevault/01.notes/AI/Harness/2026-10-25-forgeflow-speckit-skills-and-clarify-analysis.md`](file:///Users/deepblue/work/repo/bluevault/01.notes/AI/Harness/2026-10-25-forgeflow-speckit-skills-and-clarify-analysis.md)
+
 ---
 
 ## 새 세션에서 바로 이어서 착수할 과업 (Next Actions)
