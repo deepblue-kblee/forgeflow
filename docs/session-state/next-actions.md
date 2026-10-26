@@ -149,6 +149,22 @@
     - **테스트 및 거버넌스 무결성**:
       - 신규 회귀 단위 테스트 6종 추가, 전체 304개 단위 테스트 100% Pass, 15개 릴리즈 전수 거버넌스 감사 `forgeflow check --all --strict` 🟢 ALL PASSED 달성, `tasks/completed/v0.1.15-fix-post-seal-relocation-audit/` 패키지 밀봉 완료.
 
+21. **2계층 지식 관리 체계 구축, De-SHA 리팩토링 및 공식 스킬 제품군 탑재 (v0.1.16)**:
+    - **2계층 지식 관리 체계 (2-Tier Knowledge Architecture)**:
+      - Tier 1: `docs/spec/ANTI_PATTERNS.md` (500토큰 미만의 간결한 Never-Do / Always-Do 요약 수칙).
+      - Tier 2: `docs/adr/` (ADR 001: Git SHA 및 커밋 범위 diff 결합 제거, ADR 002: spec body hash 바인딩 제거).
+      - 프로젝트 헌법 제6조 주입 및 `scaffold_speckit_hybrid` / `update_repo_governance`를 통한 다운스트림 자동 스캐폴딩.
+    - **취약한 Git SHA 커밋 범위 diff 검증 완전 제거 (ADR 001)**:
+      - `harness.py`의 `_candidate_disallowed_paths` 등 diff 화이트리스트 130여 줄 삭제 및 실용적인 4대 안전 불변식(테스트 통과 + Gate 승인 + clean worktree + 패키지 매니페스트 SHA256)으로 간소화.
+    - **공식 ForgeFlow 에이전트 스킬 제품군 배포 (`~/.agents/skills/`)**:
+      - `/forgeflow`: 5단계 수명주기 마스터 오케스트레이터.
+      - `/forgeflow-graphify`: `graphify` CLI 전제조건 기반 AST/호출 관계 초고속 탐색 지식 지도.
+      - `/setup-forgeflow` & `/update-forgeflow`: 2계층 지식 체계 스캐폴딩 및 스마트 파사드 동기화.
+    - **부팅 토큰 최적화 및 적시성 정렬**:
+      - `AGENTS.md` 부팅 시퀀스는 가볍게 유지하고, 안티패턴 확인은 기획/명세 착수 시점(`/speckit.specify`, Stage 1)으로 배치하여 토큰 낭비 제거 및 설계 시점 주의력 극대화.
+    - **테스트 및 거버넌스 무결성**:
+      - 전체 302개 단위 테스트 100% Pass, 16개 릴리즈 전수 거버넌스 감사 `forgeflow check --all --strict` 🟢 ALL PASSED 달성, `tasks/completed/v0.1.16-knowledge-system-and-de-sha/` 패키지 밀봉 및 로컬 설치 `./install.sh` 완료.
+
 ---
 
 ## 새 세션에서 바로 이어서 착수할 과업 (Next Actions)
