@@ -7,6 +7,19 @@ ForgeFlow 프레임워크의 모든 주요 변경 사항은 이 문서에 기록
 
 ---
 
+## [0.1.15] - 2026-10-26
+
+### 🛡️ 릴리즈 완료 패키지 이동 사후 감사 오탐 해소 (Allow Committed Completion Relocation in Lifecycle Audit)
+
+### Fixed
+- **`forgeflow check --lifecycle` 사후 후보 감사 결함 수정 (Issue #5)**:
+  - 릴리즈 밀봉(`lifecycle seal`) 및 완료(`lifecycle complete`) 후 `tasks/in-progress/<id>`에서 `tasks/completed/<id>`로 원자적 이동된 패키지가 커밋되었을 때, 바이트가 100% 동일함에도 `release_candidate_range_invalid`로 잘못 거부되던 오탐 결함 해소.
+  - Git Blob SHA 대조 기반의 `_find_verified_completion_relocation_paths` 엔진을 도입하여, 패키지 파일의 추가·삭제·변조 없이 바이트 단위로 동일하게 이동되었음을 증명하고 사후 감사 화이트리스트에 안전하게 편입.
+  - 런타임 코드, 테스트, 스크립트 수정 및 패키지 내용 1바이트 변조, 무인가 파일 추가, 원본 파일 잔류, 타 릴리즈 이동 등에 대한 엄격한 fail-closed 차단 유지.
+  - `lifecycle complete`의 태스크 루트 탐색 시 사용자 정의 tasks 디렉터리(`configured`) 호환성 보강.
+
+---
+
 ## [0.1.14] - 2026-10-24
 
 ### 📋 forgeflow update 시 CHANGELOG 요약 한 줄 출력 개선 (Changelog Summary Simplification)

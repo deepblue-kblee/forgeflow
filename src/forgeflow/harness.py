@@ -1039,20 +1039,6 @@ class HarnessEngine:
         if state["progress"].get("last_checkpoint") != "C4":
             unmet.append("completion_checkpoint_missing:C4")
 
-        # Atomic transition from in-progress to completed if layout is tasks or ff-tasks
-        rel_dir = self._release_dir(release_id)
-        try:
-            rel = rel_dir.relative_to(self.repo_root)
-            parts = rel.parts
-            if len(parts) >= 3 and parts[0] in ("tasks", "ff-tasks") and parts[1] == "in-progress":
-                completed_dest = self.repo_root / parts[0] / "completed" / release_id
-                completed_dest.parent.mkdir(parents=True, exist_ok=True)
-                if not completed_dest.exists():
-                    import shutil
-                    shutil.move(str(rel_dir), str(completed_dest))
-        except Exception:
-            pass
-
         can_reuse_strict_audit = False
         candidate = state["identity"].get("candidate_sha")
         strict_audit_ev = state["evidence"].get("strict_audit")
@@ -1070,6 +1056,24 @@ class HarnessEngine:
                         can_reuse_strict_audit = True
             except Exception:
                 pass
+
+        # Atomic transition from in-progress to completed if layout is tasks or ff-tasks
+        rel_dir = self._release_dir(release_id)
+        try:
+            rel = rel_dir.relative_to(self.repo_root)
+            parts = rel.parts
+            valid_tasks_roots = {"tasks", "ff-tasks"}
+            configured = ReleaseScanner._read_configured_tasks_dir(self.repo_root)
+            if configured:
+                valid_tasks_roots.add(configured)
+            if len(parts) >= 3 and parts[0] in valid_tasks_roots and parts[1] == "in-progress":
+                completed_dest = self.repo_root / parts[0] / "completed" / release_id
+                completed_dest.parent.mkdir(parents=True, exist_ok=True)
+                if not completed_dest.exists():
+                    import shutil
+                    shutil.move(str(rel_dir), str(completed_dest))
+        except Exception:
+            pass
 
         strict_flag = not can_reuse_strict_audit
         audit = self.check_lifecycle_evidence(release_id, strict=strict_flag, explicit_python=explicit_python, require_terminal_state=False)
@@ -1502,6 +1506,55 @@ class HarnessEngine:
                 unmet.append("lifecycle_not_complete")
         return unmet
 
+    def _tree_files_at_commit(self, commit: str, directory_path: str) -> Dict[str, str]:
+        """Return dict of {rel_path: blob_sha} for all blob files under directory_path at commit."""
+        try:
+            res = subprocess.run(
+                ["git", "-C", str(self.repo_root), "ls-tree", "-r", "-z", commit, "--", directory_path],
+                capture_output=True, text=True, check=False,
+            )
+            if res.returncode != 0 or not res.stdout:
+                return {}
+            files: Dict[str, str] = {}
+            dir_prefix = directory_path.rstrip("/") + "/"
+            for entry in res.stdout.split("\0"):
+                if not entry:
+                    continue
+                parts = entry.split("\t", 1)
+                if len(parts) != 2:
+                    continue
+                meta, full_path = parts
+                meta_parts = meta.split(" ")
+                if len(meta_parts) < 3:
+                    continue
+                obj_type, blob_sha = meta_parts[1], meta_parts[2]
+                if obj_type != "blob":
+                    continue
+                if full_path.startswith(dir_prefix):
+                    rel_path = full_path[len(dir_prefix):]
+                    files[rel_path] = blob_sha
+            return files
+        except OSError:
+            return {}
+
+    def _find_verified_completion_relocation_paths(self, release_id: str, candidate: str, current_head: str) -> Set[str]:
+        """Find verified byte-identical relocation paths of the release package from in-progress to completed."""
+        prefixes = ["tasks", "ff-tasks"]
+        configured = ReleaseScanner._read_configured_tasks_dir(self.repo_root)
+        if configured and configured not in prefixes:
+            prefixes.append(configured)
+
+        for pfx in prefixes:
+            src_dir = f"{pfx}/in-progress/{release_id}"
+            dst_dir = f"{pfx}/completed/{release_id}"
+            candidate_files = self._tree_files_at_commit(candidate, src_dir)
+            if candidate_files:
+                head_src_files = self._tree_files_at_commit(current_head, src_dir)
+                head_dst_files = self._tree_files_at_commit(current_head, dst_dir)
+                if not head_src_files and candidate_files == head_dst_files:
+                    return {f"{src_dir}/{k}" for k in candidate_files} | {f"{dst_dir}/{k}" for k in candidate_files}
+        return set()
+
     def _candidate_disallowed_paths(self, release_id: str, qa_sha: str, candidate: str) -> Optional[List[str]]:
         try:
             head = subprocess.run(["git", "-C", str(self.repo_root), "rev-parse", "HEAD"], capture_output=True, text=True, check=False)
@@ -1577,12 +1630,15 @@ class HarnessEngine:
                 if changed_post.returncode != 0:
                     return None
                 allowed_post = {f".forgeflow/lifecycle/{release_id}.json"}
+                relocation_paths = self._find_verified_completion_relocation_paths(release_id, candidate, current_head)
                 for path in changed_post.stdout.split("\0"):
                     if not path:
                         continue
                     if path in allowed_post or path.startswith("docs/session-state/"):
                         continue
                     if path.endswith(".lock") and (".forgeflow/lifecycle" in path or path.startswith(".forgeflow/")):
+                        continue
+                    if path in relocation_paths:
                         continue
                     disallowed.append(path)
 
