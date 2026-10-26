@@ -1,29 +1,30 @@
 # ForgeFlow Current System State
 
-- **종료 상태 (Exit Status)**: 🟢 정상 종료 (Graceful Exit, 2026-10-25 22:42 KST)
-- **현재 버전**: `v0.1.14` (Simplify Update Changelog Preview)
+- **종료 상태 (Exit Status)**: 🟢 정상 종료 (Graceful Exit, 2026-10-27 00:05 KST)
+- **현재 버전**: `v0.1.15` (Allow Committed Completion Relocation in Lifecycle Audit)
 - **상태 판정**: 🟢 HEALTHY (모든 테스트 및 거버넌스 검증 통과)
-- **배포 상태**: 사용자 계정 로컬(`~/.local/forgeflow`, `~/.local/bin`) v0.1.14 배포 완료
+- **배포 상태**: 사용자 계정 로컬(`~/.local/forgeflow`, `~/.local/bin`) v0.1.15 배포 대기
 
 ---
 
 ## 검증 및 정비 요약
 
-- **단위/통합 테스트**: 298개 전원 통과 (Failure = 0, Error = 0)
-- **하네스 게이트 감사**: `forgeflow check --all --strict` 14개 릴리즈 전수 🟢 ALL PASSED
+- **단위/통합 테스트**: 304개 전원 통과 (Failure = 0, Error = 0)
+- **하네스 게이트 감사**: `forgeflow check --all --strict` 15개 릴리즈 전수 🟢 ALL PASSED
 - **코드 스멜 검사**: `forgeflow review --strict` 🟢 PASSED (결함 0건)
-- **최신 밀봉 패키지**: `tasks/completed/v0.1.14-simplify-update-changelog-preview/`
+- **최신 밀봉 패키지**: `tasks/completed/v0.1.15-fix-post-seal-relocation-audit/`
 - **최근 분석 보고서**: [`docs/session-state/speckit_skills_and_clarify_analysis.md`](file:///Users/deepblue/work/repo/forgeflow/docs/session-state/speckit_skills_and_clarify_analysis.md)
 
 ---
 
-## 핵심 완수 기능 (v0.1.14 및 세션 분석)
+## 핵심 완수 기능 (v0.1.15)
 
-1. **`forgeflow update` CHANGELOG 프리뷰 1줄 요약 단순화 (v0.1.14)**:
-   - `CHANGELOG.md` 전문 대신 버전 헤더와 1줄 대표 요약만 출력하도록 정제하여 터미널 가독성 향상.
-2. **Spec Kit 스킬 선별 및 Clarify 자율 실행 분석 보고서 작성**:
-   - Spec Kit 공식 7종 스킬 중 5종 채택, 2종(`speckit-constitution`, `speckit-analyze`) 배제 근거 정립.
-   - Stage 1 `clarify` 단계의 AI 내부적 최적해 채택, 조기 종료 규칙, 적응형 거버넌스 메커니즘 규명 및 문서화.
+1. **릴리즈 완료 패키지 이동 사후 감사 오탐 해소 (Issue #5)**:
+   - 릴리즈 밀봉 및 완료 후 `tasks/in-progress/<id>`에서 `tasks/completed/<id>`로 원자적 이동된 패키지가 커밋되었을 때, `release_candidate_range_invalid`로 잘못 거부되던 결함 수정.
+   - Git Blob SHA 대조 기반의 `_find_verified_completion_relocation_paths` 엔진을 도입하여, 패키지 파일의 추가·삭제·변조 없이 바이트 단위로 동일하게 이동되었음을 증명하고 사후 감사 화이트리스트에 안전하게 편입.
+   - 런타임 코드, 테스트, 스크립트 수정 및 패키지 내용 1바이트 변조, 무인가 파일 추가, 원본 파일 잔류, 타 릴리즈 이동 등에 대한 엄격한 fail-closed 차단 유지.
+   - `lifecycle_complete`의 태스크 루트 탐색 시 사용자 정의 tasks 디렉터리(`configured`) 호환성 보강.
+   - 신규 단위 테스트 6종 추가 (총 304개 테스트 100% 통과).
 
 ---
 

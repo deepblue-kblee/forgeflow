@@ -139,13 +139,23 @@
       - 리포지토리 세션 문서: [`docs/session-state/speckit_skills_and_clarify_analysis.md`](file:///Users/deepblue/work/repo/forgeflow/docs/session-state/speckit_skills_and_clarify_analysis.md)
       - BlueVault 하네스 영구 노트: [`~/work/repo/bluevault/01.notes/AI/Harness/2026-10-25-forgeflow-speckit-skills-and-clarify-analysis.md`](file:///Users/deepblue/work/repo/bluevault/01.notes/AI/Harness/2026-10-25-forgeflow-speckit-skills-and-clarify-analysis.md)
 
+20. **릴리즈 완료 패키지 이동 사후 감사 오탐 해소 (v0.1.15, Issue #5)**:
+    - **완료 패키지 이동 인식 및 Git Blob SHA 대조 기반 바이트 동일성 검증 (`_find_verified_completion_relocation_paths`)**:
+      - 릴리즈 밀봉 및 완료 후 `tasks/in-progress/<id>`에서 `tasks/completed/<id>`로 원자적 이동된 패키지가 커밋되었을 때, `release_candidate_range_invalid`로 잘못 거부되던 결함 수정.
+      - 후보 시점과 현재 HEAD의 파일 트리를 Blob SHA 수준에서 대조하여 파일 추가·삭제·변조 없이 바이트 단위로 동일하게 이동되었음을 증명하고 사후 감사 화이트리스트에 안전하게 편입.
+      - 런타임 코드, 테스트, 스크립트 수정 및 패키지 내용 1바이트 변조, 무인가 파일 추가, 원본 파일 잔류, 타 릴리즈 이동 등에 대한 엄격한 fail-closed 차단 유지.
+    - **`lifecycle_complete` 태스크 디렉터리 호환성 보강**:
+      - `configured` 커스텀 tasks 디렉터리 지원 추가.
+    - **테스트 및 거버넌스 무결성**:
+      - 신규 회귀 단위 테스트 6종 추가, 전체 304개 단위 테스트 100% Pass, 15개 릴리즈 전수 거버넌스 감사 `forgeflow check --all --strict` 🟢 ALL PASSED 달성, `tasks/completed/v0.1.15-fix-post-seal-relocation-audit/` 패키지 밀봉 완료.
+
 ---
 
 ## 새 세션에서 바로 이어서 착수할 과업 (Next Actions)
 
 ### 🎯 다음 작업 방향 및 버전 정책
 1. **버전 정책 준수 (0.1.X 패치 증가 원칙)**:
-   - 당분간 버전 판올림은 `0.1.X` 체계에서 `X`(패치 버전, 예: 0.1.14 ➔ 0.1.15)만 증가시킨다.
+   - 당분간 버전 판올림은 `0.1.X` 체계에서 `X`(패치 버전, 예: 0.1.15 ➔ 0.1.16)만 증가시킨다.
    - 마이너 판올림(`0.2.0` 등)은 프레임워크의 대규모 아키텍처 변화 시 사용자와 사전 상의 후 결정한다.
 2. **GitHub Issues 모니터링 및 추가 개선 사항 접수**:
    - `forgeflow issue list`를 통한 추가 이슈 확인 및 처리.
