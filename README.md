@@ -1,4 +1,4 @@
-# 🌊 ForgeFlow (포지플로우) v0.1.14
+# 🌊 ForgeFlow (포지플로우) v0.1.15
 
 **GitHub Spec Kit 결합형 자율 AI 에이전트 거버넌스 프레임워크 & 게이트키퍼 CLI**  
 *(Autonomous Agent Governance Framework & Gatekeeper CLI for GitHub Spec Kit)*
