@@ -36,7 +36,7 @@
   - 전체 단위 테스트 100% Pass 확인 (`python3 -m unittest`)
   - 전체 릴리즈 거버넌스 감사 통과 (`forgeflow check --all --strict`)
 
-- [ ] **Task 7: QA Sign-Off & Release Seal (Gate 2 & 3)**
+- [x] **Task 7: QA Sign-Off & Release Seal (Gate 2 & 3)**
   - `QA_SIGNOFF.md` 작성 및 Tier 3 독립 심사 패널 승인
   - `RELEASE_SIGNOFF.md` 작성 및 Gate 3 승인
   - `tasks/in-progress/`에서 `tasks/completed/`로 패키지 밀봉 및 이동
