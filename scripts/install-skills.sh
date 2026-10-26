@@ -97,7 +97,7 @@ description: Sets up ForgeFlow governance, 2-tier knowledge system, and GitHub S
      - 제3조 (원자적 루프 정의 - Atomic Remediation Unit): 1회 루프는 `원인 식별 -> 1개 수정 -> 테스트 재실행`으로 완결하며, 구현 완료 시 최종 원자적 커밋 1개를 생성.
      - 제4조 (루프 예산 및 진짜 멈춤 - Loop Budget & True Stop): 동일 오류 5회 연속 무진전 시에만 작업 중단 및 사용자 에스컬레이션.
      - 제5조 (스펙 무단 하향 금지 - No Spec Downgrade): 구현 난항을 이유로 `spec.md` 무단 축소 금지, 필요 시 Gate 1 재승인(Loop 3) 수행.
-     - 제6조 (설계 안티패턴 및 ADR 필수 준수 - Anti-Patterns & Architecture Decisions): 작업 전 `docs/spec/ANTI_PATTERNS.md` 필독 및 `docs/adr/` 참조.
+     - 제6조 (설계 안티패턴 및 ADR 필수 준수 - Anti-Patterns & Architecture Decisions): 새 기능 기획 및 명세 작성 착수 시(`speckit.specify` 단계) `docs/spec/ANTI_PATTERNS.md` 필독 및 `docs/adr/` 참조.
    - `.specify/extensions.yml` 파일을 생성하여 `before_implement` 훅을 등록합니다:
      ```yaml
      version: "1.0"
@@ -115,7 +115,7 @@ description: Sets up ForgeFlow governance, 2-tier knowledge system, and GitHub S
    - `tasks/README.md`에 비-행동지침 경계 선언을 작성합니다.
 
 7. 세션 진입점 앵커(AGENTS.md / CLAUDE.md) 비파괴적 주입:
-   - 리포지토리 루트의 `AGENTS.md` (또는 `CLAUDE.md`)에 `<!-- forgeflow:boot-anchor:start -->` 주석 마커 블록으로 부팅 시퀀스를 주입하여 AI 에이전트가 작업 전 헌법, 안티패턴, 공식 사양서를 자동 인지하도록 합니다. 기존 사용자 내용은 100% 보존됩니다.
+   - 리포지토리 루트의 `AGENTS.md` (또는 `CLAUDE.md`)에 `<!-- forgeflow:boot-anchor:start -->` 주석 마커 블록으로 부팅 시퀀스를 주입하여 AI 에이전트가 작업 전 헌법, 3대 메커니즘, 공식 사양서를 자동 인지하도록 합니다. 기존 사용자 내용은 100% 보존됩니다.
 
 8. 완료 보고:
    - 셋업 완료 상태를 요약하고, 다음 시작 명령어(`/forgeflow` 또는 `/speckit.specify "기능 설명"`)를 안내합니다.
@@ -182,10 +182,10 @@ ForgeFlow 자율 거버넌스 워크플로우의 마스터 오케스트레이터
 ## 5단계 수명주기 실행 가이드
 
 ### Stage 1: 기획 & 명세 (Planning & Specification)
-1. **사전 지식 인지 (토큰 절약 & 실수 방지)**:
-   - 작업 착수 전 `docs/spec/ANTI_PATTERNS.md`를 필독하여 금지된 안티패턴(Git SHA diff 결합, spec body hash 등)을 확인합니다.
+1. **사전 지식 인지 (기획 착수 시 필수 확인)**:
+   - 기능 기획 및 명세서(`spec.md`) 작성 전, 반드시 `docs/spec/ANTI_PATTERNS.md`를 필독하여 설계 금기 사항(Git SHA 결합, spec body hash 등)을 확인합니다.
    - 대규모/구조적 변경인 경우 `docs/adr/`을 확인하고 필요 시 새 ADR 초안을 작성합니다.
-   - 코드베이스 구조 및 의존성 파악이 필요하면 무차별 파일 읽기 대신 `/forgeflow-graphify`를 먼저 활용합니다.
+   - 코드베이스 구조 및 의존성 파악이 필요하면 무차별 파일 읽기 대신 `/forgeflow-graphify`를 먼저 활용합니다. (단, `graphify` CLI 사전 설치 필수)
 2. **명세 작성**:
    - `/speckit.specify "<기능 요구사항 요약>"` 실행하여 `tasks/in-progress/<release-id>/spec.md` 생성.
    - 불명확하거나 누락된 요구사항이 있다면 `/speckit.clarify`를 통해 최대 5개 질문으로 정밀 명세화.
@@ -238,59 +238,64 @@ description: 코드베이스의 AST 및 모듈 간 호출·의존 관계 지식 
 
 코드베이스와 문서의 AST 및 모듈 간 호출 관계 지도를 조회하여, 토큰 낭비 없는 초고속 구조 탐색을 제공합니다.
 
+> [!IMPORTANT]
+> **외부 도구 전제조건 (External Tool Prerequisite)**:
+> 본 스킬은 시스템에 **`graphify` CLI** 도구가 사전 설치되어 있어야 동작합니다.
+
 ## When to use
 
 - 사용자가 `/forgeflow-graphify` 또는 "코드 구조 파악", "의존성 지도", "호출 관계 추적", "아키텍처 탐색"을 요청할 때
-- 기능 개발이나 버그 수정을 시작하기 전, 어떤 파일들이 어떻게 연결되어 있는지 파악해야 할 때
+- 기능 기획/명세 착수 전, 어떤 파일들과 심볼들이 상호 연결되어 있는지 파악해야 할 때
 - 수십 개 파일의 코드를 무차별적으로 `read_file`하거나 과도한 `grep`으로 컨텍스트 윈도우를 소진하지 않으려 할 때
 
-## 탐색 절차 (Token-Saving Exploration Pattern)
+## Instructions
 
-### 1단계: Graphify CLI 가용성 확인
-시스템에 `graphify` 도구가 설치되어 있는지 확인합니다:
+에이전트는 코드베이스 구조를 파악하거나 호출 관계를 추적할 때 다음 절차를 준수하여 `graphify` CLI를 활용하십시오.
+
+### 1단계: graphify CLI 설치 확인
+에이전트는 먼저 시스템에 `graphify` 도구가 설치되어 있는지 확인합니다:
 ```bash
-command -v graphify || echo "graphify CLI not available"
+command -v graphify
 ```
+- **미설치 시**:
+  - `graphify`가 설치되어 있지 않으면 작업을 진행할 수 없습니다.
+  - 에이전트는 즉시 사용자에게 `graphify` 도구의 설치를 안내하고 확인을 요청합니다:
+    > "이 스킬을 사용하려면 `graphify` CLI 도구가 필요해요. `pip install graphify` 등을 통해 도구를 먼저 설치해 주세요."
 
-1. **`graphify` CLI가 있는 경우**:
-   - 색인 추출 또는 갱신:
-     ```bash
-     graphify extract <target_path> --code-only
-     ```
-   - 특정 심볼/모듈의 의존성 및 연결 관계 조회:
-     ```bash
-     graphify explain "<Node_or_File_Name>"
-     ```
-   - 두 모듈/함수 간의 최단 호출 경로 탐색:
-     ```bash
-     graphify path "<Source_Node>" "<Target_Node>"
-     ```
+### 2단계: 색인 상태 확인 및 빌드 (Index Build & Update)
+대상 디렉터리(또는 프로젝트 루트)에 `graphify-out/graph.json`이 존재하는지 확인합니다:
+- **색인이 없거나 초기 빌드가 필요한 경우**:
+  ```bash
+  graphify extract <target_path> --code-only
+  ```
+  (로컬 Tree-sitter AST 기반으로 파싱하며 LLM API 호출 없이 즉시 생성됩니다)
+- **코드가 일부 수정되어 증분 갱신이 필요한 경우**:
+  ```bash
+  graphify update <target_path>
+  ```
 
-2. **`graphify` CLI가 없는 경우 (경량 내장 Fallback)**:
-   - 외부 의존성 없이 Python 표준 라이브러리(`ast`) 단일 라이너로 파일들의 클래스/함수 시그니처와 import 관계만 추출:
-     ```bash
-     python3 -c "
-import ast, sys
-for path in sys.argv[1:]:
-    try:
-        tree = ast.parse(open(path, 'r', encoding='utf-8').read(), filename=path)
-        print(f'=== {path} ===')
-        for node in ast.iter_child_nodes(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                print(f'  func {node.name}({len(node.args.args)} args)')
-            elif isinstance(node, ast.ClassDef):
-                methods = [n.name for n in node.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
-                print(f'  class {node.name}: {methods}')
-            elif isinstance(node, ast.ImportFrom):
-                print(f'  import from {node.module}: {[n.name for n in node.names]}')
-    except Exception: pass
-" src/forgeflow/*.py
-     ```
+### 3단계: 주요 탐색 명령어 (Token-Saving Exploration)
+필요한 정보의 성격에 맞춰 적절한 명령어를 실행합니다:
+1. **특정 심볼/모듈의 의존성 및 연결 관계 조회**:
+   ```bash
+   graphify explain "<Node_or_File_Name>" [--graph <path/to/graph.json>]
+   ```
+   - 특정 함수, 클래스, 파일이 import하거나 포함하는 심볼 및 역방향 참조를 즉시 반환합니다.
+2. **두 심볼 간의 최단 호출/의존 경로 탐색**:
+   ```bash
+   graphify path "<Source_Node>" "<Target_Node>" [--graph <path/to/graph.json>]
+   ```
+   - 모듈 간 또는 함수 간 어떤 호출 체인을 거쳐 연결되는지 최소 홉(hop) 단위로 출력합니다.
+3. **시각화 HTML 내보내기**:
+   ```bash
+   graphify export html [--graph <path/to/graph.json>]
+   ```
+   - 브라우저에서 직접 인터랙티브하게 탐색할 수 있는 독립형 `graph.html`을 생성합니다.
 
-### 2단계: 핵심 연결 파일 선별 및 정밀 읽기
-1. 1단계의 구조 지도에서 작업 대상과 직접 연결된 핵심 파일 및 함수 목록을 1차 필터링합니다.
-2. 필터링된 최소한의 파일에 대해서만 특정 라인 범위를 지정하여 `read_file`을 실행합니다.
-3. 이를 통해 컨텍스트 토큰 낭비를 80% 이상 절감하고 환각(Hallucination) 없이 정확한 구현을 진행합니다.
+### 4단계: 핵심 연결 파일 선별 및 최소 읽기 (Selective Reading)
+- 수십 개 파일 전체를 순차적으로 읽지 않습니다.
+- `graphify explain` / `graphify path`로 작업 대상과 직접 연결된 핵심 파일 및 함수 목록을 1차 필터링합니다.
+- 필터링된 최소한의 파일에 대해서만 특정 라인 범위를 지정하여 `read_file`을 실행함으로써 컨텍스트 토큰을 최대 80% 이상 절감합니다.
 EOF
 
 chmod +x "${SETUP_DIR}/SKILL.md" "${UPDATE_DIR}/SKILL.md" "${FORGEFLOW_DIR}/SKILL.md" "${GRAPHIFY_DIR}/SKILL.md" 2>/dev/null || true
