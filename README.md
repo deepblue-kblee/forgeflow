@@ -20,8 +20,8 @@ ForgeFlow는 **GitHub Spec Kit**의 대화형 명세 기반 개발(Spec-Driven D
    - Gate 2 QA Sign-Off (`QA_SIGNOFF.md`)
    - Gate 3 릴리즈 승인 및 패키지 무결성 밀봉 (Package Manifest SHA256)
 3. **2계층 지식 관리 체계 (2-Tier Knowledge Architecture)**:
-   - **Tier 1 (Fast Recognition)**: `docs/spec/ANTI_PATTERNS.md` (500토큰 미만 Never-Do/Always-Do 핵심 수칙)로 에이전트 부팅 시 즉각 인지.
-   - **Tier 2 (Deep Dive)**: `docs/adr/` (아키텍처 결정 레코드)로 심층 설계 결정 보존 (과거 실수 반복/망각 원천 방지).
+   - **Tier 1 (Fast Recognition)**: `docs/spec/ANTI_PATTERNS.md` (500토큰 미만 핵심 Never-Do / Always-Do 수칙). 세션 부팅 시의 상시 토큰 낭비를 배제하고, 새 기능 기획 및 명세 작성 시작 시점(`/speckit.specify`)에 집중 확인하여 설계 실수 재발을 원천 방지합니다.
+   - **Tier 2 (Deep Dive)**: `docs/adr/` (아키텍처 결정 레코드). Git SHA 결합 제거(ADR 001), spec body hash 바인딩 제거(ADR 002) 등 주요 기술적 의사결정의 배경과 근거를 영구 보존하여 심층 맥락 필요 시 온디맨드로 참조합니다.
 
 ### 핵심 설계 원칙:
 - **Zero-Dependency 원칙**: 외부 서드파티 런타임 의존성 없이 Python 3.10+ 표준 라이브러리만으로 100% 동작합니다.
@@ -43,7 +43,7 @@ ForgeFlow는 **GitHub Spec Kit**의 대화형 명세 기반 개발(Spec-Driven D
 
 ```text
 https://raw.githubusercontent.com/deepblue-kblee/forgeflow/main/install.sh 스크립트를 다운로드하여 실행해 주세요. 
-사용자 계정의 ~/.local/bin 경로에 forgeflow CLI와 ~/.agents/skills/ 에 setup-forgeflow, update-forgeflow 스킬이 
+사용자 계정의 ~/.local/bin 경로에 forgeflow CLI와 ~/.agents/skills/ 에 forgeflow, forgeflow-graphify, setup-forgeflow, update-forgeflow 스킬이 
 설치되었는지 확인해 주세요.
 ```
 
@@ -91,7 +91,24 @@ curl -sSL https://raw.githubusercontent.com/deepblue-kblee/forgeflow/main/instal
     └── completed/                      # 밀봉된 과거 릴리즈 아카이브
 ```
 
-### 2. 전역 런타임 업그레이드 (`forgeflow upgrade`)
+### 2. 마스터 오케스트레이터로 개발 시작 (`/forgeflow`)
+새로운 기능 구현, 결함 수정, 리팩토링 착수 시 에이전트에게 명령합니다:
+```text
+/forgeflow "<구현할 기능 또는 버그 수정 내용>"
+```
+- 기획(`spec.md`) 작성 전 `docs/spec/ANTI_PATTERNS.md`를 자동 필독하여 금기 설계 패턴을 사전 배제합니다.
+- 기술 설계(`plan.md`), 태스크 분해(`tasks.md`), Gate 1 승인, TDD 격리 구현, Gate 2 QA 승인, Gate 3 릴리즈 밀봉까지의 5단계 폐루프 수명주기를 표준화된 절차로 오케스트레이션합니다.
+
+### 3. 코드베이스 초고속 구조 탐색 (`/forgeflow-graphify`)
+기능 개발 전 대량의 소스 코드를 무차별로 읽지 않고, AST 및 호출·의존 관계 지도를 빠르게 조회합니다:
+```text
+/forgeflow-graphify
+```
+*(전제 조건: `graphify` CLI 사전 설치)*
+- `graphify explain "<모듈명>"` 또는 `graphify path "<출발>" "<도착>"` 명령으로 연결된 핵심 파일만 선별.
+- 선별된 파일만 특정 라인 단위로 정밀 조회하여 컨텍스트 윈도우 토큰을 최대 80% 이상 절감합니다.
+
+### 4. 전역 런타임 업그레이드 (`forgeflow upgrade`)
 터미널에서 언제든 OS 사용자 계정 전역의 ForgeFlow CLI 및 에이전트 스킬을 최신 버전으로 업그레이드할 수 있습니다:
 ```bash
 # 최신 버전 확인 (설치하지 않고 확인만 수행)
@@ -101,20 +118,29 @@ forgeflow upgrade --check
 forgeflow upgrade
 ```
 
-### 3. 로컬 프로젝트 거버넌스 사양 동기화 (`forgeflow update`)
-현재 작업 리포지토리의 거버넌스 사양(`.forgeflow.json`, `.specify/scripts/bash/`, 템플릿)을 현재 설치된 최신 규격으로 동기화합니다:
+### 5. 로컬 프로젝트 거버넌스 사양 동기화 (`forgeflow update`)
+현재 작업 리포지토리의 거버넌스 사양(`.forgeflow.json`, `.specify/scripts/bash/`, 템플릿, `docs/spec/ANTI_PATTERNS.md`, `docs/adr/`)을 현재 설치된 최신 규격으로 동기화합니다:
 ```bash
 # 현재 프로젝트 거버넌스 사양 갱신 (tasks 작업 데이터 100% 보존)
 forgeflow update
 ```
 
-### 4. 작업 프로젝트 스마트 업데이트 (`/update-forgeflow`)
+### 6. 작업 프로젝트 스마트 업데이트 (`/update-forgeflow`)
 어느 작업 리포지토리에서든 한 줄로 지시하면 전역 런타임 최신화와 현재 프로젝트 거버넌스 사양 갱신을 원스톱으로 처리합니다:
 ```text
 /update-forgeflow
 ```
 - **스마트 파사드(Smart Facade)**: 원격에 새 버전이 있다면 전역 런타임(`forgeflow upgrade`)을 먼저 자동 실행하고, 이어서 현재 프로젝트의 로컬 거버넌스 갱신(`forgeflow update`)을 호출합니다.
 - 진행 중인 작업 내역(`tasks/in-progress/`, `tasks/completed/`)은 일절 변경 없이 안전하게 보존됩니다.
+
+### 7. 경량 내장 이슈 트래커 (`forgeflow issue`)
+외부 의존성 없이 프레임워크 자체 CLI로 GitHub Issues를 조회하고 로컬 캐시(`.cache/issues/`)와 연동합니다:
+```bash
+forgeflow issue list                   # 열려 있는 이슈 조회
+forgeflow issue view <번호>            # 특정 이슈 상세 조회
+forgeflow issue create --title "..."   # 새 이슈 등록
+forgeflow issue close <번호>           # 이슈 종결
+```
 
 ---
 
@@ -126,6 +152,7 @@ Stage(작업 수행 단계)와 Gate(품질 및 명세 승인 관문)를 명확�
 
 ```text
 [Stage 1: 기획 & 명세 작성]
+   - 사전 점검: docs/spec/ANTI_PATTERNS.md 확인 (필요 시 docs/adr/ 및 /forgeflow-graphify 활용)
    - 도구: /speckit.specify ➔ /speckit.clarify
    - 결과물: tasks/in-progress/<id>/spec.md
        │
@@ -134,7 +161,7 @@ Stage(작업 수행 단계)와 Gate(품질 및 명세 승인 관문)를 명확�
    - 수행: 리스크 판정(Tier 1/2/3) 및 GATE1_REVIEW.md 발행
    - 승인 주체: Tier 1=AI 자체 승인 / Tier 2=독립 에이전트 검토 / Tier 3=3대 패널 심사 후 사용자 대화 승인
    - 완료 상태: GATE1_REVIEW.md 내 "Gate 1 Verdict: APPROVED"
-   - 잠금 해제: Stage 2 기술 설계 및 Stage 3 구현 착수 허용
+   - 잠금 해제: Stage 2 기술 설계 및 Stage 3 구현 착수 허용 (No Code Before Gate 1 Pass)
        │
        ▼
 [Stage 2: 기술 설계 & 태스크 분해]
@@ -144,13 +171,14 @@ Stage(작업 수행 단계)와 Gate(품질 및 명세 승인 관문)를 명확�
 [Stage 3: 격리 구현 & 자가 치유]
    - 도구: /speckit.implement (TDD 순차 구현)
    - 사전 가드: before_implement 훅이 forgeflow check --stage 2 실행 ➔ Gate 1 APPROVED 증적 확인
-   - Inner Loop (Loop 2): 테스트 실패 시 분석 ➔ 수정 ➔ 테스트 성공 ➔ git commit 자율 주행 (동일 결함 5회 한도)
+   - Inner Loop (Loop 2): 테스트 실패 시 분석 ➔ 수정 ➔ 테스트 성공 ➔ 원자적 커밋 자율 주행 (동일 결함 5회 한도)
        │
        ▼
 [Gate 2: QA 품질 승인 (QA Sign-Off)]  <--- ★ Gate 2 승인 관문
-   - 수행: forgeflow review --strict (정적 분석) + 전체 테스트 100% Pass + QA 커밋 결속
+   - 수행: forgeflow review --strict (정적 분석) + 전체 단위/통합 테스트 100% Pass
+   - 안전 불변식: ADR 001에 따라 취약한 commit diff range를 배제하고 실질적 안전성 검증
    - 생성물: QA_SIGNOFF.md 발행
-   - 승인 주체: QA 심사관 에이전트 (Tier 3는 3대 패널 검증)
+   - 승인 주체: QA 심사관 에이전트 (Tier 3는 3대 독립 패널 검증)
    - 완료 상태: QA_SIGNOFF.md 내 "Gate 2 Verdict: APPROVED"
    - 잠금 해제: 최종 릴리즈 승격 준비 허용
        │
@@ -159,7 +187,8 @@ Stage(작업 수행 단계)와 Gate(품질 및 명세 승인 관문)를 명확�
    - 수행: RELEASE_SIGNOFF.md 및 COMPLETION_REPORT.md 발행
    - 승인 주체: 최종 사용자 (User Go/No-Go 구두 승인)
    - 완료 상태: RELEASE_SIGNOFF.md 내 "Gate 3 Verdict: APPROVED"
-   - 패키지 밀봉: tasks/in-progress/<id> ➔ tasks/completed/<id> 원자적 이동 및 브랜치 정리 (Fast-Path Close)
+   - 패키지 밀봉: Package Manifest SHA256 검증 및 tasks/in-progress/<id> ➔ tasks/completed/<id> 이동
+   - 브랜치 정리: main 병합 및 작업 브랜치 삭제 (Fast-Path Close)
 ```
 
 ### 2. 게이트(Gate) 요약 매트릭스
@@ -169,6 +198,6 @@ Stage(작업 수행 단계)와 Gate(품질 및 명세 승인 관문)를 명확�
 | **Before (전제 조건)** | Stage 1 완료 (`spec.md` 작성 및 모호성 해소) | Stage 3 구현 완료, 전체 테스트 통과, 작업 커밋 생성 | Gate 2 `APPROVED` 완료, 릴리즈 커밋 생성 |
 | **Run (실제 CLI 명령)** | `forgeflow check --stage 2` (또는 implement 진입 시 훅 자동 검증) | `forgeflow review --strict` 및 `forgeflow lifecycle package-review <qa-sha>` | `forgeflow lifecycle seal <rc-sha>` 및 `forgeflow lifecycle complete <id>` |
 | **Creates (생성 산출물)** | `tasks/in-progress/<id>/GATE1_REVIEW.md` | `tasks/in-progress/<id>/QA_SIGNOFF.md` | `RELEASE_SIGNOFF.md`, `COMPLETION_REPORT.md` |
-| **User action (승인 방식)** | Tier 1: 자동 통과 / Tier 2: 결과 확인 / Tier 3: 사용자 대화창 구두 승인 ("승인합니다") | `QA_SIGNOFF.md`의 `APPROVED` 및 커밋 SHA 확인 | 사용자 Go/No-Go 최종 배포 구두 승인 |
-| **Done when (완료 조건)** | `GATE1_REVIEW.md` 내 `Gate 1 Verdict: APPROVED` 기록 완료 | 단위/통합 테스트 0 실패, 린트 0 Warning, QA-SHA 결속 | 릴리즈 산출물 완성 및 `tasks/completed/` 원자적 이동 완료 |
+| **User action (승인 방식)** | Tier 1: 자동 통과 / Tier 2: 결과 확인 / Tier 3: 사용자 대화창 구두 승인 ("승인합니다") | `QA_SIGNOFF.md`의 `APPROVED` 확인 | 사용자 Go/No-Go 최종 배포 구두 승인 |
+| **Done when (완료 조건)** | `GATE1_REVIEW.md` 내 `Gate 1 Verdict: APPROVED` 기록 완료 | 단위/통합 테스트 0 실패, 린트 0 Warning, Gate 2 APPROVED | 릴리즈 산출물 완성 및 `tasks/completed/` 원자적 이동 완료 |
 | **Unlocks (허용 작업)** | Stage 2 기술 설계 (`plan.md`, `tasks.md`) 및 작업 브랜치 생성 | Gate 3 최종 배포 승격 준비 | main 브랜치 머지 및 피쳐 브랜치 정리 (Fast-Path Close) |
