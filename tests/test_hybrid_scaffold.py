@@ -33,6 +33,14 @@ class TestHybridScaffold(unittest.TestCase):
         const_text = constitution.read_text(encoding="utf-8")
         self.assertIn("제1조 (무승인 구현 금지", const_text)
         self.assertIn("제2조 (가짜 멈춤 금지", const_text)
+        self.assertIn("제6조 (설계 안티패턴 및 ADR 필수 준수", const_text)
+        self.assertIn("docs/spec/ANTI_PATTERNS.md", const_text)
+
+        # Verify knowledge architecture (ANTI_PATTERNS.md & ADRs)
+        self.assertTrue((self.root / "docs" / "spec" / "ANTI_PATTERNS.md").exists())
+        self.assertTrue((self.root / "docs" / "adr" / "template.md").exists())
+        self.assertTrue((self.root / "docs" / "adr" / "001-eliminate-git-sha-and-commit-range-bindings.md").exists())
+        self.assertTrue((self.root / "docs" / "adr" / "002-remove-spec-body-hash-binding.md").exists())
 
         extensions = self.root / ".specify" / "extensions.yml"
         self.assertTrue(extensions.exists())

@@ -57,7 +57,7 @@ class CandidateSealTests(unittest.TestCase):
         self.assertEqual(disallowed, [], f"Disallowed paths found: {disallowed}")
         self.assertTrue(engine._has_v2_candidate_binding(self.release_id, qa_sha=qa_sha, candidate=candidate_sha))
 
-    def test_candidate_rejects_unallowed_file(self):
+    def test_candidate_rejects_non_local_commit(self):
         engine = HarnessEngine(repo_root=self.repo_root)
         rel_dir = self.repo_root / "docs" / "releases" / self.release_id
         rel_dir.mkdir(parents=True, exist_ok=True)
@@ -67,18 +67,15 @@ class CandidateSealTests(unittest.TestCase):
         subprocess.run(["git", "commit", "-m", "QA commit"], cwd=self.repo_root, capture_output=True, check=True)
         qa_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=self.repo_root, capture_output=True, text=True, check=True).stdout.strip()
 
-        # Update an unauthorized file
-        src_file = self.repo_root / "src" / "code.py"
-        src_file.parent.mkdir(parents=True, exist_ok=True)
-        src_file.write_text("print('unauthorized change after qa')\n", encoding="utf-8")
-
-        subprocess.run(["git", "add", "."], cwd=self.repo_root, capture_output=True, check=True)
-        subprocess.run(["git", "commit", "-m", "Bad candidate commit"], cwd=self.repo_root, capture_output=True, check=True)
-        candidate_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=self.repo_root, capture_output=True, text=True, check=True).stdout.strip()
-
-        disallowed = engine._candidate_disallowed_paths(self.release_id, qa_sha=qa_sha, candidate=candidate_sha)
+        # Non-local / nonexistent candidate SHA must be rejected per ADR 001
+        fake_candidate = "0" * 40
+        self.assertFalse(engine._has_v2_candidate_binding(self.release_id, qa_sha=qa_sha, candidate=fake_candidate))
+        disallowed = engine._candidate_disallowed_paths(self.release_id, qa_sha=qa_sha, candidate=fake_candidate)
         self.assertIsNotNone(disallowed)
-        self.assertIn("src/code.py", disallowed)
+        self.assertIn("candidate_sha_not_local_commit", disallowed)
+
+        # Invalid shape is also rejected
+        self.assertFalse(engine._has_v2_candidate_binding(self.release_id, qa_sha=qa_sha, candidate="invalid-sha"))
 
     def test_candidate_allows_speckit_hybrid_documents(self):
         engine = HarnessEngine(repo_root=self.repo_root)
@@ -89,7 +86,23 @@ class CandidateSealTests(unittest.TestCase):
         (pkg_dir / "GATE1_REVIEW.md").write_text("# Gate 1\n", encoding="utf-8")
         (pkg_dir / "plan.md").write_text("# Plan\n", encoding="utf-8")
         (pkg_dir / "tasks.md").write_text("# Tasks\n- [ ] task 1\n", encoding="utf-8")
-        (pkg_dir / "QA_SIGNOFF.md").write_text("# QA\n", encoding="utf-8")
+        qa_text = f"""## ForgeFlow Evidence v2
+```text
+Schema-Version: 2
+Release-ID: {self.release_id}
+Tier: 2
+Task-Branch: feat/test
+Base-SHA: {"0" * 40}
+QA-SHA: {"a" * 40}
+Stage: PACKAGE_REVIEW_PENDING
+Gate-1: APPROVED
+Gate-2: APPROVED
+Reviewer: id=lead; perspective=Quality; verdict=APPROVED; qa-sha={"a" * 40}
+Verification: id=unit; command=test; result=PASS; exit-code=0; qa-sha={"a" * 40}
+Next-Action: RELEASE_SIGNOFF
+```
+"""
+        (pkg_dir / "QA_SIGNOFF.md").write_text(qa_text, encoding="utf-8")
 
         subprocess.run(["git", "add", "."], cwd=self.repo_root, capture_output=True, check=True)
         subprocess.run(["git", "commit", "-m", "QA commit with speckit docs"], cwd=self.repo_root, capture_output=True, check=True)
@@ -127,7 +140,23 @@ class CandidateSealTests(unittest.TestCase):
         (pkg_dir / "GATE1_REVIEW.md").write_text("# Gate 1\n", encoding="utf-8")
         (pkg_dir / "plan.md").write_text("# Plan\n", encoding="utf-8")
         (pkg_dir / "tasks.md").write_text("# Tasks\n", encoding="utf-8")
-        (pkg_dir / "QA_SIGNOFF.md").write_text("# QA\n", encoding="utf-8")
+        qa_text = f"""## ForgeFlow Evidence v2
+```text
+Schema-Version: 2
+Release-ID: {self.release_id}
+Tier: 2
+Task-Branch: feat/test
+Base-SHA: {"0" * 40}
+QA-SHA: {"a" * 40}
+Stage: PACKAGE_REVIEW_PENDING
+Gate-1: APPROVED
+Gate-2: APPROVED
+Reviewer: id=lead; perspective=Quality; verdict=APPROVED; qa-sha={"a" * 40}
+Verification: id=unit; command=test; result=PASS; exit-code=0; qa-sha={"a" * 40}
+Next-Action: RELEASE_SIGNOFF
+```
+"""
+        (pkg_dir / "QA_SIGNOFF.md").write_text(qa_text, encoding="utf-8")
 
         subprocess.run(["git", "add", "."], cwd=self.repo_root, capture_output=True, check=True)
         subprocess.run(["git", "commit", "-m", "QA commit"], cwd=self.repo_root, capture_output=True, check=True)
@@ -160,13 +189,30 @@ class CandidateSealTests(unittest.TestCase):
         self.assertEqual(disallowed, [], f"Disallowed paths found: {disallowed}")
         self.assertTrue(engine._has_v2_candidate_binding(self.release_id, qa_sha=qa_sha, candidate=candidate_sha))
 
-    def test_post_candidate_relocation_fails_if_package_mutated(self):
+    def test_post_candidate_benign_commits_allowed(self):
+        """Per ADR 001: Benign commits (docs, version, code) after candidate do not invalidate candidate binding."""
         engine = HarnessEngine(repo_root=self.repo_root)
 
         pkg_dir = self.repo_root / "tasks" / "in-progress" / self.release_id
         pkg_dir.mkdir(parents=True, exist_ok=True)
         (pkg_dir / "spec.md").write_text("# Spec\n", encoding="utf-8")
-        (pkg_dir / "QA_SIGNOFF.md").write_text("# QA\n", encoding="utf-8")
+        qa_text = f"""## ForgeFlow Evidence v2
+```text
+Schema-Version: 2
+Release-ID: {self.release_id}
+Tier: 2
+Task-Branch: feat/test
+Base-SHA: {"0" * 40}
+QA-SHA: {"a" * 40}
+Stage: PACKAGE_REVIEW_PENDING
+Gate-1: APPROVED
+Gate-2: APPROVED
+Reviewer: id=lead; perspective=Quality; verdict=APPROVED; qa-sha={"a" * 40}
+Verification: id=unit; command=test; result=PASS; exit-code=0; qa-sha={"a" * 40}
+Next-Action: RELEASE_SIGNOFF
+```
+"""
+        (pkg_dir / "QA_SIGNOFF.md").write_text(qa_text, encoding="utf-8")
 
         subprocess.run(["git", "add", "."], cwd=self.repo_root, capture_output=True, check=True)
         subprocess.run(["git", "commit", "-m", "QA commit"], cwd=self.repo_root, capture_output=True, check=True)
@@ -177,114 +223,62 @@ class CandidateSealTests(unittest.TestCase):
         subprocess.run(["git", "commit", "-m", "Candidate commit"], cwd=self.repo_root, capture_output=True, check=True)
         candidate_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=self.repo_root, capture_output=True, text=True, check=True).stdout.strip()
 
-        # Relocate but MUTATE spec.md
-        completed_dir = self.repo_root / "tasks" / "completed" / self.release_id
-        completed_dir.parent.mkdir(parents=True, exist_ok=True)
-        import shutil
-        shutil.move(str(pkg_dir), str(completed_dir))
-        (completed_dir / "spec.md").write_text("# Mutated Spec after Candidate!\n", encoding="utf-8")
-
+        # Create additional commits afterwards (e.g. docs, version bump)
+        docs_file = self.repo_root / "docs" / "spec" / "CHANGELOG.md"
+        docs_file.parent.mkdir(parents=True, exist_ok=True)
+        docs_file.write_text("# Changelog\n- Update\n", encoding="utf-8")
         subprocess.run(["git", "add", "."], cwd=self.repo_root, capture_output=True, check=True)
-        subprocess.run(["git", "commit", "-m", "Relocation with mutation"], cwd=self.repo_root, capture_output=True, check=True)
+        subprocess.run(["git", "commit", "-m", "Doc commit after candidate"], cwd=self.repo_root, capture_output=True, check=True)
 
-        disallowed = engine._candidate_disallowed_paths(self.release_id, qa_sha=qa_sha, candidate=candidate_sha)
-        self.assertIsNotNone(disallowed)
-        self.assertNotEqual(disallowed, [])
-        self.assertFalse(engine._has_v2_candidate_binding(self.release_id, qa_sha=qa_sha, candidate=candidate_sha))
+        # Candidate binding remains valid!
+        self.assertTrue(engine._has_v2_candidate_binding(self.release_id, qa_sha=qa_sha, candidate=candidate_sha))
+        self.assertEqual(engine._candidate_disallowed_paths(self.release_id, qa_sha=qa_sha, candidate=candidate_sha), [])
 
-    def test_post_candidate_relocation_fails_if_extra_file_added(self):
+    def test_package_manifest_mutation_rejected_after_seal(self):
+        """Mutation of files in sealed package is detected via package_manifest_sha256."""
         engine = HarnessEngine(repo_root=self.repo_root)
 
         pkg_dir = self.repo_root / "tasks" / "in-progress" / self.release_id
         pkg_dir.mkdir(parents=True, exist_ok=True)
-        (pkg_dir / "spec.md").write_text("# Spec\n", encoding="utf-8")
+        (pkg_dir / "PRD.md").write_text("# PRD\n\n## Requirements\n- REQ-1\n", encoding="utf-8")
+        (pkg_dir / "DESIGN.md").write_text("# Design\n## Requirements Traceability Matrix (RTM)\n| R | D |\n## Gate 1 Verdict\nAPPROVED\n", encoding="utf-8")
+        (pkg_dir / "COMPLETION_REPORT.md").write_text("# COMPLETION REPORT\nLine 1\nLine 2\nLine 3\nLine 4\nLine 5\n", encoding="utf-8")
+        qa_text = f"""## ForgeFlow Evidence v2
+```text
+Schema-Version: 2
+Release-ID: {self.release_id}
+Tier: 2
+Task-Branch: feat/test
+Base-SHA: {"0" * 40}
+QA-SHA: {"a" * 40}
+Stage: PACKAGE_REVIEW_PENDING
+Gate-1: APPROVED
+Gate-2: APPROVED
+Reviewer: id=lead; perspective=Quality; verdict=APPROVED; qa-sha={"a" * 40}
+Verification: id=unit; command=test; result=PASS; exit-code=0; qa-sha={"a" * 40}
+Next-Action: RELEASE_SIGNOFF
+```
+"""
+        (pkg_dir / "QA_SIGNOFF.md").write_text(qa_text, encoding="utf-8")
 
-        subprocess.run(["git", "add", "."], cwd=self.repo_root, capture_output=True, check=True)
-        subprocess.run(["git", "commit", "-m", "QA commit"], cwd=self.repo_root, capture_output=True, check=True)
-        qa_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=self.repo_root, capture_output=True, text=True, check=True).stdout.strip()
+        manifest, _ = engine._package_manifest(self.release_id, pkg_dir)
+        (pkg_dir / "RELEASE_SIGNOFF.md").write_text(f"""## ForgeFlow Release Sign-off v1
+```text
+Release-ID: {self.release_id}
+Gate-3: APPROVED
+User-Verdict: GO
+Package-Manifest-SHA256: {manifest}
+```
+""", encoding="utf-8")
 
-        (pkg_dir / "RELEASE_SIGNOFF.md").write_text("# Release Signoff\n", encoding="utf-8")
-        subprocess.run(["git", "add", "."], cwd=self.repo_root, capture_output=True, check=True)
-        subprocess.run(["git", "commit", "-m", "Candidate commit"], cwd=self.repo_root, capture_output=True, check=True)
-        candidate_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=self.repo_root, capture_output=True, text=True, check=True).stdout.strip()
+        # Mutate COMPLETION_REPORT.md after computing manifest
+        (pkg_dir / "COMPLETION_REPORT.md").write_text("# COMPLETION REPORT\nLine 1\nLine 2\nLine 3\nLine 4\nMutated Line 5\n", encoding="utf-8")
 
-        # Relocate but ADD an extra file
-        completed_dir = self.repo_root / "tasks" / "completed" / self.release_id
-        completed_dir.parent.mkdir(parents=True, exist_ok=True)
-        import shutil
-        shutil.move(str(pkg_dir), str(completed_dir))
-        (completed_dir / "unauthorized_extra.md").write_text("# Extra\n", encoding="utf-8")
-
-        subprocess.run(["git", "add", "."], cwd=self.repo_root, capture_output=True, check=True)
-        subprocess.run(["git", "commit", "-m", "Relocation with extra file"], cwd=self.repo_root, capture_output=True, check=True)
-
-        disallowed = engine._candidate_disallowed_paths(self.release_id, qa_sha=qa_sha, candidate=candidate_sha)
-        self.assertIsNotNone(disallowed)
-        self.assertNotEqual(disallowed, [])
-        self.assertFalse(engine._has_v2_candidate_binding(self.release_id, qa_sha=qa_sha, candidate=candidate_sha))
-
-    def test_post_candidate_relocation_fails_if_source_files_remain(self):
-        engine = HarnessEngine(repo_root=self.repo_root)
-
-        pkg_dir = self.repo_root / "tasks" / "in-progress" / self.release_id
-        pkg_dir.mkdir(parents=True, exist_ok=True)
-        (pkg_dir / "spec.md").write_text("# Spec\n", encoding="utf-8")
-
-        subprocess.run(["git", "add", "."], cwd=self.repo_root, capture_output=True, check=True)
-        subprocess.run(["git", "commit", "-m", "QA commit"], cwd=self.repo_root, capture_output=True, check=True)
-        qa_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=self.repo_root, capture_output=True, text=True, check=True).stdout.strip()
-
-        (pkg_dir / "RELEASE_SIGNOFF.md").write_text("# Release Signoff\n", encoding="utf-8")
-        subprocess.run(["git", "add", "."], cwd=self.repo_root, capture_output=True, check=True)
-        subprocess.run(["git", "commit", "-m", "Candidate commit"], cwd=self.repo_root, capture_output=True, check=True)
-        candidate_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=self.repo_root, capture_output=True, text=True, check=True).stdout.strip()
-
-        # Copy to completed instead of move, leaving source files behind
-        completed_dir = self.repo_root / "tasks" / "completed" / self.release_id
-        completed_dir.parent.mkdir(parents=True, exist_ok=True)
-        import shutil
-        shutil.copytree(str(pkg_dir), str(completed_dir), dirs_exist_ok=True)
-
-        subprocess.run(["git", "add", "."], cwd=self.repo_root, capture_output=True, check=True)
-        subprocess.run(["git", "commit", "-m", "Copied without removing source"], cwd=self.repo_root, capture_output=True, check=True)
-
-        disallowed = engine._candidate_disallowed_paths(self.release_id, qa_sha=qa_sha, candidate=candidate_sha)
-        self.assertIsNotNone(disallowed)
-        self.assertNotEqual(disallowed, [])
-        self.assertFalse(engine._has_v2_candidate_binding(self.release_id, qa_sha=qa_sha, candidate=candidate_sha))
-
-    def test_post_candidate_relocation_fails_if_unrelated_release(self):
-        engine = HarnessEngine(repo_root=self.repo_root)
-
-        pkg_dir = self.repo_root / "tasks" / "in-progress" / self.release_id
-        pkg_dir.mkdir(parents=True, exist_ok=True)
-        (pkg_dir / "spec.md").write_text("# Spec\n", encoding="utf-8")
-
-        subprocess.run(["git", "add", "."], cwd=self.repo_root, capture_output=True, check=True)
-        subprocess.run(["git", "commit", "-m", "QA commit"], cwd=self.repo_root, capture_output=True, check=True)
-        qa_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=self.repo_root, capture_output=True, text=True, check=True).stdout.strip()
-
-        (pkg_dir / "RELEASE_SIGNOFF.md").write_text("# Release Signoff\n", encoding="utf-8")
-        subprocess.run(["git", "add", "."], cwd=self.repo_root, capture_output=True, check=True)
-        subprocess.run(["git", "commit", "-m", "Candidate commit"], cwd=self.repo_root, capture_output=True, check=True)
-        candidate_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=self.repo_root, capture_output=True, text=True, check=True).stdout.strip()
-
-        # In post-candidate, relocate an unrelated release
-        other_src = self.repo_root / "tasks" / "in-progress" / "v0.99.0-unrelated"
-        other_src.mkdir(parents=True, exist_ok=True)
-        (other_src / "spec.md").write_text("# Other Spec\n", encoding="utf-8")
-        other_dst = self.repo_root / "tasks" / "completed" / "v0.99.0-unrelated"
-        other_dst.parent.mkdir(parents=True, exist_ok=True)
-        import shutil
-        shutil.move(str(other_src), str(other_dst))
-
-        subprocess.run(["git", "add", "."], cwd=self.repo_root, capture_output=True, check=True)
-        subprocess.run(["git", "commit", "-m", "Relocate unrelated release"], cwd=self.repo_root, capture_output=True, check=True)
-
-        disallowed = engine._candidate_disallowed_paths(self.release_id, qa_sha=qa_sha, candidate=candidate_sha)
-        self.assertIsNotNone(disallowed)
-        self.assertIn("tasks/completed/v0.99.0-unrelated/spec.md", disallowed)
-        self.assertFalse(engine._has_v2_candidate_binding(self.release_id, qa_sha=qa_sha, candidate=candidate_sha))
+        # Sealing fails with package_manifest_mismatch
+        from forgeflow.harness import LifecycleError
+        with self.assertRaises(LifecycleError) as ctx:
+            engine.lifecycle_seal(self.release_id, "a" * 40)
+        self.assertEqual(ctx.exception.code, "package_manifest_mismatch")
 
     def test_full_seal_complete_commit_lifecycle_audit_flow(self):
         from unittest.mock import patch

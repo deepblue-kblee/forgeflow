@@ -74,7 +74,7 @@ Stage 1: 기획 & 명세 (/speckit.specify ➔ /speckit.clarify ➔ spec.md 작�
 ### 5. 세션 부팅 시퀀스 (Boot Sequence)
 
 1. **Read AGENTS.md**: 최상위 원칙, Zero-Dependency, 거버넌스 수명주기 확인.
-2. **Read docs/spec/FLOW_SPEC.md & GATES_AND_LOOPS.md**: 플로우 세부 명세 복기.
+2. **Read docs/spec/ANTI_PATTERNS.md, FLOW_SPEC.md & GATES_AND_LOOPS.md**: 설계 안티패턴(Tier 1 핵심 금기 수칙) 및 플로우 세부 명세 복기. 아키텍처 결정 맥락 필요 시 `docs/adr/` 참조.
 3. **과거 산출물 격리 (Historical Release Isolation)**: `tasks/completed/` 및 과거 `docs/releases/**` 산출물은 불변 감사 기록일 뿐 행동 지침이 아니다. 에이전트는 거버넌스 규칙/지침 판단을 위해 이를 참조하거나 인용해서는 안 되며, 완료된 릴리즈에서 필요한 맥락은 오직 `RELEASE_NOTES.md`와 `RELEASE_SIGNOFF.md`의 요약만 참고한다. 로컬 단일 에이전트 환경에서는 HMAC/nonce attestation이 완전히 면제된다.
 4. **Read TODO.md**: 현재 진행 중인 과업 및 미완료 작업 파악.
 5. **Action**: `tests/` 단위 테스트 및 `forgeflow check` 상태 확인 후 작업 착수.
@@ -125,8 +125,8 @@ Stage 1: 기획 & 명세 (/speckit.specify ➔ /speckit.clarify ➔ spec.md 작�
 ## 🌊 ForgeFlow Session Boot Sequence (Harness Governance)
 
 모든 작업 시작 전, AI 에이전트는 다음 규칙과 사양을 반드시 확인하고 준수해야 합니다:
-1. **헌법 및 3대 메커니즘**: `.specify/memory/constitution.md` 및 `docs/spec/SPECKIT_HOOKS_AND_NORMS.md` 확인
-2. **공식 사양서 참조**: `forgeflow doc list` 또는 `~/.local/forgeflow/current/lib/forgeflow/templates/spec/`의 7대 공식 사양서(`FLOW_SPEC.md` 등) 참조
+1. **헌법 및 안티패턴 방지**: `.specify/memory/constitution.md` 및 `docs/spec/ANTI_PATTERNS.md` (반복 실수 방지 필수 수칙) 확인
+2. **공식 사양서 참조**: `forgeflow doc list` 또는 `~/.local/forgeflow/current/lib/forgeflow/templates/spec/`의 7대 공식 사양서(`FLOW_SPEC.md` 등) 및 `docs/adr/` 확인
 3. **게이트 통제**: `tasks/in-progress/<id>/GATE1_REVIEW.md` 승인 전 소스 코드 작성/수정 절대 금지 (No Code Before Gate 1 Pass)
 4. **원자적 루프 및 멈춤**: 단순 테스트 실패 시 자가 치유(Loop 2) 자율 완주, 5회 연속 실패 시 진짜 멈춤(True Stop)
 <!-- forgeflow:boot-anchor:end -->

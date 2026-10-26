@@ -28,8 +28,8 @@ class TemplateScaffolder:
         "<!-- forgeflow:boot-anchor:start -->\n"
         "## 🌊 ForgeFlow Session Boot Sequence (Harness Governance)\n\n"
         "모든 작업 시작 전, AI 에이전트는 다음 규칙과 사양을 반드시 확인하고 준수해야 합니다:\n"
-        "1. **헌법 및 3대 메커니즘**: `.specify/memory/constitution.md` 및 `docs/spec/SPECKIT_HOOKS_AND_NORMS.md` 확인\n"
-        "2. **공식 사양서 참조**: `forgeflow doc list` 또는 `~/.local/forgeflow/current/lib/forgeflow/templates/spec/`의 7대 공식 사양서(`FLOW_SPEC.md` 등) 참조\n"
+        "1. **헌법 및 안티패턴 방지**: `.specify/memory/constitution.md` 및 `docs/spec/ANTI_PATTERNS.md` (반복 실수 방지 필수 수칙) 확인\n"
+        "2. **공식 사양서 참조**: `forgeflow doc list` 또는 `~/.local/forgeflow/current/lib/forgeflow/templates/spec/`의 7대 공식 사양서(`FLOW_SPEC.md` 등) 및 `docs/adr/` 확인\n"
         "3. **게이트 통제**: `tasks/in-progress/<id>/GATE1_REVIEW.md` 승인 전 소스 코드 작성/수정 절대 금지 (No Code Before Gate 1 Pass)\n"
         "4. **원자적 루프 및 멈춤**: 단순 테스트 실패 시 자가 치유(Loop 2) 자율 완주, 5회 연속 실패 시 진짜 멈춤(True Stop)\n"
         "<!-- forgeflow:boot-anchor:end -->"
@@ -52,6 +52,7 @@ class TemplateScaffolder:
         Path("docs/forgeflow/spec/FLOW_SPEC.md"): "spec/FLOW_SPEC.md",
         Path("docs/forgeflow/spec/GATES_AND_LOOPS.md"): "spec/GATES_AND_LOOPS.md",
         Path("docs/forgeflow/spec/SPECKIT_HOOKS_AND_NORMS.md"): "spec/SPECKIT_HOOKS_AND_NORMS.md",
+        Path("docs/forgeflow/spec/ANTI_PATTERNS.md"): "spec/ANTI_PATTERNS.md",
         Path("docs/forgeflow/templates/COMPLETION_REPORT.md"): "COMPLETION_REPORT.md",
         Path("docs/forgeflow/templates/QA_SIGNOFF.md"): "QA_SIGNOFF.md",
         Path("docs/forgeflow/templates/RELEASE_SIGNOFF.md"): "RELEASE_SIGNOFF.md",
@@ -898,12 +899,17 @@ class TemplateScaffolder:
             "## 제5조 (스펙 무단 하향 금지 - No Spec Downgrade)\n"
             "구현의 어려움을 이유로 사용자 승인 없이 `spec.md`의 요구사항이나 Acceptance Criteria를 축소·삭제·완화할 수 없다. "
             "스펙 수정이 필요한 경우 반드시 공식 스펙 회귀(Loop 3) 절차를 거쳐 Gate 1 재승인을 획득해야 한다.\n\n"
+            "## 제6조 (설계 안티패턴 및 ADR 필수 준수 - Anti-Patterns & Architecture Decisions)\n"
+            "에이전트는 과거에 합의된 설계 결정을 망각하고 동일한 실수를 반복해서는 안 된다. "
+            "작업 착수 전 반드시 `docs/spec/ANTI_PATTERNS.md`를 필독하여 금지된 안티패턴(Git SHA 결합, 스펙 해시 바인딩 등)을 확인하고, "
+            "주요 구조적 변경 시 `docs/adr/`의 아키텍처 결정 레코드를 검토해야 한다.\n\n"
             "## 프레임워크 공식 사양서 참조 경로 (Framework Specifications)\n"
             "에이전트는 세부 규범과 아키텍처 판단이 필요할 때 다음 공식 사양서(단일 진실 공급원)를 참조해야 한다:\n"
             "- 참조 인터페이스: `forgeflow doc list` 또는 `forgeflow doc show <spec-name>` CLI\n"
             "- 전역 템플릿 경로: `~/.local/forgeflow/current/lib/forgeflow/templates/spec/`\n"
             "- 7대 공식 사양서: FLOW_SPEC.md, GATES_AND_LOOPS.md, SPECKIT_HOOKS_AND_NORMS.md, "
             "DISTRIBUTION_SPEC.md, PHILOSOPHY_AND_COMPASS.md, REFACTORING_GUIDE.md, CHANGELOG.md\n"
+            "- 안티패턴 및 ADR: docs/spec/ANTI_PATTERNS.md, docs/adr/\n"
         )
         if not constitution_file.exists() or force:
             constitution_file.write_text(constitution_content, encoding="utf-8")
@@ -988,7 +994,36 @@ class TemplateScaffolder:
                 tmpl_path.write_text(content, encoding="utf-8")
                 (updated_files if existed else created_files).append(f".specify/templates/{tmpl_name}")
 
-        # 6. .gitignore lock entries
+        # 8. Knowledge architecture (ANTI_PATTERNS.md & ADRs)
+        spec_dir = root / "docs" / "spec"
+        spec_dir.mkdir(parents=True, exist_ok=True)
+        created_dirs.append("docs/spec")
+
+        anti_patterns_file = spec_dir / "ANTI_PATTERNS.md"
+        anti_patterns_content = cls.get_template_content("spec/ANTI_PATTERNS.md")
+        existed = anti_patterns_file.exists()
+        if not existed or force:
+            anti_patterns_file.write_text(anti_patterns_content, encoding="utf-8")
+            (updated_files if existed else created_files).append("docs/spec/ANTI_PATTERNS.md")
+
+        adr_dir = root / "docs" / "adr"
+        adr_dir.mkdir(parents=True, exist_ok=True)
+        created_dirs.append("docs/adr")
+
+        adr_templates = [
+            "template.md",
+            "001-eliminate-git-sha-and-commit-range-bindings.md",
+            "002-remove-spec-body-hash-binding.md",
+        ]
+        for adr_name in adr_templates:
+            adr_path = adr_dir / adr_name
+            content = cls.get_template_content(f"adr/{adr_name}")
+            existed = adr_path.exists()
+            if not existed or force:
+                adr_path.write_text(content, encoding="utf-8")
+                (updated_files if existed else created_files).append(f"docs/adr/{adr_name}")
+
+        # 9. .gitignore lock entries
         gitignore_file = root / ".gitignore"
         lock_entry = ".forgeflow/lifecycle/.*.lock\n"
         if gitignore_file.exists():
@@ -1000,7 +1035,7 @@ class TemplateScaffolder:
             gitignore_file.write_text(lock_entry, encoding="utf-8")
             created_files.append(".gitignore")
 
-        # 7. Non-destructive Session Boot Anchor in root guides (AGENTS.md / CLAUDE.md)
+        # 10. Non-destructive Session Boot Anchor in root guides (AGENTS.md / CLAUDE.md)
         anchor_results = cls.bind_boot_anchor(root)
         for fname, action in anchor_results.items():
             if action == "created":

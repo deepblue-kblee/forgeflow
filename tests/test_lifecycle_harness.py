@@ -321,51 +321,21 @@ Package-Manifest-SHA256: {manifest}
         self.assertIsNone(refreshed.state["evidence"]["gate3"])
 
     def test_candidate_descendant_paths_evaluation(self):
-        import subprocess
         release_id = "v0.5.0-descendant-test"
         qa_sha = "a" * 40
         candidate = "c" * 40
-        current_head = "h" * 40
 
-        # Simulate git command outputs:
-        # candidate is local commit, qa_sha is local commit, rev-parse HEAD returns current_head,
-        # merge-base returns 0 (is-ancestor), diff qa..candidate has allowed package file,
-        # diff candidate..head has allowed lifecycle state file
+        # Per ADR 001: candidate is valid when candidate SHA is a local commit
         with patch.object(self.engine, "_is_local_commit", return_value=True):
-            def mock_run(cmd, **kwargs):
-                if cmd[3] == "rev-parse":
-                    return subprocess.CompletedProcess(cmd, 0, stdout=f"{current_head}\n", stderr="")
-                if cmd[3] == "merge-base":
-                    return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
-                if cmd[3] == "diff":
-                    range_spec = cmd[7]
-                    if range_spec == f"{qa_sha}..{candidate}":
-                        return subprocess.CompletedProcess(cmd, 0, stdout=f"docs/releases/{release_id}/PRD.md\0", stderr="")
-                    elif range_spec == f"{candidate}..{current_head}":
-                        return subprocess.CompletedProcess(cmd, 0, stdout=f".forgeflow/lifecycle/{release_id}.json\0", stderr="")
-                return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="")
+            self.assertTrue(self.engine._has_v2_candidate_binding(release_id, qa_sha, candidate))
+            disallowed = self.engine._candidate_disallowed_paths(release_id, qa_sha, candidate)
+            self.assertEqual(disallowed, [])
 
-            with patch("subprocess.run", side_effect=mock_run):
-                disallowed = self.engine._candidate_disallowed_paths(release_id, qa_sha, candidate)
-                self.assertEqual(disallowed, [])
-
-            # Now test rejected when candidate..head has code changes
-            def mock_run_bad_code(cmd, **kwargs):
-                if cmd[3] == "rev-parse":
-                    return subprocess.CompletedProcess(cmd, 0, stdout=f"{current_head}\n", stderr="")
-                if cmd[3] == "merge-base":
-                    return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
-                if cmd[3] == "diff":
-                    range_spec = cmd[7]
-                    if range_spec == f"{qa_sha}..{candidate}":
-                        return subprocess.CompletedProcess(cmd, 0, stdout=f"docs/releases/{release_id}/PRD.md\0", stderr="")
-                    elif range_spec == f"{candidate}..{current_head}":
-                        return subprocess.CompletedProcess(cmd, 0, stdout="src/forgeflow/harness.py\0", stderr="")
-                return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="")
-
-            with patch("subprocess.run", side_effect=mock_run_bad_code):
-                disallowed = self.engine._candidate_disallowed_paths(release_id, qa_sha, candidate)
-                self.assertEqual(disallowed, ["src/forgeflow/harness.py"])
+        # Non-local commit is rejected
+        with patch.object(self.engine, "_is_local_commit", return_value=False):
+            self.assertFalse(self.engine._has_v2_candidate_binding(release_id, qa_sha, candidate))
+            disallowed = self.engine._candidate_disallowed_paths(release_id, qa_sha, candidate)
+            self.assertEqual(disallowed, ["candidate_sha_not_local_commit"])
 
     def test_evidence_v2_tier2_support(self):
         qa_sha = "a" * 40

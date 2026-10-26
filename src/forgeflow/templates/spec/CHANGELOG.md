@@ -7,6 +7,27 @@ ForgeFlow 프레임워크의 모든 주요 변경 사항은 이 문서에 기록
 
 ---
 
+## [0.1.16] - 2026-10-27
+
+### 🧠 2계층 지식 관리 체계 구축 및 Git SHA diff 결합 제거 (2-Tier Knowledge Architecture & De-SHA)
+
+### Added
+- **2계층 지식 관리 체계 (2-Tier Knowledge System)**:
+  - **Tier 1 (Fast Recognition)**: `docs/spec/ANTI_PATTERNS.md` (500토큰 미만의 간결한 Never-Do / Always-Do 수칙)를 도입하여 AI 에이전트의 부팅 시퀀스에서 아키텍처 금기 사항을 즉각 인지.
+  - **Tier 2 (Deep Dive)**: `docs/adr/` 아키텍처 결정 레코드(ADR 001: Git SHA 및 커밋 범위 diff 결합 제거, ADR 002: spec body hash 바인딩 제거)를 영구 문서화하여 심층 컨텍스트 필요 시에만 선택적 참조.
+  - **거버넌스 헌법 제6조 주입**: `.specify/memory/constitution.md`에 설계 안티패턴 및 ADR 필수 준수 조항 추가.
+- **공식 ForgeFlow 스킬 제품군 탑재 (`scripts/install-skills.sh`)**:
+  - `/forgeflow`: 기획(spec)부터 릴리즈 밀봉(seal)까지 전 과정을 제어하는 마스터 오케스트레이터 스킬.
+  - `/forgeflow-graphify`: `kb-graphify` 패턴을 계승하여 대량 소스 코드 무차별 읽기를 방지하고 AST/의존성을 초고속 탐색하는 지식 지도 스킬.
+  - `/setup-forgeflow` & `/update-forgeflow`: 2계층 지식 관리 체계 자동 스캐폴딩 및 최신화 기능 확장.
+
+### Removed
+- **취약한 Git SHA 커밋 범위 diff 검증 완전 제거 (ADR 001)**:
+  - `harness.py`의 `_candidate_disallowed_paths`, `_find_verified_completion_relocation_paths`, `_tree_files_at_commit` 등 취약한 Git commit diff range 화이트리스트 로직을 완전히 걷어내고, 실용적인 안전 불변식(테스트 100% 통과 + Gate 승인 상태 + clean worktree + 패키지 완료 이동 + 패키지 매니페스트 SHA256)으로 간소화.
+  - 사소한 문서 수정, 버전 범프, 패키지 이동 커밋으로 인해 발생하던 릴리즈 후보 거부 오탐 원천 해소.
+
+---
+
 ## [0.1.15] - 2026-10-26
 
 ### 🛡️ 릴리즈 완료 패키지 이동 사후 감사 오탐 해소 (Allow Committed Completion Relocation in Lifecycle Audit)

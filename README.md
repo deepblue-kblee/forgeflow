@@ -1,4 +1,4 @@
-# 🌊 ForgeFlow (포지플로우) v0.1.15
+# 🌊 ForgeFlow (포지플로우) v0.1.16
 
 **GitHub Spec Kit 결합형 자율 AI 에이전트 거버넌스 프레임워크 & 게이트키퍼 CLI**  
 *(Autonomous Agent Governance Framework & Gatekeeper CLI for GitHub Spec Kit)*
@@ -9,22 +9,25 @@
 
 ForgeFlow는 **GitHub Spec Kit**의 대화형 명세 기반 개발(Spec-Driven Development) 실행력과 **ForgeFlow**의 엔터프라이즈 하네스 거버넌스(Harness Governance) 통제력을 유기적으로 결합한 차세대 자율 AI 에이전트 개발 파이프라인입니다.
 
-### 이중 엔진 아키텍처 (Dual-Engine Architecture)
+### 이중 엔진 및 2계층 지식 관리 아키텍처 (Architecture)
 1. **실행 엔진 (Worker) — GitHub Spec Kit**:
    - 대화형 인터뷰를 통한 요구사항 발굴 및 명세서(`spec.md`) 작성
    - 기술 계획(`plan.md`) 및 원자적 태스크 분해(`tasks.md`)
    - TDD 기반 순차 구현 주도
 2. **거버넌스 엔진 (Supervisor) — ForgeFlow**:
    - 릴리즈 수명주기 관리 (`tasks/in-progress/` ──► `tasks/completed/`)
-   - Gate 1 명세 승인(`GATE1_REVIEW.md`)
-   - 구현 시작 전 Gate 1 통과 여부를 기계적으로 차단하는 Fail-Closed 게이트키퍼 (`forgeflow check --stage 2`)
-   - Gate 2 QA Sign-Off 및 커밋 SHA 바인딩 (`QA_SIGNOFF.md`)
-   - Gate 3 릴리즈 승인 및 패키지 밀봉(Package Seal)
+   - Gate 1 명세 승인(`GATE1_REVIEW.md`) 및 fail-closed 사전 차단 (`forgeflow check --stage 2`)
+   - Gate 2 QA Sign-Off (`QA_SIGNOFF.md`)
+   - Gate 3 릴리즈 승인 및 패키지 무결성 밀봉 (Package Manifest SHA256)
+3. **2계층 지식 관리 체계 (2-Tier Knowledge Architecture)**:
+   - **Tier 1 (Fast Recognition)**: `docs/spec/ANTI_PATTERNS.md` (500토큰 미만 Never-Do/Always-Do 핵심 수칙)로 에이전트 부팅 시 즉각 인지.
+   - **Tier 2 (Deep Dive)**: `docs/adr/` (아키텍처 결정 레코드)로 심층 설계 결정 보존 (과거 실수 반복/망각 원천 방지).
 
 ### 핵심 설계 원칙:
 - **Zero-Dependency 원칙**: 외부 서드파티 런타임 의존성 없이 Python 3.10+ 표준 라이브러리만으로 100% 동작합니다.
 - **Fail-Closed Gatekeeper 원칙**: Gate 1 승인 증적이 누락된 경우 코드를 단 한 줄도 작성하지 못하도록 물리적으로 차단합니다.
-- **Progressive Disclosure 원칙**: 타겟 프로젝트에 무거운 프레임워크 문서를 주입하지 않고, 오직 `.forgeflow.json`, `.specify/`, `tasks/`만 최소한으로 유지합니다.
+- **실용적 안전 불변식 원칙 (De-SHA per ADR 001)**: 취약한 Git commit diff range 및 SHA 바인딩을 제거하고 실용적인 안전 불변식(테스트 100% 통과 + Gate 승인 증적 + clean worktree + 패키지 매니페스트 SHA256)으로 신뢰성을 보장합니다.
+- **Progressive Disclosure 원칙**: 타겟 프로젝트에 무거운 프레임워크 문서를 주입하지 않고, 오직 `.forgeflow.json`, `.specify/`, `docs/adr/`, `tasks/`만 최소한으로 유지합니다.
 - **Atomic Remediation Loop 원칙**: 단순 단위 테스트 실패는 중단 사유가 아니며, `원인 식별 ➔ 코드 수정 ➔ 테스트 성공` 단위를 에이전트가 최대 5회 자율 완주하고, 구현 완료 시 원자적 커밋 1개를 생성합니다.
 
 ---
@@ -52,7 +55,11 @@ curl -sSL https://raw.githubusercontent.com/deepblue-kblee/forgeflow/main/instal
 
 설치 완료 시:
 - CLI 실행 진입점: `~/.local/bin/forgeflow` (호환 별칭: `~/.local/bin/harness`)
-- 사용자 에이전트 스킬: `~/.agents/skills/setup-forgeflow/`, `~/.agents/skills/update-forgeflow/`
+- 사용자 에이전트 스킬:
+  - `~/.agents/skills/forgeflow/` (마스터 오케스트레이터 `/forgeflow`)
+  - `~/.agents/skills/forgeflow-graphify/` (코드 AST 및 의존성 탐색 `/forgeflow-graphify`)
+  - `~/.agents/skills/setup-forgeflow/` (거버넌스 & 지식 체계 초기화 `/setup-forgeflow`)
+  - `~/.agents/skills/update-forgeflow/` (전역 및 로컬 사양 동기화 `/update-forgeflow`)
 - 버전 확인: `forgeflow --version`
 
 ---
@@ -71,11 +78,14 @@ curl -sSL https://raw.githubusercontent.com/deepblue-kblee/forgeflow/main/instal
 <project-root>/
 ├── .forgeflow.json                     # 프로젝트 거버넌스 설정
 ├── .specify/                           # Spec Kit 연동 환경
-│   ├── memory/constitution.md          # 5대 불변 거버넌스 헌법
+│   ├── memory/constitution.md          # 6대 불변 거버넌스 헌법
 │   ├── extensions.yml                  # before_implement 강제 차단 훅
 │   ├── templates/commands/implement.md # 사전 검증 체크리스트
 │   ├── templates/                      # spec-template, plan-template, tasks-template
 │   └── scripts/bash/                   # check-prerequisites.sh, setup-plan.sh, setup-tasks.sh
+├── docs/                               # 2계층 지식 관리 체계
+│   ├── spec/ANTI_PATTERNS.md           # Tier 1 빠른 인지 (금기 안티패턴)
+│   └── adr/                            # Tier 2 심층 아키텍처 결정 레코드
 └── tasks/                              # 릴리즈 패키지 보관소
     ├── in-progress/                    # 현재 진행 중인 활성 패키지
     └── completed/                      # 밀봉된 과거 릴리즈 아카이브

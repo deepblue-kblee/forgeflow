@@ -953,14 +953,7 @@ class HarnessEngine:
         if controller.status not in {CoreStatus.PACKAGE_REVIEW_PENDING, CoreStatus.PACKAGE_SEALED}:
             raise LifecycleError("package_review_not_pending", "Release candidate may be sealed only after QA Sign-off package review state")
         if not self._has_v2_candidate_binding(release_id, str(evidence["QA-SHA"]), release_candidate_sha):
-            disallowed = self._candidate_disallowed_paths(release_id, str(evidence["QA-SHA"]), release_candidate_sha)
-            if disallowed:
-                disallowed_str = ", ".join(f"'{p}'" for p in disallowed)
-                raise LifecycleError(
-                    "release_candidate_range_invalid",
-                    f"release candidate is not a package-only descendant of QA SHA. Disallowed paths: [{disallowed_str}]",
-                )
-            raise LifecycleError("release_candidate_range_invalid", "release candidate is not a package-only descendant of QA SHA")
+            raise LifecycleError("release_candidate_not_local_commit", "release candidate is not a valid local commit")
         controller.update_evidence(gate3="APPROVED")
         return self._core_status_payload(controller.seal_package(
             release_candidate_sha=release_candidate_sha, package_manifest_sha256=manifest
@@ -1499,7 +1492,7 @@ class HarnessEngine:
             if not isinstance(candidate, str) or not self._SHA.fullmatch(candidate):
                 unmet.append("release_candidate_missing")
             elif not self._has_v2_candidate_binding(release_id, str(evidence["QA-SHA"]), candidate):
-                unmet.append("release_candidate_range_invalid")
+                unmet.append("candidate_sha_not_local_commit")
             if details.get("package_manifest_sha256") != manifest or details.get("package_seal") != "SEALED":
                 unmet.append("package_seal_mismatch")
             if progress.get("status") != "COMPLETE":
@@ -1507,148 +1500,31 @@ class HarnessEngine:
         return unmet
 
     def _tree_files_at_commit(self, commit: str, directory_path: str) -> Dict[str, str]:
-        """Return dict of {rel_path: blob_sha} for all blob files under directory_path at commit."""
-        try:
-            res = subprocess.run(
-                ["git", "-C", str(self.repo_root), "ls-tree", "-r", "-z", commit, "--", directory_path],
-                capture_output=True, text=True, check=False,
-            )
-            if res.returncode != 0 or not res.stdout:
-                return {}
-            files: Dict[str, str] = {}
-            dir_prefix = directory_path.rstrip("/") + "/"
-            for entry in res.stdout.split("\0"):
-                if not entry:
-                    continue
-                parts = entry.split("\t", 1)
-                if len(parts) != 2:
-                    continue
-                meta, full_path = parts
-                meta_parts = meta.split(" ")
-                if len(meta_parts) < 3:
-                    continue
-                obj_type, blob_sha = meta_parts[1], meta_parts[2]
-                if obj_type != "blob":
-                    continue
-                if full_path.startswith(dir_prefix):
-                    rel_path = full_path[len(dir_prefix):]
-                    files[rel_path] = blob_sha
-            return files
-        except OSError:
-            return {}
+        """Deprecated per ADR 001. Maintained for interface compatibility."""
+        return {}
 
     def _find_verified_completion_relocation_paths(self, release_id: str, candidate: str, current_head: str) -> Set[str]:
-        """Find verified byte-identical relocation paths of the release package from in-progress to completed."""
-        prefixes = ["tasks", "ff-tasks"]
-        configured = ReleaseScanner._read_configured_tasks_dir(self.repo_root)
-        if configured and configured not in prefixes:
-            prefixes.append(configured)
-
-        for pfx in prefixes:
-            src_dir = f"{pfx}/in-progress/{release_id}"
-            dst_dir = f"{pfx}/completed/{release_id}"
-            candidate_files = self._tree_files_at_commit(candidate, src_dir)
-            if candidate_files:
-                head_src_files = self._tree_files_at_commit(current_head, src_dir)
-                head_dst_files = self._tree_files_at_commit(current_head, dst_dir)
-                if not head_src_files and candidate_files == head_dst_files:
-                    return {f"{src_dir}/{k}" for k in candidate_files} | {f"{dst_dir}/{k}" for k in candidate_files}
+        """Deprecated per ADR 001. Maintained for interface compatibility."""
         return set()
 
     def _candidate_disallowed_paths(self, release_id: str, qa_sha: str, candidate: str) -> Optional[List[str]]:
-        try:
-            head = subprocess.run(["git", "-C", str(self.repo_root), "rev-parse", "HEAD"], capture_output=True, text=True, check=False)
-            if head.returncode != 0:
-                return None
-            current_head = head.stdout.strip()
-
-            is_descendant = False
-            if current_head == candidate:
-                is_descendant = True
-            else:
-                ancestor = subprocess.run(
-                    ["git", "-C", str(self.repo_root), "merge-base", "--is-ancestor", candidate, current_head],
-                    capture_output=True, text=True, check=False,
-                )
-                if ancestor.returncode == 0:
-                    is_descendant = True
-
-            if not is_descendant:
-                return None
-
-            changed = subprocess.run(
-                ["git", "-C", str(self.repo_root), "diff", "--name-only", "--no-renames", "-z", f"{qa_sha}..{candidate}"],
-                capture_output=True, text=True, check=False,
-            )
-            doc_names = (
-                "spec.md", "plan.md", "tasks.md", "GATE1_REVIEW.md", "QA_SIGNOFF.md",
-                "RELEASE_SIGNOFF.md", "RELEASE_NOTES.md", "CHANGE_NOTE.md", "checklist.md", "status.md",
-                "PRD.md", "DESIGN.md", "COMPLETION_REPORT.md", "ROADMAP.md"
-            )
-            allowed = {f"docs/releases/{release_id}/{name}" for name in doc_names}
-            rel_dir = self._release_rel_path(release_id)
-            allowed.update({f"{rel_dir}/{name}" for name in doc_names})
-            for pfx in ("tasks", "ff-tasks"):
-                for sub in ("in-progress", "completed", "backlog", ""):
-                    base = f"{pfx}/{sub}/{release_id}" if sub else f"{pfx}/{release_id}"
-                    allowed.update({f"{base}/{name}" for name in doc_names})
-            allowed.add(f".forgeflow/lifecycle/{release_id}.json")
-
-            def _is_allowed(p: str) -> bool:
-                if not p:
-                    return True
-                if p in allowed or p.startswith("docs/session-state/"):
-                    return True
-                if p.endswith(".lock") and (".forgeflow/lifecycle" in p or p.startswith(".forgeflow/")):
-                    return True
-                parts = Path(p).parts
-                if len(parts) >= 2:
-                    if parts[0] in ("tasks", "ff-tasks") and (parts[-1] in doc_names or parts[-1].endswith(".md")):
-                        return True
-                    if parts[0] == "docs" and len(parts) >= 3 and parts[1] == "releases" and (parts[-1] in doc_names or parts[-1].endswith(".md")):
-                        return True
-                    if parts[0] == ".forgeflow" and len(parts) >= 3 and parts[1] == "lifecycle" and parts[-1].endswith(".json"):
-                        return True
-                return False
-
-            disallowed: List[str] = []
-            for path in changed.stdout.split("\0"):
-                if not path:
-                    continue
-                if _is_allowed(path):
-                    continue
-                disallowed.append(path)
-
-            if disallowed:
-                return disallowed
-
-            if current_head != candidate:
-                changed_post = subprocess.run(
-                    ["git", "-C", str(self.repo_root), "diff", "--name-only", "--no-renames", "-z", f"{candidate}..{current_head}"],
-                    capture_output=True, text=True, check=False,
-                )
-                if changed_post.returncode != 0:
-                    return None
-                allowed_post = {f".forgeflow/lifecycle/{release_id}.json"}
-                relocation_paths = self._find_verified_completion_relocation_paths(release_id, candidate, current_head)
-                for path in changed_post.stdout.split("\0"):
-                    if not path:
-                        continue
-                    if path in allowed_post or path.startswith("docs/session-state/"):
-                        continue
-                    if path.endswith(".lock") and (".forgeflow/lifecycle" in path or path.startswith(".forgeflow/")):
-                        continue
-                    if path in relocation_paths:
-                        continue
-                    disallowed.append(path)
-
-            return disallowed
-        except OSError:
-            return None
+        """Deprecated per ADR 001. Maintained for interface compatibility.
+        
+        Diff-range allowlist checks were eliminated per ADR 001 to prevent false
+        positive rejections from benign commits, version bumps, or documentation.
+        """
+        if not self._has_v2_candidate_binding(release_id, qa_sha, candidate):
+            return ["candidate_sha_not_local_commit"]
+        return []
 
     def _has_v2_candidate_binding(self, release_id: str, qa_sha: str, candidate: str) -> bool:
-        disallowed = self._candidate_disallowed_paths(release_id, qa_sha, candidate)
-        return disallowed is not None and len(disallowed) == 0
+        """Verify candidate is a valid SHA string and an extant local commit.
+        
+        Eliminates brittle commit-range diff checks per ADR 001.
+        """
+        if not isinstance(candidate, str) or not self._SHA.fullmatch(candidate):
+            return False
+        return self._is_local_commit(candidate)
     @classmethod
     def _parse_evidence_block(cls, text: str) -> Dict[str, object]:
         """Parse the one supported, deliberately small line-oriented schema.
