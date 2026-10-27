@@ -176,13 +176,24 @@
     - **테스트 및 거버넌스 무결성**:
       - 신규 단위 테스트 4종 추가, 전체 306개 단위 테스트 100% Pass, 17개 릴리즈 전수 거버넌스 감사 `forgeflow check --all --strict` 🟢 ALL PASSED 달성, `tasks/completed/v0.1.17-preserve-custom-config-on-update/` 패키지 밀봉 및 로컬 설치 `./install.sh` 완료.
 
+23. **프로젝트별 회귀 테스트 타임아웃 오버라이드 지원 (v0.1.18, Issue #6)**:
+    - **프로젝트별 타임아웃 설정 (`governance.test_timeout_seconds`)**:
+      - `RuntimeTestRunner.resolve_test_timeout` 메서드 구현으로 `.forgeflow.json`의 `governance.test_timeout_seconds`를 통해 프로젝트별 테스트 타임아웃을 유연하게 오버라이드할 수 있도록 지원.
+      - Memograph 등 대규모 회귀 테스트 스위트를 보유한 프로젝트에서 가짜 타임아웃이 발생하던 문제를 해결.
+      - 설정 누락 시 기존의 60.0초 기본 동작을 안전하게 유지.
+      - 불리언(`bool`), 비숫자(`str`), 비유한수(`inf`, `nan`), 0 이하(`val <= 0`)의 잘못된 값이 지정되면 암묵적 폴백 없이 명확한 `ValueError`로 엄격 차단(Fail-Closed).
+    - **진단 엔진(`SystemDiagnostics`) 설정 검증 연동**:
+      - `forgeflow doctor` 실행 시 `.forgeflow.json`의 `test_timeout_seconds`가 비정상 형식인 경우 `INVALID_TEST_TIMEOUT` 경고 이상 징후로 즉시 검출 및 조치 가이드 제공.
+    - **테스트 및 거버넌스 무결성**:
+      - 신규 단위 테스트 12종 추가(`tests/test_runner.py`), 전체 318개 단위 테스트 100% Pass, 18개 릴리즈 전수 거버넌스 감사 `forgeflow check --all --strict` 🟢 ALL PASSED 달성, `tasks/completed/v0.1.18-project-test-timeout/` 패키지 밀봉 및 GitHub Issue #6 공식 종결 완료.
+
 ---
 
 ## 새 세션에서 바로 이어서 착수할 과업 (Next Actions)
 
 ### 🎯 다음 작업 방향 및 버전 정책
 1. **버전 운영 및 v0.2.0 승격 로드맵**:
-   - 현재는 `v0.1.17` 상태에서 실전 도그푸딩 및 다운스트림 작업 리포지토리 연동 검증을 진행합니다.
+   - 현재는 `v0.1.18` 상태에서 실전 도그푸딩 및 다운스트림 작업 리포지토리 연동 검증을 진행합니다.
    - 충분한 운영 검증을 거쳐 결함이 완전히 해소된 시점에 사용자와 사전 합의하여 마이너 버전 `v0.2.0`으로 승격합니다.
 2. **GitHub Issues 모니터링 및 추가 개선 사항 접수**:
    - `forgeflow issue list`를 통한 추가 이슈 확인 및 처리.

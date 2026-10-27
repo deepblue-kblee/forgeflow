@@ -3,6 +3,7 @@ Field Diagnostics, Structured Event Logging, and Doctor CLI (Zero-Dependency)
 """
 
 import json
+import math
 import os
 import platform
 import sys
@@ -260,6 +261,26 @@ class DiagnosticAnalyzer:
                             context={"current_version": cfg.get("forgeflow_version")},
                         )
                     )
+
+                # Validate test_timeout_seconds if specified in governance
+                if "test_timeout_seconds" in gov:
+                    raw_timeout = gov.get("test_timeout_seconds")
+                    is_invalid = False
+                    if isinstance(raw_timeout, bool) or not isinstance(raw_timeout, (int, float)):
+                        is_invalid = True
+                    elif not math.isfinite(raw_timeout) or raw_timeout <= 0:
+                        is_invalid = True
+
+                    if is_invalid:
+                        anomalies.append(
+                            DiagnosticAnomaly(
+                                anomaly_type="INVALID_TEST_TIMEOUT",
+                                severity="WARNING",
+                                message="유효하지 않은 test_timeout_seconds 설정이 감지되었습니다 (양수 숫자 필요).",
+                                remedy=".forgeflow.json의 governance.test_timeout_seconds 값을 60 이상의 양수 숫자로 수정하세요.",
+                                context={"test_timeout_seconds": raw_timeout},
+                            )
+                        )
             except Exception:
                 pass
 

@@ -7,6 +7,20 @@ ForgeFlow 프레임워크의 모든 주요 변경 사항은 이 문서에 기록
 
 ---
 
+## [0.1.18] - 2026-10-27
+
+### ⏱️ 프로젝트별 회귀 테스트 타임아웃 오버라이드 지원 (Support Project-Level Regression Test Timeout)
+
+### Added
+- **프로젝트별 테스트 타임아웃 설정 (`governance.test_timeout_seconds`)**:
+  - `RuntimeTestRunner.resolve_test_timeout` 메서드를 도입하여 `.forgeflow.json`의 `governance.test_timeout_seconds`를 통해 프로젝트별 테스트 타임아웃을 유연하게 오버라이드할 수 있도록 지원 (Issue #6).
+  - 설정 누락 시 기존의 60.0초 기본 동작을 안전하게 유지.
+  - 불리언(`bool`), 비숫자(`str`), 비유한수(`inf`, `nan`), 0 이하(`val <= 0`)의 잘못된 값이 지정되면 암묵적 폴백 없이 명확한 `ValueError`로 엄격 차단(Fail-Closed).
+- **진단 엔진(`SystemDiagnostics`) 설정 검증 연동**:
+  - `forgeflow doctor` 실행 시 `.forgeflow.json`의 `test_timeout_seconds`가 비정상 형식인 경우 `INVALID_TEST_TIMEOUT` 경고 이상 징후로 즉시 검출 및 조치 가이드 제공.
+
+---
+
 ## [0.1.17] - 2026-10-27
 
 ### 🔒 forgeflow update 시 작업 repo의 사용자 커스텀 설정 보존 및 불필요한 덮어쓰기 방지 (Preserve Custom Configuration on Update)

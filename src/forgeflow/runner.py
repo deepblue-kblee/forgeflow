@@ -2,6 +2,8 @@
 Generalized Target Test Runner with Multi-tiered Virtualenv Discovery
 """
 
+import json
+import math
 import os
 import subprocess
 import sys
@@ -11,6 +13,50 @@ from typing import Any, Dict, Optional
 
 class RuntimeTestRunner:
     """Discovers python executable and runs unit/regression test suites."""
+
+    DEFAULT_TEST_TIMEOUT: float = 60.0
+
+    @staticmethod
+    def resolve_test_timeout(repo_root: Path) -> float:
+        config_path = repo_root / ".forgeflow.json"
+        if not config_path.exists() or not config_path.is_file():
+            return RuntimeTestRunner.DEFAULT_TEST_TIMEOUT
+
+        try:
+            data = json.loads(config_path.read_text(encoding="utf-8"))
+        except Exception as e:
+            raise ValueError(f"Failed to parse .forgeflow.json: {e}") from e
+
+        if not isinstance(data, dict):
+            return RuntimeTestRunner.DEFAULT_TEST_TIMEOUT
+
+        governance = data.get("governance")
+        if not isinstance(governance, dict) or "test_timeout_seconds" not in governance:
+            return RuntimeTestRunner.DEFAULT_TEST_TIMEOUT
+
+        raw_val = governance["test_timeout_seconds"]
+
+        if isinstance(raw_val, bool):
+            raise ValueError(
+                f"Invalid test_timeout_seconds in .forgeflow.json: expected positive number, got bool ({raw_val})"
+            )
+
+        if not isinstance(raw_val, (int, float)):
+            raise ValueError(
+                f"Invalid test_timeout_seconds in .forgeflow.json: expected positive number, got {type(raw_val).__name__} ({raw_val!r})"
+            )
+
+        if not math.isfinite(raw_val):
+            raise ValueError(
+                f"Invalid test_timeout_seconds in .forgeflow.json: expected finite number, got {raw_val}"
+            )
+
+        if raw_val <= 0:
+            raise ValueError(
+                f"Invalid test_timeout_seconds in .forgeflow.json: expected positive number > 0, got {raw_val}"
+            )
+
+        return float(raw_val)
 
     @staticmethod
     def resolve_python_interpreter(repo_root: Path, explicit_python: Optional[str] = None) -> str:
@@ -49,8 +95,11 @@ class RuntimeTestRunner:
         repo_root: Path,
         explicit_python: Optional[str] = None,
         test_dir: Optional[str] = None,
-        timeout: float = 60.0,
+        timeout: Optional[float] = None,
     ) -> Dict[str, Any]:
+        effective_timeout = (
+            timeout if timeout is not None else RuntimeTestRunner.resolve_test_timeout(repo_root)
+        )
         python_bin = RuntimeTestRunner.resolve_python_interpreter(repo_root, explicit_python)
         target_tests_dir = repo_root / (test_dir or "tests")
 
@@ -77,7 +126,7 @@ class RuntimeTestRunner:
                 capture_output=True,
                 text=True,
                 env=env,
-                timeout=timeout,
+                timeout=effective_timeout,
                 check=False,
             )
             raw_output = res.stderr + "\n" + res.stdout
@@ -95,7 +144,7 @@ class RuntimeTestRunner:
                 "executed": True,
                 "passed": False,
                 "returncode": -1,
-                "output": f"Tests timed out after {timeout} seconds.",
+                "output": f"Tests timed out after {effective_timeout} seconds.",
                 "python_used": python_bin,
             }
         except Exception as e:
