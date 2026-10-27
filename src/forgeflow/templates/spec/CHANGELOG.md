@@ -7,6 +7,21 @@ ForgeFlow 프레임워크의 모든 주요 변경 사항은 이 문서에 기록
 
 ---
 
+## [0.1.17] - 2026-10-27
+
+### 🔒 forgeflow update 시 작업 repo의 사용자 커스텀 설정 보존 및 불필요한 덮어쓰기 방지 (Preserve Custom Configuration on Update)
+
+### Fixed
+- **작업 리포지토리 `.forgeflow.json` 커스텀 설정 100% 보존**:
+  - `TemplateScaffolder.deep_merge_config` 엔진을 도입하여, 작업 리포지토리에서 사용자가 수정한 거버넌스 설정(`strict_mode`, `max_loop_budget`, 커스텀 `tasks_dir`) 및 최상위 커스텀 메타데이터/플러그인 설정이 `forgeflow update` 실행 시 기본 템플릿 값으로 덮어써지지 않고 원형 그대로 보존되도록 개선.
+  - 최신 프레임워크 규격의 누락된 기본 설정 키만 안전하게 재귀적으로 보강(Deep Merge with User Precedence).
+- **무변경 시 불필요한 파일 덮어쓰기 방지 (Idempotent No-Op)**:
+  - 이미 최신 버전이며 내용에 변경이 없는 경우 `.forgeflow.json`을 다시 쓰지 않고 `updated_files` 목록에서도 제외하여 불필요한 mtime 갱신 및 Git 변경 감지 방지.
+- **`scaffold_speckit_hybrid` 이중 쓰기 및 커스텀 키 유실 방지**:
+  - `update_repo_governance` 실행 중 `scaffold_speckit_hybrid`가 `.forgeflow.json`을 중간에 덮어쓰지 않도록 `skip_config=True` 경로 분리 및 단독 강제 스캐폴드(`force=True`) 시에도 사용자 커스텀 키 보존.
+
+---
+
 ## [0.1.16] - 2026-10-27
 
 ### 🧠 2계층 지식 관리 체계 구축 및 Git SHA diff 결합 제거 (2-Tier Knowledge Architecture & De-SHA)

@@ -2,6 +2,7 @@
 Scaffolding Engine for Initializing Projects and Creating Release Boilerplates
 """
 
+import copy
 import datetime
 import json
 import os
@@ -811,15 +812,40 @@ class TemplateScaffolder:
         }
 
     @classmethod
-    def scaffold_speckit_hybrid(cls, root: Path, force: bool = False) -> Dict[str, Any]:
+    def deep_merge_config(cls, existing: Dict[str, Any], defaults: Dict[str, Any]) -> Dict[str, Any]:
+        """Deeply merge default configuration into existing user configuration.
+
+        Preserves all existing user-defined keys and values with highest precedence,
+        while populating any missing keys from defaults.
+        """
+        merged = copy.deepcopy(existing)
+        for key, val in defaults.items():
+            if key not in merged:
+                merged[key] = copy.deepcopy(val)
+            elif isinstance(merged[key], dict) and isinstance(val, dict):
+                merged[key] = cls.deep_merge_config(merged[key], val)
+        return merged
+
+    @classmethod
+    def scaffold_speckit_hybrid(cls, root: Path, force: bool = False, skip_config: bool = False) -> Dict[str, Any]:
         """Scaffold lightweight GitHub Spec Kit and ForgeFlow hybrid governance environment."""
         root = root.resolve()
         created_dirs: List[str] = []
         created_files: List[str] = []
         updated_files: List[str] = []
 
+        config_file = root / ".forgeflow.json"
+        custom_tasks_name = "tasks"
+        if config_file.is_file():
+            try:
+                raw_cfg = json.loads(config_file.read_text(encoding="utf-8"))
+                if isinstance(raw_cfg, dict):
+                    custom_tasks_name = raw_cfg.get("governance", {}).get("tasks_dir", "tasks")
+            except Exception:
+                pass
+
         # 1. Tasks directories
-        tasks_dir = root / "tasks"
+        tasks_dir = root / custom_tasks_name
         in_progress_dir = tasks_dir / "in-progress"
         completed_dir = tasks_dir / "completed"
         for d in (tasks_dir, in_progress_dir, completed_dir):
@@ -830,50 +856,52 @@ class TemplateScaffolder:
         guard_file = tasks_dir / "README.md"
         if not guard_file.exists() or force:
             guard_file.write_text(cls.TASKS_GUARD_CONTENT, encoding="utf-8")
-            (updated_files if guard_file.exists() and force else created_files).append("tasks/README.md")
+            (updated_files if guard_file.exists() and force else created_files).append(f"{custom_tasks_name}/README.md")
 
-        # 2. .forgeflow.json (with Date-Based Amnesia enforcement)
-        config_file = root / ".forgeflow.json"
-        config_data = {
-            "forgeflow_version": "0.1.0",
-            "governance": {
-                "tasks_dir": "tasks",
-                "strict_mode": True,
-                "max_loop_budget": 5,
-            },
-            "paths": {
-                "in_progress": "tasks/in-progress",
-                "completed": "tasks/completed",
-            },
-        }
-        needs_write = False
-        if not config_file.exists():
-            needs_write = True
-            created_files.append(".forgeflow.json")
-        else:
-            try:
-                existing = json.loads(config_file.read_text(encoding="utf-8"))
-                # Date-Based Amnesia: If not matching standard v0.1.0 or contains legacy fields, overwrite
-                if (
-                    "required_documents" in existing.get("governance", {})
-                    or "default_tier" in existing.get("governance", {})
-                ):
-                    needs_write = True
-                    updated_files.append(".forgeflow.json")
-                elif force:
-                    # Preserve existing version if valid during scaffold unless forced overwrite
-                    current_ver = existing.get("forgeflow_version", "0.1.0")
-                    config_data["forgeflow_version"] = current_ver
-                    config_data["governance"] = existing.get("governance", config_data["governance"])
-                    config_data["paths"] = existing.get("paths", config_data["paths"])
-                    needs_write = True
-                    updated_files.append(".forgeflow.json")
-            except Exception:
+        # 2. .forgeflow.json (with Date-Based Amnesia enforcement and user config preservation)
+        if not skip_config:
+            default_config = {
+                "forgeflow_version": "0.1.0",
+                "governance": {
+                    "tasks_dir": custom_tasks_name,
+                    "strict_mode": True,
+                    "max_loop_budget": 5,
+                },
+                "paths": {
+                    "in_progress": f"{custom_tasks_name}/in-progress",
+                    "completed": f"{custom_tasks_name}/completed",
+                },
+            }
+            config_data = copy.deepcopy(default_config)
+            needs_write = False
+            if not config_file.exists():
                 needs_write = True
-                updated_files.append(".forgeflow.json")
+                created_files.append(".forgeflow.json")
+            else:
+                try:
+                    existing = json.loads(config_file.read_text(encoding="utf-8"))
+                    # Date-Based Amnesia: If not matching standard v0.1.0 or contains legacy fields, overwrite
+                    if (
+                        "required_documents" in existing.get("governance", {})
+                        or "default_tier" in existing.get("governance", {})
+                    ):
+                        needs_write = True
+                        updated_files.append(".forgeflow.json")
+                    elif force:
+                        # Deep merge defaults into existing, strictly preserving all user modifications
+                        merged = cls.deep_merge_config(existing, default_config)
+                        current_ver = existing.get("forgeflow_version", "0.1.0")
+                        merged["forgeflow_version"] = current_ver
+                        config_data = merged
+                        if existing != merged:
+                            needs_write = True
+                            updated_files.append(".forgeflow.json")
+                except Exception:
+                    needs_write = True
+                    updated_files.append(".forgeflow.json")
 
-        if needs_write:
-            config_file.write_text(json.dumps(config_data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            if needs_write:
+                config_file.write_text(json.dumps(config_data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
         # 3. .specify/memory/constitution.md
         specify_mem_dir = root / ".specify" / "memory"
@@ -1162,16 +1190,35 @@ class TemplateScaffolder:
             raise ValueError(f"Failed to parse .forgeflow.json: {e}")
 
         previous_version = config_data.get("forgeflow_version", "unknown")
-        config_data["forgeflow_version"] = __version__
-        # Re-run hybrid scaffolding with force=True to refresh scripts, templates, extensions
-        scaffold_res = cls.scaffold_speckit_hybrid(root, force=True)
 
-        # Ensure final forgeflow_version is set to current version
-        config_data["forgeflow_version"] = __version__
-        config_file.write_text(json.dumps(config_data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        tasks_dir_name = config_data.get("governance", {}).get("tasks_dir", "tasks")
+        default_config = {
+            "forgeflow_version": __version__,
+            "governance": {
+                "tasks_dir": tasks_dir_name,
+                "strict_mode": True,
+                "max_loop_budget": 5,
+            },
+            "paths": {
+                "in_progress": f"{tasks_dir_name}/in-progress",
+                "completed": f"{tasks_dir_name}/completed",
+            },
+        }
 
-        updated_files = [".forgeflow.json"] + [f for f in scaffold_res.get("updated_files", []) if f != ".forgeflow.json"]
-        if ".forgeflow.json" not in updated_files:
+        # Deep merge default schema into existing config, strictly preserving any user-customized keys/values
+        merged_config = cls.deep_merge_config(config_data, default_config)
+        merged_config["forgeflow_version"] = __version__
+
+        # Re-run hybrid scaffolding with force=True, skipping config write to prevent double-write / custom key loss
+        scaffold_res = cls.scaffold_speckit_hybrid(root, force=True, skip_config=True)
+
+        # Check if .forgeflow.json actually modified compared to original on-disk content
+        is_config_changed = (merged_config != config_data)
+        if is_config_changed:
+            config_file.write_text(json.dumps(merged_config, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+        updated_files = [f for f in scaffold_res.get("updated_files", []) if f != ".forgeflow.json"]
+        if is_config_changed:
             updated_files.insert(0, ".forgeflow.json")
 
         changelog_summary = cls.extract_changelog_range(previous_version, __version__, changelog_file=cls.find_changelog_file(root))

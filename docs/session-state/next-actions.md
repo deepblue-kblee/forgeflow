@@ -165,13 +165,24 @@
     - **테스트 및 거버넌스 무결성**:
       - 전체 302개 단위 테스트 100% Pass, 16개 릴리즈 전수 거버넌스 감사 `forgeflow check --all --strict` 🟢 ALL PASSED 달성, `tasks/completed/v0.1.16-knowledge-system-and-de-sha/` 패키지 밀봉 및 로컬 설치 `./install.sh` 완료.
 
+22. **작업 repo `.forgeflow.json` 커스텀 설정 보존 및 불필요한 덮어쓰기 방지 (v0.1.17)**:
+    - **커스텀 설정 100% 보존 및 Deep Merge with User Precedence**:
+      - `TemplateScaffolder.deep_merge_config` 엔진 구현으로, 작업 리포지토리에서 사용자가 수정한 거버넌스 설정(`strict_mode`, `max_loop_budget`, 커스텀 `tasks_dir`) 및 최상위 커스텀 메타데이터/플러그인 설정이 `forgeflow update` 시 기본 템플릿 값으로 덮어써지지 않고 100% 원형 유지.
+      - 신규 프레임워크 규격의 누락된 기본 설정 키만 안전하게 재귀적으로 보강.
+    - **무변경 덮어쓰기 방지 (Idempotent No-Op)**:
+      - 이미 최신 버전이고 실질적인 설정 변경이 없는 경우 `.forgeflow.json`을 다시 쓰지 않고 `updated_files` 목록에서도 제외하여 불필요한 IO 및 mtime 갱신 방지.
+    - **`scaffold_speckit_hybrid` 이중 쓰기 및 커스텀 키 유실 원천 차단**:
+      - `update_repo_governance` 실행 중 `scaffold_speckit_hybrid`가 `.forgeflow.json`을 중간에 덮어쓰지 않도록 `skip_config=True` 경로 분리 및 단독 강제 스캐폴드(`force=True`) 시에도 사용자 커스텀 키 보존.
+    - **테스트 및 거버넌스 무결성**:
+      - 신규 단위 테스트 4종 추가, 전체 306개 단위 테스트 100% Pass, 17개 릴리즈 전수 거버넌스 감사 `forgeflow check --all --strict` 🟢 ALL PASSED 달성, `tasks/completed/v0.1.17-preserve-custom-config-on-update/` 패키지 밀봉 및 로컬 설치 `./install.sh` 완료.
+
 ---
 
 ## 새 세션에서 바로 이어서 착수할 과업 (Next Actions)
 
 ### 🎯 다음 작업 방향 및 버전 정책
 1. **버전 운영 및 v0.2.0 승격 로드맵**:
-   - 현재는 대규모 구조 변화(2계층 지식 관리 체계, De-SHA 리팩토링, 스킬 제품군 구축) 직후이므로 `v0.1.16` 상태에서 실전 도그푸딩 및 운영 안정성 검증을 우선 진행합니다.
+   - 현재는 `v0.1.17` 상태에서 실전 도그푸딩 및 다운스트림 작업 리포지토리 연동 검증을 진행합니다.
    - 충분한 운영 검증을 거쳐 결함이 완전히 해소된 시점에 사용자와 사전 합의하여 마이너 버전 `v0.2.0`으로 승격합니다.
 2. **GitHub Issues 모니터링 및 추가 개선 사항 접수**:
    - `forgeflow issue list`를 통한 추가 이슈 확인 및 처리.
