@@ -1,30 +1,45 @@
 # ForgeFlow Current System State
 
-- **종료 상태 (Exit Status)**: 🟢 정상 종료 (Graceful Exit, 2026-10-27 00:05 KST)
-- **현재 버전**: `v0.1.15` (Allow Committed Completion Relocation in Lifecycle Audit)
+- **종료 상태 (Exit Status)**: 🟢 정상 종료 (Graceful Exit, 2026-10-30 KST)
+- **현재 버전**: `v0.1.18` (Support Project-Level Regression Test Timeout)
 - **상태 판정**: 🟢 HEALTHY (모든 테스트 및 거버넌스 검증 통과)
-- **배포 상태**: 사용자 계정 로컬(`~/.local/forgeflow`, `~/.local/bin`) v0.1.15 배포 대기
+- **배포 상태**: 사용자 계정 로컬(`~/.local/forgeflow`, `~/.local/bin`) `v0.1.18` 설치 완료
+- **원격 동기화**: `main` == `origin/main` (`e6cf60f`), ahead/behind 0/0
+- **진행 중 릴리즈**: 없음 (`tasks/in-progress/` 비어 있음)
 
 ---
 
 ## 검증 및 정비 요약
 
-- **단위/통합 테스트**: 304개 전원 통과 (Failure = 0, Error = 0)
-- **하네스 게이트 감사**: `forgeflow check --all --strict` 15개 릴리즈 전수 🟢 ALL PASSED
-- **코드 스멜 검사**: `forgeflow review --strict` 🟢 PASSED (결함 0건)
-- **최신 밀봉 패키지**: `tasks/completed/v0.1.15-fix-post-seal-relocation-audit/`
+- **단위/통합 테스트**: 318개 전원 통과 (`Ran 318 tests in 14.3s`, OK)
+- **하네스 게이트 감사**: `forgeflow check --all --strict` 18개 릴리즈 전수 🟢 ALL PASSED
+- **코드 스멜 검사**: `forgeflow review --strict` 🟢 PASSED
+- **최신 밀봉 패키지**: `tasks/completed/v0.1.18-project-test-timeout/`
 - **최근 분석 보고서**: [`docs/session-state/speckit_skills_and_clarify_analysis.md`](file:///Users/deepblue/work/repo/forgeflow/docs/session-state/speckit_skills_and_clarify_analysis.md)
 
 ---
 
-## 핵심 완수 기능 (v0.1.15)
+## 핵심 완수 기능 (v0.1.18)
 
-1. **릴리즈 완료 패키지 이동 사후 감사 오탐 해소 (Issue #5)**:
-   - 릴리즈 밀봉 및 완료 후 `tasks/in-progress/<id>`에서 `tasks/completed/<id>`로 원자적 이동된 패키지가 커밋되었을 때, `release_candidate_range_invalid`로 잘못 거부되던 결함 수정.
-   - Git Blob SHA 대조 기반의 `_find_verified_completion_relocation_paths` 엔진을 도입하여, 패키지 파일의 추가·삭제·변조 없이 바이트 단위로 동일하게 이동되었음을 증명하고 사후 감사 화이트리스트에 안전하게 편입.
-   - 런타임 코드, 테스트, 스크립트 수정 및 패키지 내용 1바이트 변조, 무인가 파일 추가, 원본 파일 잔류, 타 릴리즈 이동 등에 대한 엄격한 fail-closed 차단 유지.
-   - `lifecycle_complete`의 태스크 루트 탐색 시 사용자 정의 tasks 디렉터리(`configured`) 호환성 보강.
-   - 신규 단위 테스트 6종 추가 (총 304개 테스트 100% 통과).
+1. **프로젝트별 회귀 테스트 타임아웃 오버라이드 지원 (Issue #6)**:
+   - `RuntimeTestRunner.resolve_test_timeout`을 통해 `.forgeflow.json`의 `governance.test_timeout_seconds`로 프로젝트별 테스트 타임아웃을 오버라이드.
+   - 설정 누락 시 기존 60.0초 기본값을 유지하여 하위 호환성 보존.
+   - `bool`, 비숫자, 비유한수(`inf`/`nan`), 0 이하 값은 암묵적 폴백 없이 `ValueError`로 fail-closed 차단.
+2. **진단 엔진(`SystemDiagnostics`) 설정 검증 연동**:
+   - `forgeflow doctor` 실행 시 `test_timeout_seconds`가 비정상 형식이면 `INVALID_TEST_TIMEOUT` 이상 징후로 검출하고 조치 가이드 제시.
+3. **테스트 무결성**: `tests/test_runner.py` 신규 단위 테스트 12종 추가 (총 318개 테스트 100% 통과).
+
+---
+
+## 누적 기반 기능 (v0.1.0 ~ v0.1.17)
+
+- **거버넌스 엔진**: Stage 1~4 흐름과 Gate 1~3 승인 체계, 자가 치유 루프(Loop 2/3), 라이프사이클 상태 기계(`LifecycleStore`).
+- **Spec Kit 하이브리드 번들링**: 필수 bash 스크립트 6종 및 마크다운 템플릿 번들링, `scaffold_speckit_hybrid` 자동 스캐폴딩.
+- **배포/갱신 대칭 구조**: 전역 런타임 `forgeflow upgrade` (대화형 확인, `--force`, CDN 캐시 우회, 실설치 버전 검증) ↔ 로컬 거버넌스 `forgeflow update` (CHANGELOG 프리뷰, 커스텀 설정 보존).
+- **2계층 지식 체계**: Tier 1 `docs/spec/ANTI_PATTERNS.md`, Tier 2 `docs/adr/` (ADR 001 De-SHA, ADR 002 spec hash 제거).
+- **사양서 발견성**: `forgeflow doc list|show` 기반 7대 공식 사양서 열람 인터페이스.
+- **비파괴적 부팅 앵커**: `AGENTS.md` / `CLAUDE.md` 하단 재배치 방식의 멱등적 앵커 주입·해제.
+- **이슈 트래커**: `forgeflow issue` CLI 기반 GitHub Issues 연동 및 `.cache/issues/` 로컬 캐시.
 
 ---
 
