@@ -51,7 +51,7 @@ description: Sets up ForgeFlow governance, 2-tier knowledge system, and GitHub S
 ## 핵심 원칙: 과거 레거시 흔적 강제 폐기 (Date-Based Amnesia Policy)
 
 - **기준일**: **2026-10-20** (ForgeFlow v0.1.0 공식 첫 릴리즈일).
-- **레거시 폐기**: 2026-10-20 이전에 생성된 기존 `.forgeflow.json`, 과거 프로젝트 메모리, 이전 버전의 산출물(구버전 spec/PRD/DESIGN/tasks)은 모두 폐기 대상 레거시로 간주합니다.
+- **레거시 폐기**: 2026-10-20 이전에 생성된 기존 `.forgeflow.json`(구버전 설정), 과거 프로젝트 메모리, 이전 버전의 산출물(구버전 spec/PRD/DESIGN/tasks)은 모두 폐기 대상 레거시로 간주합니다.
 - **하위 호환성 배제**: 옛버전을 보존하거나 마이그레이션하려 하지 않고, 완전히 잊은 상태(Clean Break)에서 공식 v0.1.0 규격으로 새롭게 시작합니다.
 - **새 요구사항 작성**: 사용자 요구사항에 따라 `spec.md`를 v0.1.0 단일 기준으로 완전히 새롭게 작성합니다.
 
@@ -62,8 +62,8 @@ description: Sets up ForgeFlow governance, 2-tier knowledge system, and GitHub S
    - `~/.agents/skills/`에 `speckit-specify`, `speckit-clarify`, `speckit-plan`, `speckit-tasks`, `speckit-implement` 스킬이 설치되어 있는지 확인합니다.
    - 누락된 Spec Kit 스킬이 있을 경우 에이전트가 자동 설치를 진행합니다.
 
-2. 레거시 정리 및 v0.1.0 거버넌스 설정 생성:
-   - 2026-10-20 이전의 구버전 `.forgeflow.json`이 존재하거나 이전 형식이면 새 v0.1.0 설정으로 교체합니다:
+2. 레거시 정리 및 최신 거버넌스 설정(`.forgeflow/config.json`) 생성:
+   - 2026-10-20 이전의 구버전 `.forgeflow.json`이 존재하거나 이전 형식이면 최신 `.forgeflow/config.json` 설정으로 교체합니다:
    ```json
    {
      "forgeflow_version": "0.1.0",
@@ -148,7 +148,7 @@ ForgeFlow 전역 런타임 최신화와 현재 리포지토리의 거버넌스 �
 1. 리포지토리 거버넌스 사양 갱신:
    - `forgeflow update` 명령을 실행합니다 (`forgeflow update --json`).
    - 이 명령은 `tasks/in-progress/` 및 `tasks/completed/` 내부의 모든 작업 산출물을 100% 보존하면서 다음을 최신 표준으로 동기화합니다:
-     - `.forgeflow.json` 설정 버전
+     - `.forgeflow/config.json` 설정 버전 (구버전 `.forgeflow.json` 시 자동 마이그레이션)
      - `.specify/scripts/bash/` (0o755 실행 권한 포함)
      - `.specify/templates/` 및 헌법(`.specify/memory/constitution.md`)
      - 2계층 지식 관리 체계: `docs/spec/ANTI_PATTERNS.md` 및 `docs/adr/` 최신화
@@ -205,7 +205,7 @@ ForgeFlow 자율 거버넌스 워크플로우의 마스터 오케스트레이터
 3. 사전 검증 훅 통과 확인: `forgeflow check --stage 2` 실행하여 통과 확인.
 
 ### Stage 3: 격리 구현 & 자가 치유 루프 (Isolated Implementation & Self-Healing)
-1. **작업 브랜치 분기 제어**: `.forgeflow.json`의 `governance.auto_create_branch: false`(기본값)인 경우 별도 브랜치 분기를 생략하고 현재 브랜치/worktree에서 직접 구현 진행. `auto_create_branch: true`이거나 사용자가 명시적으로 요청(`--create-branch` 등)한 경우에만 `git checkout -b feat/<release-id>` 분기.
+1. **작업 브랜치 분기 제어**: `.forgeflow/config.json`의 `governance.auto_create_branch: false`(기본값)인 경우 별도 브랜치 분기를 생략하고 현재 브랜치/worktree에서 직접 구현 진행. `auto_create_branch: true`이거나 사용자가 명시적으로 요청(`--create-branch` 등)한 경우에만 `git checkout -b feat/<release-id>` 분기.
 2. **순차 TDD 구현**: `tasks.md` 체크리스트 순서대로 테스트 작성 -> 구현 코드 작성.
 3. **Loop 2 자율 치유 (No False Stopping)**:
    - 테스트 실패 시 턴을 멈추지 않고 스스로 원인 분석 -> 수정 -> 재테스트 5회 자율 완주.

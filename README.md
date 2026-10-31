@@ -27,7 +27,7 @@ ForgeFlow는 **GitHub Spec Kit**의 대화형 명세 기반 개발(Spec-Driven D
 - **Zero-Dependency 원칙**: 외부 서드파티 런타임 의존성 없이 Python 3.10+ 표준 라이브러리만으로 100% 동작합니다.
 - **Fail-Closed Gatekeeper 원칙**: Gate 1 승인 증적이 누락된 경우 코드를 단 한 줄도 작성하지 못하도록 물리적으로 차단합니다.
 - **실용적 안전 불변식 원칙 (De-SHA per ADR 001)**: 취약한 Git commit diff range 및 SHA 바인딩을 제거하고 실용적인 안전 불변식(테스트 100% 통과 + Gate 승인 증적 + clean worktree + 패키지 매니페스트 SHA256)으로 신뢰성을 보장합니다.
-- **Progressive Disclosure 원칙**: 타겟 프로젝트에 무거운 프레임워크 문서를 주입하지 않고, 오직 `.forgeflow.json`, `.specify/`, `docs/adr/`, `tasks/`만 최소한으로 유지합니다.
+- **Progressive Disclosure 원칙**: 타겟 프로젝트에 무거운 프레임워크 문서를 주입하지 않고, 오직 `.forgeflow/config.json`, `.specify/`, `docs/adr/`, `tasks/`만 최소한으로 유지합니다.
 - **Atomic Remediation Loop 원칙**: 단순 단위 테스트 실패는 중단 사유가 아니며, `원인 식별 ➔ 코드 수정 ➔ 테스트 성공` 단위를 에이전트가 최대 5회 자율 완주하고, 구현 완료 시 원자적 커밋 1개를 생성합니다.
 
 ---
@@ -76,7 +76,8 @@ curl -sSL https://raw.githubusercontent.com/deepblue-kblee/forgeflow/main/instal
 자동 생성되는 프로젝트 레이아웃:
 ```text
 <project-root>/
-├── .forgeflow.json                     # 프로젝트 거버넌스 설정
+├── .forgeflow/
+│   └── config.json                     # 프로젝트 거버넌스 설정
 ├── .specify/                           # Spec Kit 연동 환경
 │   ├── memory/constitution.md          # 6대 불변 거버넌스 헌법
 │   ├── extensions.yml                  # before_implement 강제 차단 훅
@@ -119,7 +120,7 @@ forgeflow upgrade
 ```
 
 ### 5. 로컬 프로젝트 거버넌스 사양 동기화 (`forgeflow update`)
-현재 작업 리포지토리의 거버넌스 사양(`.forgeflow.json`, `.specify/scripts/bash/`, 템플릿, `docs/spec/ANTI_PATTERNS.md`, `docs/adr/`)을 현재 설치된 최신 규격으로 동기화합니다:
+현재 작업 리포지토리의 거버넌스 사양(`.forgeflow/config.json`, `.specify/scripts/bash/`, 템플릿, `docs/spec/ANTI_PATTERNS.md`, `docs/adr/`)을 현재 설치된 최신 규격으로 동기화합니다:
 ```bash
 # 현재 프로젝트 거버넌스 사양 갱신 (tasks 작업 데이터 100% 보존)
 forgeflow update

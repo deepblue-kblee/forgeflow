@@ -1,44 +1,43 @@
 # ForgeFlow Current System State
 
-- **종료 상태 (Exit Status)**: 🟢 정상 종료 (Graceful Exit, 2026-10-31 20:35 KST)
-- **현재 버전**: `v0.1.19` (Support auto_create_branch Governance Configuration)
+- **종료 상태 (Exit Status)**: 🟢 정상 종료 (Graceful Exit, 2026-11-01 00:00 KST)
+- **현재 버전**: `v0.1.20` (Relocate Configuration to .forgeflow/config.json with Update Migration)
 - **상태 판정**: 🟢 HEALTHY (모든 테스트 및 거버넌스 검증 통과)
-- **배포 상태**: 사용자 계정 로컬(`~/.local/forgeflow`, `~/.local/bin`) `v0.1.19` 설치 완료
-- **원격 동기화**: `main` == `origin/main` (`f20e16c`), ahead/behind 0/0, 태그 `v0.1.19` 배포 완료
+- **배포 상태**: 사용자 계정 로컬(`~/.local/forgeflow`, `~/.local/bin`) `v0.1.20` 설치 완료
+- **원격 동기화**: `main` == `origin/main` (`98c5c57`), ahead/behind 0/0, 태그 `v0.1.20` 배포 완료
 - **진행 중 릴리즈**: 없음 (`tasks/in-progress/` 비어 있음)
 
 ---
 
 ## 검증 및 정비 요약
 
-- **단위/통합 테스트**: 324개 전원 통과 (`Ran 324 tests in 14.5s`, OK)
-- **하네스 게이트 감사**: `forgeflow check --all --strict` 19개 릴리즈 전수 🟢 ALL PASSED
+- **단위/통합 테스트**: 325개 전원 통과 (`Ran 325 tests in 16.1s`, OK)
+- **하네스 게이트 감사**: `forgeflow check --all --strict` 20개 릴리즈 전수 🟢 ALL PASSED
 - **코드 스멜 검사**: `forgeflow review --strict` 🟢 PASSED
-- **최신 밀봉 패키지**: `tasks/completed/v0.1.19-auto-create-branch-option/`
+- **최신 밀봉 패키지**: `tasks/completed/v0.1.20-relocate-config-to-forgeflow-dir/`
 - **최근 분석 보고서**: [`docs/session-state/speckit_skills_and_clarify_analysis.md`](file:///Users/deepblue/work/repo/forgeflow/docs/session-state/speckit_skills_and_clarify_analysis.md)
 
 ---
 
-## 핵심 완수 기능 (v0.1.19)
+## 핵심 완수 기능 (v0.1.20)
 
-1. **브랜치 자동 분기 제어 옵션 (`governance.auto_create_branch`)**:
-   - `.forgeflow.json`의 `governance.auto_create_branch` 옵션 추가 (미지정 시 기본값 `false`).
-   - `auto_create_branch: false`인 경우 Stage 3 격리 구현 시 별도 브랜치(`feat/<release-id>`) 분기를 생략하고 현재 브랜치/worktree에서 직접 진행하여, 타 AI 도구나 개발자가 사전 구성한 worktree 환경과의 브랜치 중복 및 충돌 방지.
-   - CLI 명령(`release create`, `task create`)에 `--create-branch` (별칭 `--branch`) 플래그를 지원하여 설정이 `false`이더라도 사용자의 명시적 요청 시 브랜치를 분기하여 전환할 수 있도록 구현.
-   - 프로젝트별 브랜치 정책 변경 시 `AGENTS.md`를 오염시키지 않고 `.forgeflow.json` 설정을 단일 진실 공급원(SSOT)으로 삼도록 사양 확립.
-2. **엄격한 불리언 타입 검증 및 진단 엔진 연동**:
-   - `resolve_auto_create_branch` 함수를 통해 비불리언(문자열, 숫자 등) 설정 값을 `ValueError`로 fail-closed 차단.
-   - `forgeflow doctor`(`SystemDiagnostics`)에서 유효하지 않은 `auto_create_branch` 값을 `INVALID_AUTO_CREATE_BRANCH` 이상 징후로 검출.
-3. **안전한 라이프사이클 종료 가드**:
-   - `forgeflow lifecycle close` 실행 시 별도 브랜치를 생성하지 않은 경우(동일 브랜치 또는 미생성)에도 안전하게 Fast-Path로 릴리즈를 종료하도록 보장.
-4. **테스트 무결성**: 신규 단위 테스트 6종 추가 (총 324개 테스트 100% 통과).
+1. **설정 파일 표준 경로 이전 (`.forgeflow/config.json`)**:
+   - 프로젝트 루트 디렉터리의 정돈성을 위해, 기존 루트 `.forgeflow.json`을 `.forgeflow/config.json`으로 이전.
+   - 신규 스캐폴딩(`forgeflow setup`, `scaffold_speckit_hybrid`, `init_project_governance` 등) 시 `.forgeflow/config.json`을 기본 생성.
+2. **`forgeflow update` 하위 버전 자동 마이그레이션**:
+   - 구버전 리포지토리(루트에 `.forgeflow.json`이 존재하는 프로젝트)에서 `forgeflow update` 실행 시, 기존 사용자 설정을 100% 보존하면서 `.forgeflow/config.json`으로 자동 마이그레이션 및 버전 승격.
+   - 마이그레이션 완료 후 루트에 남아있던 구버전 `.forgeflow.json` 파일을 안전하게 삭제(unlink)하여 최신 프로젝트 레이아웃으로 일원화.
+3. **투명한 하위 호환 폴백 (Graceful Fallback)**:
+   - `ReleaseScanner`, `RuntimeTestRunner`, `SystemDiagnostics`, `resolve_auto_create_branch` 등 모든 설정 탐색 로직에서 `.forgeflow/config.json`을 우선 탐색하고, 구버전 프로젝트의 경우 루트 `.forgeflow.json`을 안전하게 폴백 조회하도록 보장.
+4. **테스트 무결성**: 신규 단위 테스트 추가 (총 325개 테스트 100% 통과).
 
 ---
 
-## 누적 기반 기능 (v0.1.0 ~ v0.1.18)
+## 누적 기반 기능 (v0.1.0 ~ v0.1.19)
 
+- **브랜치 자동 분기 제어 (v0.1.19)**: `.forgeflow/config.json`의 `governance.auto_create_branch` 옵션을 통한 격리 브랜치 생성 제어.
 - **프로젝트별 테스트 타임아웃 지원 (v0.1.18)**: `governance.test_timeout_seconds`를 통한 타임아웃 오버라이드.
-- **커스텀 설정 보존 (v0.1.17)**: `forgeflow update` 시 `.forgeflow.json` 커스텀 키 100% 보존.
+- **커스텀 설정 보존 (v0.1.17)**: `forgeflow update` 시 `.forgeflow/config.json` 커스텀 키 100% 보존.
 - **2계층 지식 체계 (v0.1.16)**: Tier 1 `docs/spec/ANTI_PATTERNS.md`, Tier 2 `docs/adr/` (ADR 001 De-SHA, ADR 002 spec hash 제거).
 - **거버넌스 엔진**: Stage 1~4 흐름과 Gate 1~3 승인 체계, 자가 치유 루프(Loop 2/3), 라이프사이클 상태 기계(`LifecycleStore`).
 - **Spec Kit 하이브리드 번들링**: 필수 bash 스크립트 6종 및 마크다운 템플릿 번들링, `scaffold_speckit_hybrid` 자동 스캐폴딩.

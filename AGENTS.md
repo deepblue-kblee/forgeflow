@@ -38,7 +38,7 @@ Stage 1: 기획 & 명세 (/speckit.specify ➔ /speckit.clarify ➔ spec.md 작�
    - 거버넌스 엔진 산출물 (ForgeFlow): `GATE1_REVIEW.md` (Gate 1 명세 승인), `QA_SIGNOFF.md` (Gate 2 QA 승인), `RELEASE_SIGNOFF.md` (Gate 3 릴리즈 승인 및 밀봉)
 4. **과거 버전 및 흔적 강제 폐기 규범 (Date-Based Amnesia Policy)**:
    - **기준일**: **2026-10-20** (ForgeFlow v0.1.0 공식 릴리즈일).
-   - 2026-10-20 이전에 생성된 모든 레거시 설정(`.forgeflow.json`), 메모리, 과거 릴리즈 산출물, 구버전 spec/PRD/DESIGN 등은 일체 폐기한다.
+   - 2026-10-20 이전에 생성된 모든 레거시 설정(구버전 `.forgeflow.json` 등), 메모리, 과거 릴리즈 산출물, 구버전 spec/PRD/DESIGN 등은 일체 폐기한다.
    - 과거 버전의 하위 호환성을 유지하려 하지 않으며, 과거 메모리나 산출물을 계승하지 않는다. 사용자 요구사항에 따라 공식 v0.1.0 표준으로 `spec.md`를 새롭게 작성한다.
 5. **ForgeFlow 자체 버전 규칙**:
    - `src/forgeflow/**`, `tests/**`, `docs/spec/**`, `AGENTS.md`, `README.md`, `pyproject.toml`, 또는 `install.sh`를 변경하는 ForgeFlow self-maintenance 릴리즈는 canonical `src/forgeflow/_version.py`를 단일 진실 공급원(SSOT)으로 삼아 갱신한다.
