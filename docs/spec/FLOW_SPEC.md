@@ -35,7 +35,8 @@
 
 ```text
 <project-root>/
-├── .forgeflow.json                     # 프로젝트 전역 거버넌스 설정
+├── .forgeflow/
+│   └── config.json                     # 프로젝트 전역 거버넌스 설정
 ├── .specify/                           # Spec Kit 환경 설정
 │   ├── memory/
 │   │   └── constitution.md             # [최상위 헌법] 게이트 통과 전 구현 금지, 루프 규범
@@ -65,7 +66,7 @@
 
 ### 2.2 설정 파일 규격
 
-#### 1. `.forgeflow.json`
+#### 1. `.forgeflow/config.json`
 ```json
 {
   "forgeflow_version": "0.1.0",

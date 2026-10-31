@@ -99,7 +99,7 @@ forgeflow upgrade --force
 ```
 
 ### 4.2 로컬 프로젝트 거버넌스 사양 동기화 (`forgeflow update`)
-- 현재 개발 프로젝트 루트에서 실행하여 `.forgeflow.json`, `.specify/scripts/bash/`(0o755 권한 부여), 템플릿, 헌법 및 훅을 현재 설치된 ForgeFlow 규격으로 원자적 갱신한다.
+- 현재 개발 프로젝트 루트에서 실행하여 `.forgeflow/config.json`(구버전 .forgeflow.json 시 자동 마이그레이션), `.specify/scripts/bash/`(0o755 권한 부여), 템플릿, 헌법 및 훅을 현재 설치된 ForgeFlow 규격으로 원자적 갱신한다.
 - 현재 진행 중인 태스크(`tasks/in-progress/`)와 과거 완료 아카이브(`tasks/completed/`) 데이터는 100% 안전하게 보존된다:
 ```bash
 forgeflow update

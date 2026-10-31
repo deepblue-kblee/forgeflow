@@ -37,6 +37,8 @@ class TemplateScaffolder:
     )
 
     GOVERNANCE_PATH = Path("docs/forgeflow/GOVERNANCE.md")
+    CONFIG_REL_PATH = Path(".forgeflow") / "config.json"
+    LEGACY_CONFIG_REL_PATH = Path(".forgeflow.json")
     ROOT_GUIDES = ("AGENTS.md", "CLAUDE.md", "GEMINI.md")
     BINDING_START = "<!-- forgeflow-governance-binding:start -->"
     BINDING_END = "<!-- forgeflow-governance-binding:end -->"
@@ -154,9 +156,26 @@ class TemplateScaffolder:
             raise
 
     @classmethod
+    def get_config_path(cls, root: Path, write_intent: bool = False) -> Path:
+        """Resolve the project configuration file path.
+
+        Prioritizes .forgeflow/config.json. If it does not exist and legacy .forgeflow.json
+        exists (and not write_intent), falls back to .forgeflow.json.
+        """
+        modern = root / cls.CONFIG_REL_PATH
+        legacy = root / cls.LEGACY_CONFIG_REL_PATH
+        if modern.exists():
+            return modern
+        if not write_intent and legacy.exists():
+            return legacy
+        return modern
+
+    @classmethod
     def _journal_target(cls, root: Path, target: str) -> Path:
         allowed = {
             str(cls.GOVERNANCE_PATH),
+            str(cls.CONFIG_REL_PATH),
+            ".forgeflow/config.json",
             ".forgeflow.json",
             *cls.ROOT_GUIDES,
             *(str(path) for path in cls.BUNDLE_FILES),
@@ -339,7 +358,7 @@ class TemplateScaffolder:
         if additional_files:
             for path, content in additional_files.items():
                 absolute_path = path if path.is_absolute() else root / path
-                if absolute_path != root / ".forgeflow.json":
+                if absolute_path not in {root / ".forgeflow" / "config.json", root / ".forgeflow.json"}:
                     raise ValueError(f"Invalid additional governance target: {path}")
                 cls._assert_safe_file(absolute_path, root, allow_missing=True)
                 desired[absolute_path] = content
@@ -691,13 +710,20 @@ class TemplateScaffolder:
             },
             }
 
-            config_file = root / ".forgeflow.json"
-            config_existed = config_file.exists()
-            config_should_write = not config_existed or force
+            forgeflow_dir = root / ".forgeflow"
+            if not forgeflow_dir.exists():
+                forgeflow_dir.mkdir(parents=True, exist_ok=True)
+                created_directory_paths.append(forgeflow_dir)
+
+            config_file = root / ".forgeflow" / "config.json"
+            legacy_config_file = root / ".forgeflow.json"
+            config_existed = config_file.exists() or legacy_config_file.exists()
+            config_should_write = not config_file.exists() or force
             if config_existed and migrate_continuation_policy and not force:
-                TemplateScaffolder._assert_safe_file(config_file, root)
+                source_cfg = config_file if config_file.exists() else legacy_config_file
+                TemplateScaffolder._assert_safe_file(source_cfg, root)
                 try:
-                    existing_config = json.loads(config_file.read_text(encoding="utf-8"))
+                    existing_config = json.loads(source_cfg.read_text(encoding="utf-8"))
                 except (OSError, UnicodeError, json.JSONDecodeError) as exc:
                     raise ValueError("Invalid existing ForgeFlow configuration") from exc
                 if not isinstance(existing_config, dict) or not isinstance(existing_config.get("governance"), dict):
@@ -744,9 +770,9 @@ class TemplateScaffolder:
         updated_files: List[str] = []
         skipped_files: List[str] = []
         if config_should_write:
-            (updated_files if force or config_existed else created_files).append(".forgeflow.json")
+            (updated_files if force or config_existed else created_files).append(".forgeflow/config.json")
         else:
-            skipped_files.append(".forgeflow.json")
+            skipped_files.append(".forgeflow/config.json")
         created_files.extend(governance["created"])
         updated_files.extend(governance["updated"])
         skipped_files.extend(governance["skipped"])
@@ -793,7 +819,7 @@ class TemplateScaffolder:
                     shutil.move(str(child), str(dest))
                     migrated.append(child.name)
 
-        config_path = repo_root / ".forgeflow.json"
+        config_path = cls.get_config_path(repo_root)
         if config_path.exists() and config_path.is_file():
             try:
                 data = json.loads(config_path.read_text(encoding="utf-8"))
@@ -834,11 +860,13 @@ class TemplateScaffolder:
         created_files: List[str] = []
         updated_files: List[str] = []
 
-        config_file = root / ".forgeflow.json"
+        config_file = root / ".forgeflow" / "config.json"
+        legacy_config_file = root / ".forgeflow.json"
         custom_tasks_name = "tasks"
-        if config_file.is_file():
+        existing_cfg_file = config_file if config_file.is_file() else legacy_config_file
+        if existing_cfg_file.is_file():
             try:
-                raw_cfg = json.loads(config_file.read_text(encoding="utf-8"))
+                raw_cfg = json.loads(existing_cfg_file.read_text(encoding="utf-8"))
                 if isinstance(raw_cfg, dict):
                     custom_tasks_name = raw_cfg.get("governance", {}).get("tasks_dir", "tasks")
             except Exception:
@@ -858,7 +886,13 @@ class TemplateScaffolder:
             guard_file.write_text(cls.TASKS_GUARD_CONTENT, encoding="utf-8")
             (updated_files if guard_file.exists() and force else created_files).append(f"{custom_tasks_name}/README.md")
 
-        # 2. .forgeflow.json (with Date-Based Amnesia enforcement and user config preservation)
+        # Ensure .forgeflow directory
+        forgeflow_dir = root / ".forgeflow"
+        if not forgeflow_dir.exists():
+            forgeflow_dir.mkdir(parents=True, exist_ok=True)
+            created_dirs.append(".forgeflow")
+
+        # 2. .forgeflow/config.json (with Date-Based Amnesia enforcement and user config preservation)
         if not skip_config:
             default_config = {
                 "forgeflow_version": "0.1.0",
@@ -875,33 +909,40 @@ class TemplateScaffolder:
             }
             config_data = copy.deepcopy(default_config)
             needs_write = False
-            if not config_file.exists():
+            source_file = config_file if config_file.exists() else legacy_config_file
+            if not source_file.exists():
                 needs_write = True
-                created_files.append(".forgeflow.json")
+                created_files.append(".forgeflow/config.json")
             else:
                 try:
-                    existing = json.loads(config_file.read_text(encoding="utf-8"))
+                    existing = json.loads(source_file.read_text(encoding="utf-8"))
                     # Date-Based Amnesia: If not matching standard v0.1.0 or contains legacy fields, overwrite
                     if (
                         "required_documents" in existing.get("governance", {})
                         or "default_tier" in existing.get("governance", {})
                     ):
                         needs_write = True
-                        updated_files.append(".forgeflow.json")
+                        (updated_files if config_file.exists() else created_files).append(".forgeflow/config.json")
                     elif force:
                         # Deep merge defaults into existing, strictly preserving all user modifications
                         merged = cls.deep_merge_config(existing, default_config)
                         current_ver = existing.get("forgeflow_version", "0.1.0")
                         merged["forgeflow_version"] = current_ver
                         config_data = merged
-                        if existing != merged:
+                        if existing != merged or not config_file.exists():
                             needs_write = True
-                            updated_files.append(".forgeflow.json")
+                            (updated_files if config_file.exists() else created_files).append(".forgeflow/config.json")
+                    elif not config_file.exists():
+                        merged = cls.deep_merge_config(existing, default_config)
+                        config_data = merged
+                        needs_write = True
+                        created_files.append(".forgeflow/config.json")
                 except Exception:
                     needs_write = True
-                    updated_files.append(".forgeflow.json")
+                    (updated_files if config_file.exists() else created_files).append(".forgeflow/config.json")
 
             if needs_write:
+                config_file.parent.mkdir(parents=True, exist_ok=True)
                 config_file.write_text(json.dumps(config_data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
         # 3. .specify/memory/constitution.md
@@ -1177,18 +1218,23 @@ class TemplateScaffolder:
         """Update local repository governance specifications and Spec Kit assets to the current version.
 
         Preserves all task packages in tasks/in-progress and tasks/completed while refreshing
-        .specify/ scripts (with 0o755 permission), templates, and .forgeflow.json version.
+        .specify/ scripts (with 0o755 permission), templates, and .forgeflow/config.json version.
+        If a legacy .forgeflow.json exists at root, it is migrated to .forgeflow/config.json and removed.
         """
         from ._version import __version__
         root = root.resolve()
-        config_file = root / ".forgeflow.json"
-        if not config_file.exists() or not config_file.is_file():
-            raise ValueError(f"Target directory '{root}' is not a valid ForgeFlow repository (.forgeflow.json missing).")
+        modern_config = root / ".forgeflow" / "config.json"
+        legacy_config = root / ".forgeflow.json"
+        if not modern_config.exists() and not legacy_config.exists():
+            raise ValueError(f"Target directory '{root}' is not a valid ForgeFlow repository (.forgeflow/config.json missing).")
+
+        is_legacy_migration = not modern_config.exists() and legacy_config.exists()
+        source_config = legacy_config if is_legacy_migration else modern_config
 
         try:
-            config_data = json.loads(config_file.read_text(encoding="utf-8"))
+            config_data = json.loads(source_config.read_text(encoding="utf-8"))
         except Exception as e:
-            raise ValueError(f"Failed to parse .forgeflow.json: {e}")
+            raise ValueError(f"Failed to parse {source_config.name}: {e}")
 
         previous_version = config_data.get("forgeflow_version", "unknown")
 
@@ -1213,14 +1259,22 @@ class TemplateScaffolder:
         # Re-run hybrid scaffolding with force=True, skipping config write to prevent double-write / custom key loss
         scaffold_res = cls.scaffold_speckit_hybrid(root, force=True, skip_config=True)
 
-        # Check if .forgeflow.json actually modified compared to original on-disk content
-        is_config_changed = (merged_config != config_data)
-        if is_config_changed:
-            config_file.write_text(json.dumps(merged_config, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        # Check if config actually modified compared to original on-disk content or needs migration
+        is_config_changed = (merged_config != config_data) or is_legacy_migration
+        if is_config_changed or not modern_config.exists():
+            modern_config.parent.mkdir(parents=True, exist_ok=True)
+            modern_config.write_text(json.dumps(merged_config, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
-        updated_files = [f for f in scaffold_res.get("updated_files", []) if f != ".forgeflow.json"]
+        # Clean up legacy config if present
+        if legacy_config.exists():
+            try:
+                legacy_config.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+        updated_files = [f for f in scaffold_res.get("updated_files", []) if f not in {".forgeflow/config.json", ".forgeflow.json"}]
         if is_config_changed:
-            updated_files.insert(0, ".forgeflow.json")
+            updated_files.insert(0, ".forgeflow/config.json")
 
         changelog_summary = cls.extract_changelog_range(previous_version, __version__, changelog_file=cls.find_changelog_file(root))
 
@@ -1362,23 +1416,25 @@ class TemplateScaffolder:
 
 
 def resolve_auto_create_branch(repo_root: Path) -> bool:
-    """Resolve auto_create_branch configuration from .forgeflow.json.
+    """Resolve auto_create_branch configuration from .forgeflow/config.json (or fallback .forgeflow.json).
 
     Returns:
         bool: False by default if omitted or file missing.
               True or False if explicitly specified as a boolean.
     Raises:
-        ValueError: If .forgeflow.json contains an invalid non-boolean auto_create_branch.
+        ValueError: If configuration contains an invalid non-boolean auto_create_branch.
     """
     root = Path(repo_root).resolve()
-    config_file = root / ".forgeflow.json"
+    modern_cfg = root / ".forgeflow" / "config.json"
+    legacy_cfg = root / ".forgeflow.json"
+    config_file = modern_cfg if modern_cfg.exists() else legacy_cfg
     if not config_file.exists() or not config_file.is_file():
         return False
 
     try:
         data = json.loads(config_file.read_text(encoding="utf-8"))
     except Exception as exc:
-        raise ValueError(f"Failed to parse .forgeflow.json: {exc}") from exc
+        raise ValueError(f"Failed to parse {config_file.name}: {exc}") from exc
 
     if not isinstance(data, dict):
         return False
@@ -1393,7 +1449,7 @@ def resolve_auto_create_branch(repo_root: Path) -> bool:
     val = gov["auto_create_branch"]
     if not isinstance(val, bool):
         raise ValueError(
-            f"Invalid auto_create_branch in .forgeflow.json: expected boolean, got {type(val).__name__} ({val!r})"
+            f"Invalid auto_create_branch in {config_file.name}: expected boolean, got {type(val).__name__} ({val!r})"
         )
 
     return val

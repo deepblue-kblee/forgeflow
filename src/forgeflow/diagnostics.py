@@ -230,7 +230,10 @@ class DiagnosticAnalyzer:
                     )
 
         # 5. Legacy Configuration & Amnesia Policy Check (Baseline Date: 2026-10-20)
-        config_file = self.repo_root / ".forgeflow.json"
+        modern_cfg = self.repo_root / ".forgeflow" / "config.json"
+        legacy_cfg = self.repo_root / ".forgeflow.json"
+        config_file = modern_cfg if modern_cfg.is_file() else legacy_cfg
+        cfg_name = ".forgeflow/config.json" if config_file == modern_cfg else ".forgeflow.json"
         if config_file.is_file():
             try:
                 cfg = json.loads(config_file.read_text(encoding="utf-8"))
@@ -277,7 +280,7 @@ class DiagnosticAnalyzer:
                                 anomaly_type="INVALID_TEST_TIMEOUT",
                                 severity="WARNING",
                                 message="유효하지 않은 test_timeout_seconds 설정이 감지되었습니다 (양수 숫자 필요).",
-                                remedy=".forgeflow.json의 governance.test_timeout_seconds 값을 60 이상의 양수 숫자로 수정하세요.",
+                                remedy=f"{cfg_name}의 governance.test_timeout_seconds 값을 60 이상의 양수 숫자로 수정하세요.",
                                 context={"test_timeout_seconds": raw_timeout},
                             )
                         )
@@ -291,7 +294,7 @@ class DiagnosticAnalyzer:
                                 anomaly_type="INVALID_AUTO_CREATE_BRANCH",
                                 severity="WARNING",
                                 message="유효하지 않은 auto_create_branch 설정이 감지되었습니다 (불리언 true/false 필요).",
-                                remedy=".forgeflow.json의 governance.auto_create_branch 값을 true 또는 false로 수정하세요.",
+                                remedy=f"{cfg_name}의 governance.auto_create_branch 값을 true 또는 false로 수정하세요.",
                                 context={"auto_create_branch": raw_acb},
                             )
                         )

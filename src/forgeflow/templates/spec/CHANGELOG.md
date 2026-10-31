@@ -7,6 +7,22 @@ ForgeFlow 프레임워크의 모든 주요 변경 사항은 이 문서에 기록
 
 ---
 
+## [0.1.20] - 2026-10-31
+
+### 📁 설정 파일 경로 이전 (.forgeflow/config.json) 및 forgeflow update 자동 마이그레이션 (Relocate Configuration to .forgeflow/config.json with Update Migration)
+
+### Changed
+- **프로젝트 설정 파일 표준 경로 이전**:
+  - 프로젝트 루트 디렉터리의 정돈성을 극대화하기 위해, 기존 루트의 `.forgeflow.json`을 `.forgeflow/config.json`으로 이전.
+  - 신규 스캐폴딩(`forgeflow setup`, `scaffold_speckit_hybrid`, `init_project_governance` 등) 시 `.forgeflow/config.json`을 기본 생성.
+- **`forgeflow update` 하위 버전 자동 마이그레이션**:
+  - 구버전 리포지토리(루트에 `.forgeflow.json`이 존재하는 프로젝트)에서 `forgeflow update` 실행 시, 기존 사용자 설정을 100% 보존하면서 `.forgeflow/config.json`으로 자동 마이그레이션 및 버전 승격.
+  - 마이그레이션 완료 후 루트에 남아있던 구버전 `.forgeflow.json` 파일을 안전하게 삭제(unlink)하여 최신 프로젝트 레이아웃으로 일원화.
+- **투명한 하위 호환 폴백 (Graceful Fallback)**:
+  - `ReleaseScanner`, `RuntimeTestRunner`, `SystemDiagnostics`, `resolve_auto_create_branch` 등 모든 설정 탐색 로직에서 `.forgeflow/config.json`을 우선 탐색하고, 구버전 프로젝트의 경우 루트 `.forgeflow.json`을 안전하게 폴백 조회하도록 보장.
+
+---
+
 ## [0.1.19] - 2026-10-31
 
 ### 🌿 브랜치 자동 분기 On/Off 거버넌스 설정 지원 (Support auto_create_branch Configuration)

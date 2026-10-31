@@ -83,7 +83,7 @@ class TestCliIntegration(unittest.TestCase):
         payload = json.loads(res.stdout)
         self.assertEqual(payload["status"], "success")
         self.assertEqual(payload["mode"], "project")
-        self.assertTrue((target_dir / ".forgeflow.json").exists())
+        self.assertTrue((target_dir / ".forgeflow" / "config.json").exists())
         self.assertTrue((target_dir / "tasks").exists())
         self.assertTrue((target_dir / "tasks" / "README.md").exists())
 
@@ -97,7 +97,7 @@ class TestCliIntegration(unittest.TestCase):
         ]
         res = subprocess.run(cmd, capture_output=True, text=True)
         self.assertEqual(res.returncode, 0, res.stderr)
-        config = json.loads((target_dir / ".forgeflow.json").read_text(encoding="utf-8"))
+        config = json.loads((target_dir / ".forgeflow" / "config.json").read_text(encoding="utf-8"))
         self.assertEqual(config["governance"]["continuation_policy"], "autonomous")
 
     def test_forgeflow_init_no_target_forwards_autonomous_policy(self):
@@ -110,7 +110,7 @@ class TestCliIntegration(unittest.TestCase):
         ]
         res = subprocess.run(cmd, capture_output=True, text=True)
         self.assertEqual(res.returncode, 0, res.stderr)
-        config = json.loads((target_dir / ".forgeflow.json").read_text(encoding="utf-8"))
+        config = json.loads((target_dir / ".forgeflow" / "config.json").read_text(encoding="utf-8"))
         self.assertEqual(config["governance"]["continuation_policy"], "autonomous")
 
     def test_forgeflow_init_project_cli_rejects_symlinked_parent(self):

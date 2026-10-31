@@ -15,8 +15,12 @@
 ## 제5조 (스펙 무단 하향 금지 - No Spec Downgrade)
 구현의 어려움을 이유로 사용자 승인 없이 `spec.md`의 요구사항이나 Acceptance Criteria를 축소·삭제·완화할 수 없다. 스펙 수정이 필요한 경우 반드시 공식 스펙 회귀(Loop 3) 절차를 거쳐 Gate 1 재승인을 획득해야 한다.
 
+## 제6조 (기획 시 안티패턴 및 ADR 필수 준수 - Anti-Patterns & Architecture Decisions)
+에이전트는 과거에 합의된 설계 결정을 망각하고 동일한 실수를 반복해서는 안 된다. 새 기능 기획 및 명세서 작성 착수 시(`speckit.specify` 단계) 반드시 `docs/spec/ANTI_PATTERNS.md`를 필독하여 금지된 안티패턴(Git SHA 결합, 스펙 해시 바인딩 등)을 확인하고, 주요 구조적 변경 시 `docs/adr/`의 아키텍처 결정 레코드를 검토해야 한다.
+
 ## 프레임워크 공식 사양서 참조 경로 (Framework Specifications)
 에이전트는 세부 규범과 아키텍처 판단이 필요할 때 다음 공식 사양서(단일 진실 공급원)를 참조해야 한다:
 - 참조 인터페이스: `forgeflow doc list` 또는 `forgeflow doc show <spec-name>` CLI
 - 전역 템플릿 경로: `~/.local/forgeflow/current/lib/forgeflow/templates/spec/`
 - 7대 공식 사양서: FLOW_SPEC.md, GATES_AND_LOOPS.md, SPECKIT_HOOKS_AND_NORMS.md, DISTRIBUTION_SPEC.md, PHILOSOPHY_AND_COMPASS.md, REFACTORING_GUIDE.md, CHANGELOG.md
+- 안티패턴 및 ADR: docs/spec/ANTI_PATTERNS.md, docs/adr/

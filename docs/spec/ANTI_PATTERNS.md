@@ -23,12 +23,12 @@
 
 | ID | 🚫 영구 금지된 패턴 (Never Do) | ✅ 채택된 표준 원칙 (Always Do) | 💡 핵심 사유 (Why) | 상세 ADR |
 | :---: | :--- | :--- | :--- | :---: |
-| **AP-01** | **Git 커밋/Blob SHA 바인딩 & Diff 범위 감사** (`QA-SHA`, `Candidate-SHA`, post-candidate diff 등) | **실용적 4대 안전 불변식** (100% 테스트 통과, 게이트 마크다운 승인, Clean Status, 패키지 보존) | Git은 유연한 VCS이며 SHA는 사소한 부기·이동·리베이스에도 깨져 무한 오탐과 회귀를 유발함 | [ADR-001](file:///Users/deepblue/work/repo/forgeflow/docs/adr/001-eliminate-git-sha-and-commit-range-bindings.md) |
-| **AP-02** | **문서 본문 내용 해시 바인딩** (`spec.md` SHA-256 등) | **구조적 섹션 및 명시적 승인 키워드 검증** (`has_acceptance`, `APPROVED` 등) | 오탈자 수정, 포맷팅 한 글자에도 해시가 깨져 Loop 3 무한 루프 유발 | [ADR-002](file:///Users/deepblue/work/repo/forgeflow/docs/adr/002-remove-spec-body-hash-binding.md) |
-| **AP-03** | **외부 서드파티 런타임 의존성 추가** (pip 패키지 등) | **Python 3.10+ 표준 라이브러리 100% 자립** | Zero-Dependency 원칙 준수 및 환경 격리 무결성 | [헌법 제1조](file:///Users/deepblue/work/repo/forgeflow/.specify/memory/constitution.md) |
-| **AP-04** | **Gate 1 승인 전 소스코드 구현/수정** | **명세 및 기술 설계 승인 후 구현 착수** | 무계획 구현으로 인한 회귀 및 비용 낭비 방지 (Fail-Closed) | [헌법 제3조](file:///Users/deepblue/work/repo/forgeflow/.specify/memory/constitution.md) |
-| **AP-05** | **사소한 출력/공백 차이에 깨지는 취약한 검증** (Brittle Testing) | **본질적 불변식 및 런타임 전달성 검증** (Pragmatic Rigor) | 배보다 배꼽이 더 큰 형식주의를 배제하고 실제 사용자 런타임 가치 집중 | [철학 헌장](file:///Users/deepblue/work/repo/forgeflow/docs/spec/PHILOSOPHY_AND_COMPASS.md) |
-| **AP-06** | **무차별 소스파일 전체 읽기 및 grep 폭풍** | **Graphify AST / 의존성 지도로 심볼 좁혀 읽기** | 컨텍스트 윈도우 낭비 방지 및 초고속 아키텍처 파악 | [Graphify 가이드](file:///Users/deepblue/work/repo/forgeflow/docs/spec/PHILOSOPHY_AND_COMPASS.md#code-exploration) |
+| **AP-01** | **Git 커밋/Blob SHA 바인딩 & Diff 범위 감사** (`QA-SHA`, `Candidate-SHA`, post-candidate diff 등) | **실용적 4대 안전 불변식** (100% 테스트 통과, 게이트 마크다운 승인, Clean Status, 패키지 보존) | Git은 유연한 VCS이며 SHA는 사소한 부기·이동·리베이스에도 깨져 무한 오탐과 회귀를 유발함 | [ADR-001](../adr/001-eliminate-git-sha-and-commit-range-bindings.md) |
+| **AP-02** | **문서 본문 내용 해시 바인딩** (`spec.md` SHA-256 등) | **구조적 섹션 및 명시적 승인 키워드 검증** (`has_acceptance`, `APPROVED` 등) | 오탈자 수정, 포맷팅 한 글자에도 해시가 깨져 Loop 3 무한 루프 유발 | [ADR-002](../adr/002-remove-spec-body-hash-binding.md) |
+| **AP-03** | **외부 서드파티 런타임 의존성 추가** (pip 패키지 등) | **Python 3.10+ 표준 라이브러리 100% 자립** | Zero-Dependency 원칙 준수 및 환경 격리 무결성 | [헌법 제1조](../../.specify/memory/constitution.md) |
+| **AP-04** | **Gate 1 승인 전 소스코드 구현/수정** | **명세 및 기술 설계 승인 후 구현 착수** | 무계획 구현으로 인한 회귀 및 비용 낭비 방지 (Fail-Closed) | [헌법 제3조](../../.specify/memory/constitution.md) |
+| **AP-05** | **사소한 출력/공백 차이에 깨지는 취약한 검증** (Brittle Testing) | **본질적 불변식 및 런타임 전달성 검증** (Pragmatic Rigor) | 배보다 배꼽이 더 큰 형식주의를 배제하고 실제 사용자 런타임 가치 집중 | [철학 헌장](./PHILOSOPHY_AND_COMPASS.md) |
+| **AP-06** | **무차별 소스파일 전체 읽기 및 grep 폭풍** | **Graphify AST / 의존성 지도로 심볼 좁혀 읽기** | 컨텍스트 윈도우 낭비 방지 및 초고속 아키텍처 파악 | [Graphify 가이드](./PHILOSOPHY_AND_COMPASS.md#code-exploration) |
 
 ---
 

@@ -35,7 +35,7 @@ class HierarchicalRootScanner:
         # 2. Upward directory walk for markers
         probe = current
         while probe != probe.parent:
-            if (probe / ".forgeflow.json").exists():
+            if (probe / ".forgeflow" / "config.json").exists() or (probe / ".forgeflow.json").exists():
                 return probe
             if (probe / "tasks").exists() and (probe / "tasks").is_dir():
                 return probe
@@ -60,7 +60,9 @@ class ReleaseScanner:
 
     @staticmethod
     def _read_configured_tasks_dir(repo_root: Path) -> Optional[str]:
-        config_path = repo_root / ".forgeflow.json"
+        modern_cfg = repo_root / ".forgeflow" / "config.json"
+        legacy_cfg = repo_root / ".forgeflow.json"
+        config_path = modern_cfg if modern_cfg.exists() else legacy_cfg
         if config_path.exists() and config_path.is_file():
             try:
                 data = json.loads(config_path.read_text(encoding="utf-8"))

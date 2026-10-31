@@ -18,14 +18,18 @@ class RuntimeTestRunner:
 
     @staticmethod
     def resolve_test_timeout(repo_root: Path) -> float:
-        config_path = repo_root / ".forgeflow.json"
+        modern_cfg = repo_root / ".forgeflow" / "config.json"
+        legacy_cfg = repo_root / ".forgeflow.json"
+        config_path = modern_cfg if modern_cfg.exists() else legacy_cfg
         if not config_path.exists() or not config_path.is_file():
             return RuntimeTestRunner.DEFAULT_TEST_TIMEOUT
+
+        config_name = ".forgeflow/config.json" if config_path == modern_cfg else ".forgeflow.json"
 
         try:
             data = json.loads(config_path.read_text(encoding="utf-8"))
         except Exception as e:
-            raise ValueError(f"Failed to parse .forgeflow.json: {e}") from e
+            raise ValueError(f"Failed to parse {config_name}: {e}") from e
 
         if not isinstance(data, dict):
             return RuntimeTestRunner.DEFAULT_TEST_TIMEOUT
@@ -38,22 +42,22 @@ class RuntimeTestRunner:
 
         if isinstance(raw_val, bool):
             raise ValueError(
-                f"Invalid test_timeout_seconds in .forgeflow.json: expected positive number, got bool ({raw_val})"
+                f"Invalid test_timeout_seconds in {config_name}: expected positive number, got bool ({raw_val})"
             )
 
         if not isinstance(raw_val, (int, float)):
             raise ValueError(
-                f"Invalid test_timeout_seconds in .forgeflow.json: expected positive number, got {type(raw_val).__name__} ({raw_val!r})"
+                f"Invalid test_timeout_seconds in {config_name}: expected positive number, got {type(raw_val).__name__} ({raw_val!r})"
             )
 
         if not math.isfinite(raw_val):
             raise ValueError(
-                f"Invalid test_timeout_seconds in .forgeflow.json: expected finite number, got {raw_val}"
+                f"Invalid test_timeout_seconds in {config_name}: expected finite number, got {raw_val}"
             )
 
         if raw_val <= 0:
             raise ValueError(
-                f"Invalid test_timeout_seconds in .forgeflow.json: expected positive number > 0, got {raw_val}"
+                f"Invalid test_timeout_seconds in {config_name}: expected positive number > 0, got {raw_val}"
             )
 
         return float(raw_val)

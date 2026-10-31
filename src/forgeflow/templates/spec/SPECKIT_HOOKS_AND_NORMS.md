@@ -116,8 +116,8 @@ Spec Kit 공식 지원 훅은 커맨드 단위의 **사전 훅(`before_*`)**과 
 
 ### 3.1 브랜치 제어 및 단일 진실 공급원 (SSOT)
 - **worktree 격리 환경 호환**: 외부 AI 도구(Claude Code, OpenCode)나 개발자가 이미 별도의 git worktree 또는 격리 브랜치를 생성하여 작업하는 환경에서는 ForgeFlow가 중복 브랜치를 다시 생성하면 작업 트리가 복잡해집니다.
-- **auto_create_branch 거버넌스 옵션**: `.forgeflow.json`의 `governance.auto_create_branch` 옵션(기본값: `false`)으로 브랜치 생성 단계를 켜고 끕니다.
-- **지침 오염 방지**: 향후 프로젝트별로 브랜치 자동 생성을 기본으로 설정하고자 할 때 `AGENTS.md`나 프롬프트 문서를 오염시키지 않고, `.forgeflow.json`의 `auto_create_branch: true`를 통해서만 일관되게 제어합니다. 사용자가 CLI에서 `--create-branch`를 명시하거나 요청하면 설정값에 관계없이 브랜치가 생성됩니다.
+- **auto_create_branch 거버넌스 옵션**: `.forgeflow/config.json`의 `governance.auto_create_branch` 옵션(기본값: `false`)으로 브랜치 생성 단계를 켜고 끕니다.
+- **지침 오염 방지**: 향후 프로젝트별로 브랜치 자동 생성을 기본으로 설정하고자 할 때 `AGENTS.md`나 프롬프트 문서를 오염시키지 않고, `.forgeflow/config.json`의 `auto_create_branch: true`를 통해서만 일관되게 제어합니다. 사용자가 CLI에서 `--create-branch`를 명시하거나 요청하면 설정값에 관계없이 브랜치가 생성됩니다.
 
 ### 3.2 체크포인트 커밋의 3대 안전 규칙
 1. **Never Commit Red**: 단위/통합 테스트가 실패 중인 중간 상태는 절대로 git commit하지 않는다.

@@ -38,7 +38,7 @@ class TestScaffolder(unittest.TestCase):
         self.assertTrue((self.temp_dir / "tasks" / "README.md").exists())
         self.assertTrue((self.temp_dir / "src").exists())
         self.assertTrue((self.temp_dir / "tests").exists())
-        self.assertTrue((self.temp_dir / ".forgeflow.json").exists())
+        self.assertTrue((self.temp_dir / ".forgeflow" / "config.json").exists())
         self.assertTrue((self.temp_dir / "docs" / "forgeflow" / "GOVERNANCE.md").exists())
         for guide in ("AGENTS.md", "CLAUDE.md", "GEMINI.md"):
             self.assertIn(
@@ -46,17 +46,17 @@ class TestScaffolder(unittest.TestCase):
                 (self.temp_dir / guide).read_text(encoding="utf-8"),
             )
 
-        config_data = json.loads((self.temp_dir / ".forgeflow.json").read_text(encoding="utf-8"))
+        config_data = json.loads((self.temp_dir / ".forgeflow" / "config.json").read_text(encoding="utf-8"))
         self.assertEqual(config_data["project"]["name"], "test-proj")
         self.assertEqual(config_data["governance"]["default_tier"], 2)
         self.assertEqual(config_data["governance"]["continuation_policy"], "interactive")
-        self.assertIn(".forgeflow.json", res["created_files"])
+        self.assertIn(".forgeflow/config.json", res["created_files"])
         for relative_path in TemplateScaffolder.BUNDLE_FILES:
             self.assertTrue((self.temp_dir / relative_path).exists(), relative_path)
 
     def test_init_supports_autonomous_policy_and_non_destructive_migration(self):
         TemplateScaffolder.init_project_governance(self.temp_dir, "test-proj")
-        config_path = self.temp_dir / ".forgeflow.json"
+        config_path = self.temp_dir / ".forgeflow" / "config.json"
         config = json.loads(config_path.read_text(encoding="utf-8"))
         config["governance"].pop("continuation_policy")
         config["custom"] = {"preserve": True}
@@ -254,6 +254,8 @@ class TestScaffolder(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Invalid ForgeFlow governance binding markers"):
             TemplateScaffolder.init_project_governance(self.temp_dir, "test-proj")
 
+        self.assertFalse((self.temp_dir / ".forgeflow" / "config.json").exists())
+        self.assertFalse((self.temp_dir / ".forgeflow" / "config.json").exists())
         self.assertFalse((self.temp_dir / ".forgeflow.json").exists())
         self.assertFalse((self.temp_dir / "docs").exists())
         self.assertFalse((self.temp_dir / "src").exists())
@@ -269,6 +271,7 @@ class TestScaffolder(unittest.TestCase):
 
         self.assertFalse((self.temp_dir / "docs").exists())
         self.assertFalse((self.temp_dir / "tests").exists())
+        self.assertFalse((self.temp_dir / ".forgeflow" / "config.json").exists())
         self.assertFalse((self.temp_dir / ".forgeflow.json").exists())
 
     def test_refresh_governance_uses_numbered_backup_on_collision(self):
@@ -331,6 +334,7 @@ class TestScaffolder(unittest.TestCase):
             with self.assertRaisesRegex(OSError, "simulated replace failure"):
                 TemplateScaffolder.init_project_governance(self.temp_dir, "test-proj")
 
+        self.assertFalse((self.temp_dir / ".forgeflow" / "config.json").exists())
         self.assertFalse((self.temp_dir / ".forgeflow.json").exists())
         self.assertFalse((self.temp_dir / "docs" / "forgeflow" / "GOVERNANCE.md").exists())
         for guide in TemplateScaffolder.ROOT_GUIDES:

@@ -21,7 +21,7 @@ class TestUpdateCLI(unittest.TestCase):
     def test_update_success_and_preserves_tasks(self):
         # 1. Initialize project with old version and active task
         TemplateScaffolder.scaffold_speckit_hybrid(self.root)
-        config_path = self.root / ".forgeflow.json"
+        config_path = self.root / ".forgeflow" / "config.json"
         config_data = json.loads(config_path.read_text(encoding="utf-8"))
         config_data["forgeflow_version"] = "0.1.0"
         config_path.write_text(json.dumps(config_data, indent=2) + "\n", encoding="utf-8")
@@ -62,7 +62,7 @@ class TestUpdateCLI(unittest.TestCase):
     def test_update_includes_changelog_summary(self):
         # 1. Setup mock repo with older version
         TemplateScaffolder.scaffold_speckit_hybrid(self.root)
-        config_path = self.root / ".forgeflow.json"
+        config_path = self.root / ".forgeflow" / "config.json"
         config_data = json.loads(config_path.read_text(encoding="utf-8"))
         config_data["forgeflow_version"] = "0.1.10"
         config_path.write_text(json.dumps(config_data, indent=2) + "\n", encoding="utf-8")
@@ -132,9 +132,9 @@ class TestUpdateCLI(unittest.TestCase):
 
     def test_update_preserves_custom_settings_and_keys(self):
         TemplateScaffolder.scaffold_speckit_hybrid(self.root)
-        config_path = self.root / ".forgeflow.json"
+        config_path = self.root / ".forgeflow" / "config.json"
 
-        # User modifies .forgeflow.json with custom values and additional custom keys
+        # User modifies config with custom values and additional custom keys
         custom_config = {
             "forgeflow_version": "0.1.0",
             "governance": {
@@ -179,7 +179,7 @@ class TestUpdateCLI(unittest.TestCase):
 
     def test_update_no_op_when_already_current_and_customized(self):
         TemplateScaffolder.scaffold_speckit_hybrid(self.root)
-        config_path = self.root / ".forgeflow.json"
+        config_path = self.root / ".forgeflow" / "config.json"
 
         # Config is already at current __version__ with custom settings
         custom_config = {
@@ -203,15 +203,16 @@ class TestUpdateCLI(unittest.TestCase):
         self.assertEqual(res["status"], "success")
         self.assertEqual(res["current_version"], __version__)
 
-        # .forgeflow.json must not be in updated_files because it did not change
-        self.assertNotIn(".forgeflow.json", res["updated_files"])
+        # .forgeflow/config.json must not be in updated_files because it did not change
+        self.assertNotIn(".forgeflow/config.json", res["updated_files"])
 
         # Content must remain intact
         after = json.loads(config_path.read_text(encoding="utf-8"))
         self.assertEqual(after, custom_config)
 
     def test_scaffold_force_preserves_custom_keys(self):
-        config_path = self.root / ".forgeflow.json"
+        config_path = self.root / ".forgeflow" / "config.json"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
         custom_config = {
             "forgeflow_version": "0.1.0",
             "governance": {
@@ -265,6 +266,48 @@ class TestUpdateCLI(unittest.TestCase):
         self.assertEqual(merged["governance"]["tasks_dir"], "tasks")
         self.assertEqual(merged["governance"]["max_loop_budget"], 5)
         self.assertEqual(merged["paths"]["in_progress"], "tasks/in-progress")
+
+    def test_update_migrates_legacy_forgeflow_json_to_modern_config(self):
+        # 1. Setup a legacy repository with .forgeflow.json at root and no .forgeflow/config.json
+        legacy_config = {
+            "forgeflow_version": "0.1.18",
+            "governance": {
+                "tasks_dir": "tasks",
+                "strict_mode": True,
+                "max_loop_budget": 5,
+                "test_timeout_seconds": 120.0,
+                "custom_policy": "legacy_preserved",
+            },
+            "paths": {
+                "in_progress": "tasks/in-progress",
+                "completed": "tasks/completed",
+            },
+            "custom_root_field": "preserved_value",
+        }
+        legacy_path = self.root / ".forgeflow.json"
+        legacy_path.write_text(json.dumps(legacy_config, indent=2) + "\n", encoding="utf-8")
+
+        modern_path = self.root / ".forgeflow" / "config.json"
+        self.assertTrue(legacy_path.exists())
+        self.assertFalse(modern_path.exists())
+
+        # 2. Run update
+        res = TemplateScaffolder.update_repo_governance(self.root)
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["previous_version"], "0.1.18")
+        self.assertEqual(res["current_version"], __version__)
+
+        # 3. Assertions: modern config created, legacy config deleted
+        self.assertTrue(modern_path.exists())
+        self.assertFalse(legacy_path.exists())
+        self.assertIn(".forgeflow/config.json", res["updated_files"])
+
+        # 4. Verify preserved contents in migrated modern config
+        migrated_data = json.loads(modern_path.read_text(encoding="utf-8"))
+        self.assertEqual(migrated_data["forgeflow_version"], __version__)
+        self.assertEqual(migrated_data["governance"]["test_timeout_seconds"], 120.0)
+        self.assertEqual(migrated_data["governance"]["custom_policy"], "legacy_preserved")
+        self.assertEqual(migrated_data["custom_root_field"], "preserved_value")
 
 
 if __name__ == "__main__":

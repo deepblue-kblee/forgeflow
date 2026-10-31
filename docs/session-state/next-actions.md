@@ -201,15 +201,27 @@
     - **테스트 및 거버넌스 무결성**:
       - 신규 단위 테스트 6종 추가, 전체 324개 단위 테스트 100% Pass, 19개 릴리즈 전수 거버넌스 감사 `forgeflow check --all --strict` 🟢 ALL PASSED 달성, `tasks/completed/v0.1.19-auto-create-branch-option/` 패키지 밀봉 완료.
 
+25. **설정 파일 경로 이전(`.forgeflow/config.json`) 및 forgeflow update 자동 마이그레이션 (v0.1.20)**:
+    - **설정 파일 표준 경로 이전**:
+      - 프로젝트 루트 디렉터리의 정돈성을 극대화하기 위해, 기존 루트 `.forgeflow.json`을 `.forgeflow/config.json`으로 이전.
+      - 신규 스캐폴딩(`forgeflow setup`, `scaffold_speckit_hybrid`, `init_project_governance` 등) 시 `.forgeflow/config.json`을 기본 생성.
+    - **`forgeflow update` 하위 버전 자동 마이그레이션**:
+      - 구버전 리포지토리(루트에 `.forgeflow.json`이 존재하는 프로젝트)에서 `forgeflow update` 실행 시, 기존 사용자 설정을 100% 보존하면서 `.forgeflow/config.json`으로 자동 마이그레이션 및 버전 승격.
+      - 마이그레이션 완료 후 루트에 남아있던 구버전 `.forgeflow.json` 파일을 안전하게 삭제(unlink)하여 최신 프로젝트 레이아웃으로 일원화.
+    - **투명한 하위 호환 폴백 (Graceful Fallback)**:
+      - `ReleaseScanner`, `RuntimeTestRunner`, `SystemDiagnostics`, `resolve_auto_create_branch` 등 모든 설정 탐색 로직에서 `.forgeflow/config.json`을 우선 탐색하고, 구버전 프로젝트의 경우 루트 `.forgeflow.json`을 안전하게 폴백 조회하도록 보장.
+    - **테스트 및 거버넌스 무결성**:
+      - 신규 단위 테스트 추가, 전체 325개 단위 테스트 100% Pass, 20개 릴리즈 전수 거버넌스 감사 `forgeflow check --all --strict` 🟢 ALL PASSED 달성, `tasks/completed/v0.1.20-relocate-config-to-forgeflow-dir/` 패키지 밀봉 완료.
+
 ---
 
 ## 새 세션에서 바로 이어서 착수할 과업 (Next Actions)
 
 ### 🎯 다음 작업 방향 및 버전 정책
 1. **버전 운영 및 v0.2.0 승격 로드맵**:
-   - 현재는 `v0.1.19` 상태에서 실전 도그푸딩 및 다운스트림 작업 리포지토리 연동 검증을 진행합니다.
+   - 현재는 `v0.1.20` 상태에서 실전 도그푸딩 및 다운스트림 작업 리포지토리 연동 검증을 진행합니다.
    - 충분한 운영 검증을 거쳐 결함이 완전히 해소된 시점에 사용자와 사전 합의하여 마이너 버전 `v0.2.0`으로 승격합니다.
 2. **GitHub Issues 모니터링 및 추가 개선 사항 접수**:
    - `forgeflow issue list`를 통한 추가 이슈 확인 및 처리.
 3. **원격 동기화 현황**:
-   - `git push origin main --tags`로 `v0.1.16` 릴리즈, `README.md` 최신화 커밋 및 태그가 원격(`origin/main`)에 전원 배포 완료되었습니다.
+   - `v0.1.20` 릴리즈 구현 완료 및 main 머지/푸시 예정.

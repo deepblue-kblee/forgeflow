@@ -1429,7 +1429,8 @@ def main(args=None):
                 for r in result.get("migrated", []):
                     print(f"  • {r}")
                 print(f"✅ Created {result.get('target_dir')}/README.md non-guidance boundary guard.")
-                print(f"✅ Updated .forgeflow.json governance.tasks_dir to '{result.get('target_dir')}'.")
+                cfg_name = ".forgeflow/config.json" if (root_path / ".forgeflow" / "config.json").exists() else ".forgeflow.json"
+                print(f"✅ Updated {cfg_name} governance.tasks_dir to '{result.get('target_dir')}'.")
             else:
                 print(f"ℹ️ Migration skipped: {result.get('reason')}")
             sys.exit(0)

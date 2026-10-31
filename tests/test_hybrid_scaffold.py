@@ -19,9 +19,10 @@ class TestHybridScaffold(unittest.TestCase):
         res = TemplateScaffolder.scaffold_speckit_hybrid(self.root)
         self.assertEqual(res["status"], "success")
 
-        # Verify .forgeflow.json
-        config_file = self.root / ".forgeflow.json"
+        # Verify .forgeflow/config.json
+        config_file = self.root / ".forgeflow" / "config.json"
         self.assertTrue(config_file.exists())
+        self.assertFalse((self.root / ".forgeflow.json").exists())
         config = json.loads(config_file.read_text(encoding="utf-8"))
         self.assertEqual(config["forgeflow_version"], "0.1.0")
         self.assertEqual(config["governance"]["tasks_dir"], "tasks")
@@ -95,7 +96,8 @@ class TestHybridScaffold(unittest.TestCase):
             self.assertGreater(tmpl_path.stat().st_size, 0)
 
     def test_scaffold_enforces_date_based_amnesia_on_legacy_config(self):
-        config_file = self.root / ".forgeflow.json"
+        config_file = self.root / ".forgeflow" / "config.json"
+        config_file.parent.mkdir(parents=True, exist_ok=True)
         legacy_config = {
             "forgeflow_version": "0.22.1",
             "created_at": "2026-10-15T12:00:00Z",
@@ -119,7 +121,8 @@ class TestHybridScaffold(unittest.TestCase):
         with self.assertRaises(SystemExit) as cm:
             main(["init", "--speckit", "--path", str(target)])
         self.assertEqual(cm.exception.code, 0)
-        self.assertTrue((target / ".forgeflow.json").exists())
+        self.assertTrue((target / ".forgeflow" / "config.json").exists())
+        self.assertFalse((target / ".forgeflow.json").exists())
         self.assertTrue((target / ".specify" / "extensions.yml").exists())
 
 
