@@ -1,9 +1,10 @@
 {
-  "forgeflow_version": "0.1.15",
+  "forgeflow_version": "0.1.19",
   "governance": {
     "tasks_dir": "tasks",
     "strict_mode": true,
-    "max_loop_budget": 5
+    "max_loop_budget": 5,
+    "auto_create_branch": false
   },
   "paths": {
     "in_progress": "tasks/in-progress",

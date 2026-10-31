@@ -73,7 +73,8 @@
     "tasks_dir": "tasks",
     "strict_mode": true,
     "max_loop_budget": 5,
-    "test_timeout_seconds": 60
+    "test_timeout_seconds": 60,
+    "auto_create_branch": false
   },
   "paths": {
     "in_progress": "tasks/in-progress",
@@ -82,6 +83,7 @@
 }
 ```
 - `test_timeout_seconds` (선택, 기본값 60초): `RuntimeTestRunner`의 단위/회귀 테스트 실행 타임아웃(초). 대규모 회귀 테스트 스위트를 보유한 프로젝트에서 가짜 타임아웃을 방지하기 위해 프로젝트 레벨에서 상향 조정할 수 있으며, 비정상 값(불리언, 비숫자, 음수, 0, 무한대) 지정 시 엄격히 거부된다.
+- `auto_create_branch` (선택, 기본값 `false`): Stage 3 격리 구현 진입 시 `feat/<release-id>` 브랜치 자동 분기 여부. `false`(기본값)인 경우 worktree 환경과의 충돌을 방지하기 위해 별도 브랜치 자동 생성을 생략하고 현재 브랜치/worktree에서 작업을 진행한다. 사용자가 CLI에서 `--create-branch`를 명시하거나 직접 요청하면 브랜치가 생성된다. 향후 프로젝트 전역에서 브랜치 생성을 기본 동작으로 삼고자 할 때 `AGENTS.md` 같은 지침 문서를 오염시키지 않고 본 설정(`auto_create_branch: true`)을 단일 진실 공급원(SSOT)으로 사용한다.
 
 #### 2. `.specify/extensions.yml`
 Spec Kit의 공식 확장 훅 규격을 사용하여 구현 시작 전 Gate 1 통과 여부를 기계적으로 검증한다.

@@ -206,6 +206,50 @@ class TestCliIntegration(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertIn("strict_audit_not_run", payload["unmet_conditions"])
 
+    def test_cli_release_and_task_create_branch_flag(self):
+        repo_src = Path(__file__).resolve().parent.parent / "src"
+        repo_dir = self.temp_dir / "git_repo"
+        repo_dir.mkdir()
+        subprocess.run(["git", "init", "-b", "main"], cwd=repo_dir, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "Tester"], cwd=repo_dir, check=True)
+        subprocess.run(["git", "config", "user.email", "tester@example.com"], cwd=repo_dir, check=True)
+        (repo_dir / "README.md").write_text("# Repo\n", encoding="utf-8")
+        subprocess.run(["git", "add", "README.md"], cwd=repo_dir, check=True)
+        subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=repo_dir, check=True, capture_output=True)
+
+        # 1. By default with auto_create_branch: false (or omitted), branch creation is skipped
+        cmd_default = [
+            sys.executable,
+            "-c",
+            f"import sys; sys.path.insert(0, '{repo_src}'); from forgeflow.cli import main; main(['release', 'create', 'v0.2.0-test'])",
+        ]
+        res_default = subprocess.run(cmd_default, cwd=repo_dir, capture_output=True, text=True)
+        self.assertEqual(res_default.returncode, 0)
+        self.assertIn("Task branch creation skipped (auto_create_branch: false)", res_default.stdout)
+
+        # 2. When --create-branch is explicitly provided, branch is created
+        cmd_branch = [
+            sys.executable,
+            "-c",
+            f"import sys; sys.path.insert(0, '{repo_src}'); from forgeflow.cli import main; main(['release', 'create', 'v0.2.1-branch', '--create-branch'])",
+        ]
+        res_branch = subprocess.run(cmd_branch, cwd=repo_dir, capture_output=True, text=True)
+        self.assertEqual(res_branch.returncode, 0)
+        self.assertIn("Switched to new branch 'feat/v0.2.1-branch'", res_branch.stdout)
+
+        # Switch back to main for task test
+        subprocess.run(["git", "checkout", "main"], cwd=repo_dir, check=True, capture_output=True)
+
+        # 3. Task create with --create-branch
+        cmd_task_branch = [
+            sys.executable,
+            "-c",
+            f"import sys; sys.path.insert(0, '{repo_src}'); from forgeflow.cli import main; main(['task', 'create', 'task-999', '--create-branch'])",
+        ]
+        res_task_branch = subprocess.run(cmd_task_branch, cwd=repo_dir, capture_output=True, text=True)
+        self.assertEqual(res_task_branch.returncode, 0)
+        self.assertIn("Switched to new branch 'feat/task-999'", res_task_branch.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

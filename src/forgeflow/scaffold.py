@@ -866,6 +866,7 @@ class TemplateScaffolder:
                     "tasks_dir": custom_tasks_name,
                     "strict_mode": True,
                     "max_loop_budget": 5,
+                    "auto_create_branch": False,
                 },
                 "paths": {
                     "in_progress": f"{custom_tasks_name}/in-progress",
@@ -1358,3 +1359,45 @@ class TemplateScaffolder:
         if matched_sections:
             return "\n\n".join(matched_sections)
         return cls.extract_changelog_section(curr_ver, changelog_file=target_file, summary=summary)
+
+
+def resolve_auto_create_branch(repo_root: Path) -> bool:
+    """Resolve auto_create_branch configuration from .forgeflow.json.
+
+    Returns:
+        bool: False by default if omitted or file missing.
+              True or False if explicitly specified as a boolean.
+    Raises:
+        ValueError: If .forgeflow.json contains an invalid non-boolean auto_create_branch.
+    """
+    root = Path(repo_root).resolve()
+    config_file = root / ".forgeflow.json"
+    if not config_file.exists() or not config_file.is_file():
+        return False
+
+    try:
+        data = json.loads(config_file.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise ValueError(f"Failed to parse .forgeflow.json: {exc}") from exc
+
+    if not isinstance(data, dict):
+        return False
+
+    gov = data.get("governance")
+    if not isinstance(gov, dict):
+        return False
+
+    if "auto_create_branch" not in gov:
+        return False
+
+    val = gov["auto_create_branch"]
+    if not isinstance(val, bool):
+        raise ValueError(
+            f"Invalid auto_create_branch in .forgeflow.json: expected boolean, got {type(val).__name__} ({val!r})"
+        )
+
+    return val
+
+
+TemplateScaffolder.resolve_auto_create_branch = staticmethod(resolve_auto_create_branch)
+

@@ -79,9 +79,11 @@ Spec Kit 공식 지원 훅은 커맨드 단위의 **사전 훅(`before_*`)**과 
 시스템은 작업 중인 코드가 불완전한 상태에서 `main` 브랜치를 오염시키는 것을 방지하기 위해 **완전한 브랜치 격리 수명주기**를 준수한다.
 
 ```text
-[main 브랜치] (항상 안정적이며 배포 가능한 클린 상태)
+[main 또는 격리 worktree 브랜치] (항상 안정적이며 배포 가능한 클린 상태)
    │
-   ├─► 1. 격리 분기: git checkout -b feat/<release-id>
+   ├─► 1. 격리 분기 제어 (auto_create_branch):
+   │      - false (기본값): 별도 브랜치 분기를 건너뛰고(skip) 현재 브랜치/worktree에서 직접 진행
+   │      - true 또는 사용자 명시 요청(--create-branch): git checkout -b feat/<release-id>
    │      │
    │      ├─ 📌 [체크포인트 1] Gate 1 명세 승인 완료 시점
    │      │     산출물: tasks/in-progress/<id>/spec.md + GATE1_REVIEW.md
@@ -106,13 +108,18 @@ Spec Kit 공식 지원 훅은 커맨드 단위의 **사전 훅(`before_*`)**과 
    │            커밋: git commit -m "release: seal <id> package"
    │      │
    ▼      ▼
-[main 브랜치 복귀]
+[완료 및 릴리즈 정리]
    │
-   ├─► 2. 머지: git checkout main && git merge feat/<release-id>
-   └─► 3. 정리: git branch -d feat/<release-id> (Fast-Path Close)
+   ├─► 2. 머지: 별도 브랜치 분기 시 git checkout main && git merge feat/<release-id>
+   └─► 3. 정리: 별도 브랜치 분기 시 git branch -d feat/<release-id> (Fast-Path Close)
 ```
 
-### 3.1 체크포인트 커밋의 3대 안전 규칙
+### 3.1 브랜치 제어 및 단일 진실 공급원 (SSOT)
+- **worktree 격리 환경 호환**: 외부 AI 도구(Claude Code, OpenCode)나 개발자가 이미 별도의 git worktree 또는 격리 브랜치를 생성하여 작업하는 환경에서는 ForgeFlow가 중복 브랜치를 다시 생성하면 작업 트리가 복잡해집니다.
+- **auto_create_branch 거버넌스 옵션**: `.forgeflow.json`의 `governance.auto_create_branch` 옵션(기본값: `false`)으로 브랜치 생성 단계를 켜고 끕니다.
+- **지침 오염 방지**: 향후 프로젝트별로 브랜치 자동 생성을 기본으로 설정하고자 할 때 `AGENTS.md`나 프롬프트 문서를 오염시키지 않고, `.forgeflow.json`의 `auto_create_branch: true`를 통해서만 일관되게 제어합니다. 사용자가 CLI에서 `--create-branch`를 명시하거나 요청하면 설정값에 관계없이 브랜치가 생성됩니다.
+
+### 3.2 체크포인트 커밋의 3대 안전 규칙
 1. **Never Commit Red**: 단위/통합 테스트가 실패 중인 중간 상태는 절대로 git commit하지 않는다.
 2. **Commit Clean Green**: `tasks.md`의 특정 태스크와 관련 테스트가 100% 통과하여 안전한 상태가 되었을 때만 원자적 커밋을 생성한다.
 3. **Safe Rollback Point**: 새로운 태스크 구현 중 코드가 심각하게 꼬이거나 아키텍처 결함이 발생하면, 즉시 `git reset --hard HEAD` 또는 직전 정상 태스크 커밋으로 롤백하여 깨끗한 상태에서 자율 치유(Loop 2/3)를 재시도한다.

@@ -7,6 +7,24 @@ ForgeFlow 프레임워크의 모든 주요 변경 사항은 이 문서에 기록
 
 ---
 
+## [0.1.19] - 2026-10-31
+
+### 🌿 브랜치 자동 분기 On/Off 거버넌스 설정 지원 (Support auto_create_branch Configuration)
+
+### Added
+- **격리 브랜치 자동 생성 제어 옵션 (`governance.auto_create_branch`)**:
+  - `.forgeflow.json`의 `governance.auto_create_branch` 불리언 옵션 추가 (미지정 시 기본값 `false`).
+  - `auto_create_branch: false`인 경우 Stage 3 격리 구현 시 별도 브랜치(`feat/<release-id>`) 생성을 건너뛰고 현재 브랜치/worktree에서 직접 진행하여, 타 AI 도구(Claude Code, OpenCode)나 개발자가 사전에 설정한 worktree 환경과의 브랜치 중복 및 충돌 방지.
+  - CLI 명령(`release create`, `task create`)에 `--create-branch` (별칭 `--branch`) 플래그를 제공하여 설정이 `false`이더라도 사용자의 명시적 요청 시 브랜치를 분기하여 전환할 수 있도록 지원.
+  - 향후 브랜치 생성 정책을 변경할 때 `AGENTS.md` 같은 지침 문서를 오염시키지 않고 `.forgeflow.json`의 본 설정을 단일 진실 공급원(SSOT)으로 삼도록 사양 확립.
+- **엄격한 불리언 타입 검증 및 진단 엔진 연동**:
+  - `resolve_auto_create_branch` 함수를 통해 비불리언(문자열, 숫자 등) 설정 값을 `ValueError`로 fail-closed 차단.
+  - `forgeflow doctor`(`SystemDiagnostics`)에서 유효하지 않은 `auto_create_branch` 값을 `INVALID_AUTO_CREATE_BRANCH` 이상 징후로 검출.
+- **안전한 라이프사이클 종료 가드**:
+  - `forgeflow lifecycle close` 실행 시 별도 브랜치를 생성하지 않은 경우에도 안전하게 Fast-Path로 릴리즈를 종료하도록 보장.
+
+---
+
 ## [0.1.18] - 2026-10-27
 
 ### ⏱️ 프로젝트별 회귀 테스트 타임아웃 오버라이드 지원 (Support Project-Level Regression Test Timeout)

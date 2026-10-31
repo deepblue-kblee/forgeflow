@@ -281,6 +281,20 @@ class DiagnosticAnalyzer:
                                 context={"test_timeout_seconds": raw_timeout},
                             )
                         )
+
+                # Validate auto_create_branch if specified in governance
+                if "auto_create_branch" in gov:
+                    raw_acb = gov.get("auto_create_branch")
+                    if not isinstance(raw_acb, bool):
+                        anomalies.append(
+                            DiagnosticAnomaly(
+                                anomaly_type="INVALID_AUTO_CREATE_BRANCH",
+                                severity="WARNING",
+                                message="유효하지 않은 auto_create_branch 설정이 감지되었습니다 (불리언 true/false 필요).",
+                                remedy=".forgeflow.json의 governance.auto_create_branch 값을 true 또는 false로 수정하세요.",
+                                context={"auto_create_branch": raw_acb},
+                            )
+                        )
             except Exception:
                 pass
 

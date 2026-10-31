@@ -180,6 +180,21 @@ class TestLifecycleClose(unittest.TestCase):
         status = subprocess.run(["git", "status", "--porcelain"], cwd=self.repo_root, capture_output=True, text=True, check=True)
         self.assertEqual("", status.stdout.strip())
 
+    def test_lifecycle_close_without_separate_branch(self):
+        # When auto_create_branch: false was used, work was directly on main
+        self._setup_lifecycle(status="COMPLETE", branch="main")
+
+        # Do NOT create feat/<release-id> branch
+        result = self.engine.lifecycle_close(self.release_id)
+        self.assertTrue(result["ok"])
+        self.assertEqual("CLOSED", result["status"])
+        self.assertFalse(result["branch_cleaned"])
+        self.assertIsNone(result["deleted_branch"])
+
+        # Invariants: branch is main, not detached, and clean
+        current_branch = self.engine._git_branch(self.repo_root)
+        self.assertEqual("main", current_branch)
+
 
 if __name__ == "__main__":
     unittest.main()

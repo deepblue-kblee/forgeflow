@@ -205,7 +205,7 @@ ForgeFlow 자율 거버넌스 워크플로우의 마스터 오케스트레이터
 3. 사전 검증 훅 통과 확인: `forgeflow check --stage 2` 실행하여 통과 확인.
 
 ### Stage 3: 격리 구현 & 자가 치유 루프 (Isolated Implementation & Self-Healing)
-1. **작업 브랜치 분기**: `git checkout -b feat/<release-id>`
+1. **작업 브랜치 분기 제어**: `.forgeflow.json`의 `governance.auto_create_branch: false`(기본값)인 경우 별도 브랜치 분기를 생략하고 현재 브랜치/worktree에서 직접 구현 진행. `auto_create_branch: true`이거나 사용자가 명시적으로 요청(`--create-branch` 등)한 경우에만 `git checkout -b feat/<release-id>` 분기.
 2. **순차 TDD 구현**: `tasks.md` 체크리스트 순서대로 테스트 작성 -> 구현 코드 작성.
 3. **Loop 2 자율 치유 (No False Stopping)**:
    - 테스트 실패 시 턴을 멈추지 않고 스스로 원인 분석 -> 수정 -> 재테스트 5회 자율 완주.

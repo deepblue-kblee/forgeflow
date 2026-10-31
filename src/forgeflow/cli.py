@@ -5,6 +5,7 @@ ForgeFlow & Harness Unified CLI Entrypoints
 
 import argparse
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -18,7 +19,7 @@ from .lifecycle import (
 )
 from .renderer import ReportRenderer
 from .reviewer import ReviewEngine
-from .scaffold import TemplateScaffolder
+from .scaffold import TemplateScaffolder, resolve_auto_create_branch
 from .scanner import HierarchicalRootScanner, ReleaseScanner
 from .validator import TierRules
 from .validator import SelfGovernanceValidator
@@ -244,6 +245,10 @@ def parse_forgeflow_args(args=None):
     rel_create.add_argument(
         "--tier", type=int, default=2, choices=[1, 2, 3], help="Risk Tier (1=Minor, 2=Standard, 3=Critical)"
     )
+    rel_create.add_argument(
+        "--create-branch", "--branch", action="store_true", default=False,
+        help="Explicitly create and checkout a task branch (e.g. feat/<release_id>)"
+    )
 
     # Command: check
     check_parser = subparsers.add_parser("check", help="Run ForgeFlow governance gate audit", description="Run ForgeFlow governance gate audit")
@@ -403,6 +408,10 @@ def parse_forgeflow_args(args=None):
     task_create.add_argument("task_id", help="Task ID (e.g. task-001 or v1.0.0)")
     task_create.add_argument("--tier", type=int, choices=[1, 2, 3], default=2, help="Governance tier (default: 2)")
     task_create.add_argument("--stage", choices=["backlog", "in-progress"], default="in-progress", help="Target stage folder (default: in-progress)")
+    task_create.add_argument(
+        "--create-branch", "--branch", action="store_true", default=False,
+        help="Explicitly create and checkout a task branch (e.g. feat/<task_id>)"
+    )
 
     # Command: status
     subparsers.add_parser("status", help="Show current project governance status")
@@ -1357,9 +1366,26 @@ def main(args=None):
             print(f"✅ Created release scaffold in: {rel_dir}")
             for name, p in created.items():
                 print(f"  📄 {name}")
+
+            should_branch = getattr(parsed, "create_branch", False) or resolve_auto_create_branch(root_path)
+            if should_branch:
+                branch_name = f"feat/{parsed.release_id}"
+                git_res = subprocess.run(
+                    ["git", "checkout", "-b", branch_name],
+                    cwd=root_path,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if git_res.returncode == 0:
+                    print(f"🌿 Switched to new branch '{branch_name}'")
+                else:
+                    print(f"ℹ️ Branch switch skipped or already exists: {git_res.stderr.strip() or git_res.stdout.strip()}")
+            else:
+                print("ℹ️ Task branch creation skipped (auto_create_branch: false). Continuing on current branch/worktree.")
             sys.exit(0)
         else:
-            print("Usage: forgeflow release create <release_id> [--tier 1|2|3]")
+            print("Usage: forgeflow release create <release_id> [--tier 1|2|3] [--create-branch]")
             sys.exit(1)
 
     elif parsed.command == "task":
@@ -1372,9 +1398,26 @@ def main(args=None):
             print(f"✅ Created task package scaffold in: {rel_dir}")
             for name, p in created.items():
                 print(f"  📄 {name}")
+
+            should_branch = getattr(parsed, "create_branch", False) or resolve_auto_create_branch(root_path)
+            if should_branch:
+                branch_name = f"feat/{parsed.task_id}"
+                git_res = subprocess.run(
+                    ["git", "checkout", "-b", branch_name],
+                    cwd=root_path,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if git_res.returncode == 0:
+                    print(f"🌿 Switched to new branch '{branch_name}'")
+                else:
+                    print(f"ℹ️ Branch switch skipped or already exists: {git_res.stderr.strip() or git_res.stdout.strip()}")
+            else:
+                print("ℹ️ Task branch creation skipped (auto_create_branch: false). Continuing on current branch/worktree.")
             sys.exit(0)
         else:
-            print("Usage: forgeflow task create <task_id> [--tier 1|2|3] [--stage in-progress|backlog]")
+            print("Usage: forgeflow task create <task_id> [--tier 1|2|3] [--stage in-progress|backlog] [--create-branch]")
             sys.exit(1)
 
     elif parsed.command == "migrate":

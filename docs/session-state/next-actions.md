@@ -187,13 +187,27 @@
     - **테스트 및 거버넌스 무결성**:
       - 신규 단위 테스트 12종 추가(`tests/test_runner.py`), 전체 318개 단위 테스트 100% Pass, 18개 릴리즈 전수 거버넌스 감사 `forgeflow check --all --strict` 🟢 ALL PASSED 달성, `tasks/completed/v0.1.18-project-test-timeout/` 패키지 밀봉 및 GitHub Issue #6 공식 종결 완료.
 
+24. **브랜치 자동 분기 On/Off 거버넌스 설정 지원 (v0.1.19)**:
+    - **격리 브랜치 자동 생성 제어 옵션 (`governance.auto_create_branch`)**:
+      - `.forgeflow.json`의 `governance.auto_create_branch` 옵션 지원 (미지정 시 기본값 `false`).
+      - `auto_create_branch: false`인 경우 Stage 3 격리 구현 시 별도 브랜치(`feat/<release-id>`) 생성을 건너뛰고 현재 브랜치/worktree에서 직접 진행하여, 타 AI 도구(Claude Code, OpenCode)나 개발자가 사전 구성한 git worktree 환경과의 브랜치 중복 및 충돌 방지.
+      - CLI 명령(`release create`, `task create`)에 `--create-branch` (별칭 `--branch`) 플래그를 제공하여 설정이 `false`이더라도 사용자의 명시적 요청 시 브랜치를 분기하여 전환할 수 있도록 지원.
+      - 향후 브랜치 생성 정책을 변경할 때 `AGENTS.md` 같은 지침 문서를 오염시키지 않고 `.forgeflow.json`의 본 설정을 단일 진실 공급원(SSOT)으로 삼도록 사양 확립.
+    - **엄격한 불리언 타입 검증 및 진단 엔진 연동**:
+      - `resolve_auto_create_branch` 함수를 통해 비불리언(문자열, 숫자 등) 설정 값을 `ValueError`로 fail-closed 차단.
+      - `forgeflow doctor`(`SystemDiagnostics`)에서 유효하지 않은 `auto_create_branch` 값을 `INVALID_AUTO_CREATE_BRANCH` 이상 징후로 검출.
+    - **안전한 라이프사이클 종료 가드**:
+      - `forgeflow lifecycle close` 실행 시 별도 브랜치를 생성하지 않은 경우에도 안전하게 Fast-Path로 릴리즈를 종료하도록 보장.
+    - **테스트 및 거버넌스 무결성**:
+      - 신규 단위 테스트 6종 추가, 전체 324개 단위 테스트 100% Pass, 19개 릴리즈 전수 거버넌스 감사 `forgeflow check --all --strict` 🟢 ALL PASSED 달성, `tasks/completed/v0.1.19-auto-create-branch-option/` 패키지 밀봉 완료.
+
 ---
 
 ## 새 세션에서 바로 이어서 착수할 과업 (Next Actions)
 
 ### 🎯 다음 작업 방향 및 버전 정책
 1. **버전 운영 및 v0.2.0 승격 로드맵**:
-   - 현재는 `v0.1.18` 상태에서 실전 도그푸딩 및 다운스트림 작업 리포지토리 연동 검증을 진행합니다.
+   - 현재는 `v0.1.19` 상태에서 실전 도그푸딩 및 다운스트림 작업 리포지토리 연동 검증을 진행합니다.
    - 충분한 운영 검증을 거쳐 결함이 완전히 해소된 시점에 사용자와 사전 합의하여 마이너 버전 `v0.2.0`으로 승격합니다.
 2. **GitHub Issues 모니터링 및 추가 개선 사항 접수**:
    - `forgeflow issue list`를 통한 추가 이슈 확인 및 처리.

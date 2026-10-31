@@ -203,6 +203,27 @@ class TestDoctorCLI(unittest.TestCase):
         types = [a.anomaly_type for a in anomalies]
         self.assertIn("LEGACY_CONFIG_DETECTED", types)
 
+    def test_doctor_detects_invalid_auto_create_branch(self):
+        config_file = self.root / ".forgeflow.json"
+        config_file.write_text(json.dumps({
+            "forgeflow_version": "0.1.18",
+            "governance": {"auto_create_branch": "true"}  # string instead of boolean
+        }), encoding="utf-8")
+        analyzer = DiagnosticAnalyzer(repo_root=self.root)
+        anomalies = analyzer.analyze()
+        types = [a.anomaly_type for a in anomalies]
+        self.assertIn("INVALID_AUTO_CREATE_BRANCH", types)
+
+        # Valid boolean should not produce anomaly
+        config_file.write_text(json.dumps({
+            "forgeflow_version": "0.1.18",
+            "governance": {"auto_create_branch": False}
+        }), encoding="utf-8")
+        analyzer = DiagnosticAnalyzer(repo_root=self.root)
+        anomalies = analyzer.analyze()
+        types = [a.anomaly_type for a in anomalies]
+        self.assertNotIn("INVALID_AUTO_CREATE_BRANCH", types)
+
 
 if __name__ == "__main__":
     unittest.main()

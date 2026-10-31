@@ -10,7 +10,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from forgeflow.scaffold import TemplateScaffolder
+from forgeflow.scaffold import TemplateScaffolder, resolve_auto_create_branch
 from forgeflow.validator import DocumentIntegrityValidator
 
 
@@ -426,6 +426,42 @@ class TestScaffolder(unittest.TestCase):
         self.assertIn("PRD.md", created)
         content = (rel_dir / "PRD.md").read_text(encoding="utf-8")
         self.assertEqual(content, "# CUSTOM PRD v0.2.0-custom")
+
+    def test_resolve_auto_create_branch_defaults_to_false(self):
+        # 1. When .forgeflow.json does not exist
+        empty_dir = self.temp_dir / "empty_repo"
+        empty_dir.mkdir()
+        self.assertFalse(resolve_auto_create_branch(empty_dir))
+
+        # 2. When .forgeflow.json exists but governance.auto_create_branch is omitted
+        config_file = empty_dir / ".forgeflow.json"
+        config_file.write_text(json.dumps({"forgeflow_version": "0.1.18", "governance": {}}), encoding="utf-8")
+        self.assertFalse(resolve_auto_create_branch(empty_dir))
+
+    def test_resolve_auto_create_branch_explicit_booleans(self):
+        repo_dir = self.temp_dir / "repo_bool"
+        repo_dir.mkdir()
+        config_file = repo_dir / ".forgeflow.json"
+
+        # Explicit True
+        config_file.write_text(json.dumps({"governance": {"auto_create_branch": True}}), encoding="utf-8")
+        self.assertTrue(resolve_auto_create_branch(repo_dir))
+
+        # Explicit False
+        config_file.write_text(json.dumps({"governance": {"auto_create_branch": False}}), encoding="utf-8")
+        self.assertFalse(resolve_auto_create_branch(repo_dir))
+
+    def test_resolve_auto_create_branch_strict_validation(self):
+        repo_dir = self.temp_dir / "repo_invalid"
+        repo_dir.mkdir()
+        config_file = repo_dir / ".forgeflow.json"
+
+        # Strings, numbers, etc. must raise ValueError
+        invalid_values = ["true", "false", 1, 0, [], {}, 1.0]
+        for val in invalid_values:
+            config_file.write_text(json.dumps({"governance": {"auto_create_branch": val}}), encoding="utf-8")
+            with self.assertRaises(ValueError, msg=f"Should raise ValueError for {val!r}"):
+                resolve_auto_create_branch(repo_dir)
 
 
 if __name__ == "__main__":
