@@ -2,11 +2,15 @@
 
 2026-11-02. Python 3.14.6, macOS, source branch codex/lean-development-flow. 이 문서는 관찰된 결과를 기록하며 main 통합을 뜻하지 않습니다.
 
+후속 실제 개발 사이클 검증은 [behavior-verification.md](behavior-verification.md)에 기록했습니다. 설치 CLI에서 실행하는 9개 acceptance tests를 추가했으며, 기존 단일 파일 smoke test와 검증 범위를 구분합니다.
+
 ## 결과
 
 | 검사 | 결과 |
 | --- | --- |
-| 전체 unittest | 415 tests PASS, 93.555초 |
+| 최초 전체 unittest | 415 tests PASS, 93.555초 |
+| 실제 개발 사이클 보완 후 전체 unittest | 424 tests PASS, 124.733초; 설치 CLI acceptance 9개 포함 |
+| 최종 설치 CLI acceptance 개별 실행 | 9개 PASS, 31.017초; 실제 프로그램·Git·bare remote, 무관한 작업 보존·실패/복구 확인 |
 | Legacy strict archive audit | completed package 23개 모두 PASS |
 | 최종 installer resource 보완 후 focused suite | test_distribution 11개 PASS, 17.6초 |
 | Wheel build | uv isolated build 성공, forgeflow-0.1.25-py3-none-any.whl |
@@ -20,6 +24,10 @@
 | 독립 최종 심사 | Security/Reliability/Maintainability 모두 APPROVED |
 
 전체 suite는 `PYTHONPATH=src python3 -m forgeflow.cli check --all --strict --json`의 내부 unittest 실행으로 확인했습니다. 개별 archive마다 같은 suite를 반복 실행하지 않습니다. 마지막 CHANGELOG 복사 보완은 installer 전용이며 이후 installer 11개와 실제 전달성 probe를 다시 실행했습니다.
+
+후속 424개 검사는 `PYTHONPATH=src python3 -m unittest discover -s tests -p 'test_*.py'`로 실행했습니다. Runtime·parser·기존 strict evidence를 바꾸지 않고 black-box tests와 근거 문서만 추가했습니다. 실제 host 도구/PR와 LLM 자율 수행 pilot의 미검증 범위는 behavior-verification.md에 명시했습니다.
+
+전체 회귀 이후 fixture의 dependency 선언과 동일 prefix의 실제 current 전환 관찰을 강화했으며, 영향받은 acceptance 9개를 최종 재실행했습니다. Runtime이나 나머지 검사의 입력은 바뀌지 않았습니다.
 
 Wheel은 metadata/resource만 검사하지 않고 임시 venv에 실제 설치했습니다. 두 전달 경로에서 scope commit, local --ff-only integration, task branch 삭제와 최종 app 내용까지 관찰했습니다. 테스트 과정에서 새 버전을 전역 CLI/skills에 설치하지 않았습니다.
 

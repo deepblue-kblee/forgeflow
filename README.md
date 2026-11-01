@@ -82,4 +82,6 @@ PYTHONPATH=src python3 -m unittest discover -s tests -p 'test_*.py'
 PYTHONPATH=src python3 -m forgeflow.cli --help
 ~~~
 
+설치된 CLI와 실제 Git으로 작은 프로그램의 실패·수정·push·통합·정리·재개를 재현하려면 `python3 -m unittest discover -s tests -p 'test_workflow_e2e.py' -v`를 실행해주세요. [실제 동작 검증과 확인 범위](docs/design/lean-development-flow/behavior-verification.md)에 시나리오와 한계를 기록했어요.
+
 설치 검증은 임시 prefix/bin과 FORGEFLOW_SKILLS_DIR을 지정해 전역 설치를 건드리지 않게 수행해요. 이 저장소의 작업 지침은 [AGENTS.md](AGENTS.md), 현재 진행 상태는 [next-actions.md](docs/session-state/next-actions.md)에 있어요.
