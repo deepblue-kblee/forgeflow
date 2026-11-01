@@ -1,40 +1,46 @@
 # ForgeFlow Current System State
 
-- **종료 상태 (Exit Status)**: 🟢 정상 종료 (Graceful Exit, 2026-11-01 00:08 KST)
-- **현재 버전**: `v0.1.20` (Relocate Configuration to .forgeflow/config.json with Update Migration)
+- **종료 상태 (Exit Status)**: 🟢 정상 종료 (Graceful Exit, 2026-11-01 20:08 KST)
+- **현재 버전**: `v0.1.23` (Delta-Zero Non-Increasing Warning Allowance in Baseline Review)
 - **상태 판정**: 🟢 HEALTHY (모든 테스트 및 거버넌스 검증 통과)
-- **배포 상태**: 사용자 계정 로컬(`~/.local/forgeflow`, `~/.local/bin`) `v0.1.20` 설치 완료
-- **원격 동기화**: `main` == `origin/main` (`ee57eaf`), ahead/behind 0/0, 태그 `v0.1.20` 배포 완료
+- **배포 상태**: 사용자 계정 로컬(`~/.local/share/forgeflow`, `~/.local/bin`) `v0.1.23` 설치 완료
+- **원격 동기화**: `main` == `origin/main` (`eece5a5`), ahead/behind 0/0, 태그 및 패키지 밀봉 완료
 - **진행 중 릴리즈**: 없음 (`tasks/in-progress/` 비어 있음)
+- **오픈 이슈**: 0건 (GitHub Issue #7 공식 종결 완료)
 
 ---
 
 ## 검증 및 정비 요약
 
-- **단위/통합 테스트**: 325개 전원 통과 (`Ran 325 tests in 16.1s`, OK)
-- **하네스 게이트 감사**: `forgeflow check --all --strict` 20개 릴리즈 전수 🟢 ALL PASSED
+- **단위/통합 테스트**: 343개 전원 통과 (`Ran 343 tests in 16.07s`, OK)
+- **하네스 게이트 감사**: `forgeflow check --all --strict` 22개 릴리즈 전수 🟢 ALL PASSED
 - **코드 스멜 검사**: `forgeflow review --strict` 🟢 PASSED
-- **최신 밀봉 패키지**: `tasks/completed/v0.1.20-relocate-config-to-forgeflow-dir/`
-- **최근 분석 보고서**: [`docs/session-state/speckit_skills_and_clarify_analysis.md`](file:///Users/deepblue/work/repo/forgeflow/docs/session-state/speckit_skills_and_clarify_analysis.md)
+- **최신 밀봉 패키지**: `tasks/completed/v0.1.23-delta-zero-baseline-review/`
 
 ---
 
-## 핵심 완수 기능 (v0.1.20)
+## 핵심 완수 기능 (v0.1.22 ~ v0.1.23, Issue #7)
 
-1. **설정 파일 표준 경로 이전 (`.forgeflow/config.json`)**:
-   - 프로젝트 루트 디렉터리의 정돈성을 위해, 기존 루트 `.forgeflow.json`을 `.forgeflow/config.json`으로 이전.
-   - 신규 스캐폴딩(`forgeflow setup`, `scaffold_speckit_hybrid`, `init_project_governance` 등) 시 `.forgeflow/config.json`을 기본 생성.
-2. **`forgeflow update` 하위 버전 자동 마이그레이션**:
-   - 구버전 리포지토리(루트에 `.forgeflow.json`이 존재하는 프로젝트)에서 `forgeflow update` 실행 시, 기존 사용자 설정을 100% 보존하면서 `.forgeflow/config.json`으로 자동 마이그레이션 및 버전 승격.
-   - 마이그레이션 완료 후 루트에 남아있던 구버전 `.forgeflow.json` 파일을 안전하게 삭제(unlink)하여 최신 프로젝트 레이아웃으로 일원화.
-3. **투명한 하위 호환 폴백 (Graceful Fallback)**:
-   - `ReleaseScanner`, `RuntimeTestRunner`, `SystemDiagnostics`, `resolve_auto_create_branch` 등 모든 설정 탐색 로직에서 `.forgeflow/config.json`을 우선 탐색하고, 구버전 프로젝트의 경우 루트 `.forgeflow.json`을 안전하게 폴백 조회하도록 보장.
-4. **테스트 무결성**: 신규 단위 테스트 추가 (총 325개 테스트 100% 통과).
+1. **Delta-Zero 기존 Warning 비증가 허용 (v0.1.23)**:
+   - `collections.Counter` 다중 집합 슬롯 매칭을 도입하여, 수정된 함수 스코프 내의 기존 Warning이라도 수량이 증가하지 않는다면 Gate 2 통과 허용 (`modified_scope_unchanged_warnings`로 분류 및 리포트에 잔존 주의 표기).
+   - 사소한 1줄 패치나 국소 변경 시 기존 경고 해소를 위한 불필요한 과도 리팩토링 마찰 해소.
+   - 함수 내에서 동일/신규 경고가 추가되거나 기존 수량을 초과하면 신규 경고(`new_warnings`)로 즉시 차단(Fail-Closed).
+2. **`--findings-baseline <ref>` 기준선 비교 모드 (v0.1.22)**:
+   - `forgeflow review`에 `--findings-baseline <ref>` 옵션을 제공하여, 지정된 git revision 대비 새로 생기거나 재발한 Warning 및 수정된 함수 스코프 내의 Warning만 strict 차단(Fail-Closed).
+   - 기존의 `--strict` 전체 Warning 0건 동작은 100% 하위 호환 보존.
+   - 수정되지 않은 함수에 위치한 기존 Warning은 Gate 2 차단에서 면제하되, 결과 리포트에 계속 투명하게 보존.
+3. **구조적 Finding 식별 (Structural Fingerprinting) 및 스코프 추적**:
+   - `CodeSmell`에 `scope` 필드를 추가하고 AST 방문 중 클래스/함수 스택을 추적하여 기록.
+   - 줄 번호(`line_no`) 변동에 영향받지 않는 함수 스코프 및 식별자 기반 매칭 엔진을 도입하여 코드 추가/삭제로 인한 라인 이동 시 기존 Warning이 신규 경고로 오탐되는 문제 방지.
+4. **스멜 검사기 오탐 교정**:
+   - `SmellDetector`의 `Unused Import` 검사기에서 파이썬 컴파일러 지시자인 `from __future__ import annotations`를 런타임 미사용 식별자 경고 대상에서 제외하도록 교정.
 
 ---
 
-## 누적 기반 기능 (v0.1.0 ~ v0.1.19)
+## 누적 기반 기능 (v0.1.0 ~ v0.1.21)
 
+- **배포본 XDG 표준화 및 사양서 디렉토리 격리/최적화 (v0.1.21)**: 배포 경로 `~/.local/share/forgeflow` 표준화, 사양서 `src/forgeflow/spec/` 분리 및 상황별 라우터(`spec/README.md`) 구축, 버전 스탬프(`spec/VERSION`) 및 Amnesia 지침 도입.
+- **설정 파일 표준 경로 이전 (v0.1.20)**: `.forgeflow/config.json` 표준화 및 `forgeflow update` 시 구버전 자동 마이그레이션.
 - **브랜치 자동 분기 제어 (v0.1.19)**: `.forgeflow/config.json`의 `governance.auto_create_branch` 옵션을 통한 격리 브랜치 생성 제어.
 - **프로젝트별 테스트 타임아웃 지원 (v0.1.18)**: `governance.test_timeout_seconds`를 통한 타임아웃 오버라이드.
 - **커스텀 설정 보존 (v0.1.17)**: `forgeflow update` 시 `.forgeflow/config.json` 커스텀 키 100% 보존.
@@ -56,6 +62,6 @@
 - **엔지니어링 철학 헌장**: [`docs/spec/PHILOSOPHY_AND_COMPASS.md`](file:///Users/deepblue/work/repo/forgeflow/docs/spec/PHILOSOPHY_AND_COMPASS.md)
 - **배포 규격서**: [`docs/spec/DISTRIBUTION_SPEC.md`](file:///Users/deepblue/work/repo/forgeflow/docs/spec/DISTRIBUTION_SPEC.md)
 - **리팩토링 가이드라인**: [`docs/spec/REFACTORING_GUIDE.md`](file:///Users/deepblue/work/repo/forgeflow/docs/spec/REFACTORING_GUIDE.md)
-- **변경 이력**: [`docs/spec/CHANGELOG.md`](file:///Users/deepblue/work/repo/forgeflow/docs/spec/CHANGELOG.md)
+- **변경 이력**: [`docs/CHANGELOG.md`](file:///Users/deepblue/work/repo/forgeflow/docs/CHANGELOG.md)
 - **사용자 매뉴얼**: [`README.md`](file:///Users/deepblue/work/repo/forgeflow/README.md)
 - **루트 에이전트 지침**: [`AGENTS.md`](file:///Users/deepblue/work/repo/forgeflow/AGENTS.md)
