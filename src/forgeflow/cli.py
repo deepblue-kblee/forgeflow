@@ -223,6 +223,9 @@ def parse_forgeflow_args(args=None):
     )
     subparsers = parser.add_subparsers(dest="command", help="ForgeFlow Commands")
 
+    from .workflow import add_parser as add_workflow_parser
+    add_workflow_parser(subparsers)
+
     # Command: init
     init_parser = subparsers.add_parser("init", help="Initialize project governance or release scaffold")
     init_parser.add_argument("target", nargs="?", default=None, help="Target release ID or project name (optional)")
@@ -232,7 +235,7 @@ def parse_forgeflow_args(args=None):
     )
     init_parser.add_argument("--speckit", "--hybrid", action="store_true", dest="speckit", help="Initialize lightweight GitHub Spec Kit & ForgeFlow hybrid environment")
     init_parser.add_argument("--template", type=str, default=None, help="Custom template directory path")
-    init_parser.add_argument("--force", action="store_true", help="Force reinstall the complete governance bundle or overwrite release files")
+    init_parser.add_argument("--force", action="store_true", help="Strict release overwrite compatibility flag; default setup preserves user files")
     init_parser.add_argument("--continuation-policy", choices=["interactive", "autonomous"], default="interactive", help="Selectable human-in-the-loop or autonomous continuation capability")
     init_parser.add_argument("--migrate-continuation-policy", action="store_true", help="Add the continuation policy without replacing unrelated configuration")
     init_parser.add_argument("--refresh-governance", action="store_true", help="Refresh central governance guide and retain a backup")
@@ -245,7 +248,7 @@ def parse_forgeflow_args(args=None):
     init_parser.add_argument("--path", type=str, default=None, help="Target directory (legacy alias / explicit path)")
 
     # Command: release
-    rel_parser = subparsers.add_parser("release", help="Manage release specifications")
+    rel_parser = subparsers.add_parser("release", help="Explicit strict compatibility release scaffolding")
     rel_sub = rel_parser.add_subparsers(dest="release_command")
     rel_create = rel_sub.add_parser("create", help="Create a new release boilerplate")
     rel_create.add_argument("release_id", help="Release identifier (e.g. v0.1.0-feature)")
@@ -273,7 +276,7 @@ def parse_forgeflow_args(args=None):
     check_parser.add_argument("--python", type=str, default=None, help="Explicit python interpreter for running tests")
 
     # Command: lifecycle
-    lifecycle_parser = subparsers.add_parser("lifecycle", help="Manage durable lifecycle state")
+    lifecycle_parser = subparsers.add_parser("lifecycle", help="Explicit strict compatibility lifecycle (not the default workflow)")
     lifecycle_sub = lifecycle_parser.add_subparsers(dest="lifecycle_command", required=True)
 
     def add_lifecycle_common(parser):
@@ -634,7 +637,25 @@ def verify_stage2_gatekeeper(repo_root: Path, target: Optional[str] = None, quie
     Fail-closed gatekeeper for GitHub Spec Kit /before_implement hook.
     Returns 0 if valid APPROVED Gate 1 proof exists, exits with 1 otherwise.
     """
-    import hashlib
+    workflows = repo_root / ".forgeflow" / "workflows"
+    if workflows.is_dir():
+        from .workflow import Workflow
+        try:
+            candidates = [path.stem for path in workflows.glob("*.json")]
+            if target:
+                candidates = [target] if target in candidates else []
+            else:
+                candidates = [name for name in candidates
+                              if json.loads((workflows / f"{name}.json").read_text()).get("finalization_complete") is not True]
+            if candidates:
+                if len(candidates) != 1:
+                    raise ValueError("Multiple active workflows: select a task ID explicitly")
+                Workflow(repo_root, candidates[0]).check()
+                return 0
+        except (ValueError, RuntimeError, OSError) as exc:
+            if not quiet:
+                print(f"ForgeFlow workflow check: {exc}", file=sys.stderr)
+            return 1
     in_progress_dir = repo_root / "tasks" / "in-progress"
     if not in_progress_dir.exists() or not in_progress_dir.is_dir():
         if not quiet:
@@ -929,20 +950,26 @@ OFFICIAL_SPECS = [
     {
         "id": "FLOW_SPEC",
         "filename": "FLOW_SPEC.md",
-        "title": "5-Stage Closed-Loop Lifecycle & Branch Strategy",
-        "description": "5단계 폐루프 수명주기, 3단 칸반 구조, 브랜치 격리 및 전진 규칙",
+        "title": "Development Workflow, Ownership & Finalization",
+        "description": "요구·계획·구현·검증·통합·정리의 상태 및 실행 계약",
     },
     {
         "id": "GATES_AND_LOOPS",
         "filename": "GATES_AND_LOOPS.md",
-        "title": "Gate 1/2/3 Criteria & Remediation Loops",
-        "description": "게이트 판정 기준, 3대 루프(Loop 1~3), 자가 치유 예산(5회 한도)",
+        "title": "Verification, Progress & Strict Compatibility",
+        "description": "필수 검증, 증거 재사용, 실패 조사 및 strict 호환 경로",
     },
     {
         "id": "SPECKIT_HOOKS_AND_NORMS",
         "filename": "SPECKIT_HOOKS_AND_NORMS.md",
-        "title": "GitHub Spec Kit Hooks & Governance Injection",
-        "description": "Spec Kit 3대 주입 메커니즘, 훅 라이프사이클 및 TDD 체크포인트 커밋 규범",
+        "title": "GitHub Spec Kit Integration",
+        "description": "Spec Kit 위임, 비파괴 setup 및 선택적 hook",
+    },
+    {
+        "id": "ANTI_PATTERNS",
+        "filename": "ANTI_PATTERNS.md",
+        "title": "Design Boundaries & Anti-Patterns",
+        "description": "권한·소유권·검증·기준 변경의 설계 경계",
     },
     {
         "id": "DISTRIBUTION_SPEC",
@@ -979,9 +1006,24 @@ def resolve_spec_directory(custom_path: Optional[str] = None) -> Optional[Path]:
             if candidate.is_dir() and (candidate / "FLOW_SPEC.md").is_file():
                 return candidate
 
+    # A task's absolute pinned command keeps its own rules even when launched
+    # from another project's cwd. An explicit --path remains the override.
+    package = Path(__file__).resolve().parent
+    identity = package.parent.name
+    if (package.name == "forgeflow" and len(identity) == 64
+            and all(char in "0123456789abcdef" for char in identity)
+            and package.parent.parent.name == "runtime"
+            and package.parent.parent.parent.name == ".forgeflow"):
+        executing_spec = package / "spec"
+        if (executing_spec / "FLOW_SPEC.md").is_file():
+            return executing_spec
+
     # 1. Project local .forgeflow/spec or workspace docs/spec/
     try:
         root = HierarchicalRootScanner.find_root()
+        source_entry = root / "src" / "forgeflow" / "cli.py"
+        if source_entry.resolve() == Path(__file__).resolve():
+            return root / "docs" / "spec"
         proj_spec = root / ".forgeflow" / "spec"
         if proj_spec.is_dir() and (proj_spec / "FLOW_SPEC.md").is_file():
             return proj_spec
@@ -1012,6 +1054,16 @@ def resolve_spec_directory(custom_path: Optional[str] = None) -> Optional[Path]:
         return global_legacy_spec
 
     return None
+
+
+def _host_owns_workspace(root: Path) -> bool:
+    config_path = root / ".forgeflow" / "config.json"
+    if not config_path.exists():
+        config_path = root / ".forgeflow.json"
+    if not config_path.exists():
+        return False
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    return config.get("workflow", {}).get("owner") == "host"
 
 
 def handle_doc(args):
@@ -1155,6 +1207,10 @@ def main(args=None):
     if parsed.command == "upgrade":
         code = handle_upgrade(parsed)
         sys.exit(code)
+
+    if parsed.command == "workflow":
+        from .workflow import handle_command
+        sys.exit(handle_command(parsed))
 
     if parsed.command == "update":
         code = handle_update(parsed)
@@ -1427,6 +1483,9 @@ def main(args=None):
     elif parsed.command == "release":
         if parsed.release_command == "create":
             root_path = HierarchicalRootScanner.find_root()
+            if getattr(parsed, "create_branch", False) and _host_owns_workspace(root_path):
+                print("Host owns this checkout: request branch allocation through its owning tool.", file=sys.stderr)
+                sys.exit(2)
             rel_dir = TemplateScaffolder.resolve_release_dir(root_path, parsed.release_id, stage="in-progress")
             created = TemplateScaffolder.create_release_scaffold(
                 target_dir=rel_dir, release_id=parsed.release_id, tier=parsed.tier
@@ -1459,6 +1518,9 @@ def main(args=None):
     elif parsed.command == "task":
         if parsed.task_command == "create":
             root_path = HierarchicalRootScanner.find_root()
+            if getattr(parsed, "create_branch", False) and _host_owns_workspace(root_path):
+                print("Host owns this checkout: request branch allocation through its owning tool.", file=sys.stderr)
+                sys.exit(2)
             rel_dir = TemplateScaffolder.resolve_release_dir(root_path, parsed.task_id, stage=getattr(parsed, "stage", "in-progress"))
             created = TemplateScaffolder.create_release_scaffold(
                 target_dir=rel_dir, release_id=parsed.task_id, tier=parsed.tier

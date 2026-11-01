@@ -1,10 +1,21 @@
 {
-  "forgeflow_version": "0.1.24",
+  "forgeflow_version": "0.1.25",
+  "workflow": {
+    "mode": "lean",
+    "owner": "standalone",
+    "checks": [
+      ["env", "PYTHONPATH=src", "python3", "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"],
+      ["python3", "scripts/sync-distribution.py", "--check"]
+    ],
+    "environment": ["PYTHONPATH", "VIRTUAL_ENV", "FORGEFLOW_PYTHON"],
+    "verification_paths": ["src", "tests", "scripts", "install.sh", "pyproject.toml", "docs/spec", "docs/adr", "docs/CHANGELOG.md"]
+  },
   "governance": {
     "tasks_dir": "tasks",
     "strict_mode": true,
     "max_loop_budget": 5,
-    "auto_create_branch": true
+    "auto_create_branch": false,
+    "test_timeout_seconds": 300
   },
   "paths": {
     "in_progress": "tasks/in-progress",

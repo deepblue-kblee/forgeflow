@@ -172,7 +172,8 @@ class TestCliIntegration(unittest.TestCase):
         self.assertIn(TemplateScaffolder.BINDING_START, migrated)
 
     def test_forgeflow_init_json_reports_updated_files_separately(self):
-        TemplateScaffolder.init_project_governance(self.temp_dir, "test-proj")
+        # Explicit compatibility setup creates the central guide being refreshed.
+        TemplateScaffolder.init_project_governance(self.temp_dir, "test-proj", refresh_governance=True)
         repo_src = Path(__file__).resolve().parent.parent / "src"
         cmd = [
             sys.executable,

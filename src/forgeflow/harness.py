@@ -1163,6 +1163,12 @@ class HarnessEngine:
         return self._core_status_payload(updated)
 
     def lifecycle_close(self, release_id: str) -> Dict[str, object]:
+        from .scaffold import TemplateScaffolder
+        config_path = TemplateScaffolder.get_config_path(self.repo_root)
+        if config_path.is_file():
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            if config.get("workflow", {}).get("owner") == "host":
+                raise LifecycleError("host_owned_workspace", "Use the owning host tool for checkout and branch cleanup")
         controller = self._core_controller(release_id)
         state = controller.state
         if state["progress"]["status"] != "COMPLETE":

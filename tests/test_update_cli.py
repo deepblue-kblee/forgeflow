@@ -19,15 +19,15 @@ class TestUpdateCLI(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def test_update_success_and_preserves_tasks(self):
-        # 1. Initialize project with old version and active task
+        # Inactive/completed task evidence survives baseline adoption unchanged.
         TemplateScaffolder.scaffold_speckit_hybrid(self.root)
         config_path = self.root / ".forgeflow" / "config.json"
         config_data = json.loads(config_path.read_text(encoding="utf-8"))
         config_data["forgeflow_version"] = "0.1.0"
         config_path.write_text(json.dumps(config_data, indent=2) + "\n", encoding="utf-8")
 
-        # Create active task artifact in tasks/in-progress
-        task_dir = self.root / "tasks" / "in-progress" / "v0.1.0-feature"
+        # Completed evidence is immutable and does not block a new baseline.
+        task_dir = self.root / "tasks" / "completed" / "v0.1.0-feature"
         task_dir.mkdir(parents=True, exist_ok=True)
         spec_file = task_dir / "spec.md"
         spec_content = "# Preserved User Spec Content\n"
@@ -184,6 +184,7 @@ class TestUpdateCLI(unittest.TestCase):
         # Config is already at current __version__ with custom settings
         custom_config = {
             "forgeflow_version": __version__,
+            "workflow": {"mode": "lean", "owner": "standalone", "checks": []},
             "governance": {
                 "tasks_dir": "tasks",
                 "strict_mode": False,
@@ -297,9 +298,9 @@ class TestUpdateCLI(unittest.TestCase):
         self.assertEqual(res["previous_version"], "0.1.18")
         self.assertEqual(res["current_version"], __version__)
 
-        # 3. Assertions: modern config created, legacy config deleted
+        # 3. Modern configuration is created; original is retained for recovery.
         self.assertTrue(modern_path.exists())
-        self.assertFalse(legacy_path.exists())
+        self.assertTrue(legacy_path.exists())
         self.assertIn(".forgeflow/config.json", res["updated_files"])
 
         # 4. Verify preserved contents in migrated modern config

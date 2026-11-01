@@ -1,6 +1,9 @@
-# TODO (Backlog & Roadmap)
+# 진행 작업
 
-현재 진행 중이거나 예정된 미완료 과업이 없습니다.
-기존 OMO(OhMyOpenAgent) 오케스트레이션 통합 계획 및 관련 백로그는 사용자 결정에 따라 전면 폐기되었습니다.
+- v0.1.25-lean-development-flow: thin workflow·검증·Git/host ownership·baseline 연속성·setup/spec/skill 정합 구현과 독립 심사 완료
+- 검증된 codex/lean-development-flow commit/push 완료. 사용자 원격 검토 대기
+- 제출 전 실제 동작 보완: 설치 CLI acceptance 9개 및 전체 424 tests PASS. Host/LLM 운영 pilot은 검증 범위와 구분
+- GitHub #10은 사용자 요청에 따라 재설계로 대체된 제안으로 철회(CLOSED/NOT_PLANNED). #9는 merge 후 수정 반영에 따른 완료 종결 검토
+- 사용자가 main merge·배포를 진행할 계획이며 이 작업에서 에이전트가 main merge·전역 설치·배포를 수행하지 않음
 
-새로운 기능 제안, 개선 요구사항 또는 버그 리포트는 ForgeFlow 자체 개발용 이슈 트래커(`forgeflow issue create`)를 통해 등록하고 Stage 1 기획 및 설계부터 거버넌스 수명주기를 시작합니다.
+관찰된 현재 상태·다음 행동은 docs/session-state/next-actions.md가 소유합니다.

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Unit tests for TemplateScaffolder
+Legacy central-guide transaction tests; lean default coverage is in test_hybrid_scaffold
 """
 
 import json
@@ -33,7 +33,7 @@ class TestScaffolder(unittest.TestCase):
             self.assertTrue(stat.passed, f"{doc_name} should pass initial validation: {stat.errors}")
 
     def test_init_project_governance(self):
-        res = TemplateScaffolder.init_project_governance(self.temp_dir, "test-proj")
+        res = TemplateScaffolder._init_governance_binding_compatibility(self.temp_dir, "test-proj")
         self.assertTrue((self.temp_dir / "tasks").exists())
         self.assertTrue((self.temp_dir / "tasks" / "README.md").exists())
         self.assertTrue((self.temp_dir / "src").exists())
@@ -48,20 +48,21 @@ class TestScaffolder(unittest.TestCase):
 
         config_data = json.loads((self.temp_dir / ".forgeflow" / "config.json").read_text(encoding="utf-8"))
         self.assertEqual(config_data["project"]["name"], "test-proj")
-        self.assertEqual(config_data["governance"]["default_tier"], 2)
+        self.assertNotIn("default_tier", config_data["governance"])
+        self.assertEqual(config_data["workflow"]["mode"], "lean")
         self.assertEqual(config_data["governance"]["continuation_policy"], "interactive")
         self.assertIn(".forgeflow/config.json", res["created_files"])
         for relative_path in TemplateScaffolder.BUNDLE_FILES:
             self.assertTrue((self.temp_dir / relative_path).exists(), relative_path)
 
     def test_init_supports_autonomous_policy_and_non_destructive_migration(self):
-        TemplateScaffolder.init_project_governance(self.temp_dir, "test-proj")
+        TemplateScaffolder._init_governance_binding_compatibility(self.temp_dir, "test-proj")
         config_path = self.temp_dir / ".forgeflow" / "config.json"
         config = json.loads(config_path.read_text(encoding="utf-8"))
         config["governance"].pop("continuation_policy")
         config["custom"] = {"preserve": True}
         config_path.write_text(json.dumps(config), encoding="utf-8")
-        TemplateScaffolder.init_project_governance(
+        TemplateScaffolder._init_governance_binding_compatibility(
             self.temp_dir, "test-proj", migrate_continuation_policy=True
         )
         migrated = json.loads(config_path.read_text(encoding="utf-8"))
@@ -69,9 +70,9 @@ class TestScaffolder(unittest.TestCase):
         self.assertEqual(migrated["custom"], {"preserve": True})
 
     def test_migration_refuses_policy_replacement(self):
-        TemplateScaffolder.init_project_governance(self.temp_dir, "test-proj")
+        TemplateScaffolder._init_governance_binding_compatibility(self.temp_dir, "test-proj")
         with self.assertRaisesRegex(ValueError, "differs"):
-            TemplateScaffolder.init_project_governance(
+            TemplateScaffolder._init_governance_binding_compatibility(
                 self.temp_dir,
                 "test-proj",
                 continuation_policy="autonomous",
@@ -79,7 +80,7 @@ class TestScaffolder(unittest.TestCase):
             )
 
     def test_init_does_not_distribute_self_governance_control_or_binding(self):
-        TemplateScaffolder.init_project_governance(self.temp_dir, "test-proj")
+        TemplateScaffolder._init_governance_binding_compatibility(self.temp_dir, "test-proj")
 
         self.assertFalse((self.temp_dir / "docs" / "forgeflow" / "SELF_GOVERNANCE.md").exists())
         for guide in ("AGENTS.md", "CLAUDE.md", "GEMINI.md"):
@@ -97,8 +98,8 @@ class TestScaffolder(unittest.TestCase):
         existing.parent.mkdir(parents=True)
         existing.write_text("# local annotation\n", encoding="utf-8")
 
-        first = TemplateScaffolder.init_project_governance(self.temp_dir, "test-proj")
-        second = TemplateScaffolder.init_project_governance(self.temp_dir, "test-proj")
+        first = TemplateScaffolder._init_governance_binding_compatibility(self.temp_dir, "test-proj")
+        second = TemplateScaffolder._init_governance_binding_compatibility(self.temp_dir, "test-proj")
 
         self.assertEqual(existing.read_text(encoding="utf-8"), "# local annotation\n")
         self.assertIn("docs/forgeflow/spec/FLOW_SPEC.md", first["skipped_files"])
@@ -106,24 +107,24 @@ class TestScaffolder(unittest.TestCase):
             self.assertIn(str(relative_path), second["skipped_files"])
 
     def test_refresh_governance_does_not_overwrite_existing_bundle(self):
-        TemplateScaffolder.init_project_governance(self.temp_dir, "test-proj")
+        TemplateScaffolder._init_governance_binding_compatibility(self.temp_dir, "test-proj")
         spec = self.temp_dir / "docs" / "forgeflow" / "spec" / "FLOW_SPEC.md"
         spec.write_text("# project copy\n", encoding="utf-8")
 
-        TemplateScaffolder.init_project_governance(
+        TemplateScaffolder._init_governance_binding_compatibility(
             self.temp_dir, "test-proj", refresh_governance=True
         )
 
         self.assertEqual(spec.read_text(encoding="utf-8"), "# project copy\n")
 
     def test_force_reinstalls_every_governed_bundle_file(self):
-        TemplateScaffolder.init_project_governance(self.temp_dir, "test-proj")
+        TemplateScaffolder._init_governance_binding_compatibility(self.temp_dir, "test-proj")
         central = self.temp_dir / TemplateScaffolder.GOVERNANCE_PATH
         central.write_text("# local central\n", encoding="utf-8")
         for relative_path in TemplateScaffolder.BUNDLE_FILES:
             (self.temp_dir / relative_path).write_text("# local bundle\n", encoding="utf-8")
 
-        result = TemplateScaffolder.init_project_governance(self.temp_dir, "test-proj", force=True)
+        result = TemplateScaffolder._init_governance_binding_compatibility(self.temp_dir, "test-proj", force=True)
 
         self.assertIn(str(TemplateScaffolder.GOVERNANCE_PATH), result["updated_files"])
         for relative_path, resource_name in TemplateScaffolder.BUNDLE_FILES.items():
@@ -134,11 +135,11 @@ class TestScaffolder(unittest.TestCase):
             )
 
     def test_force_reports_created_missing_bundle_file_as_updated(self):
-        TemplateScaffolder.init_project_governance(self.temp_dir, "test-proj")
+        TemplateScaffolder._init_governance_binding_compatibility(self.temp_dir, "test-proj")
         missing = next(iter(TemplateScaffolder.BUNDLE_FILES))
         (self.temp_dir / missing).unlink()
 
-        result = TemplateScaffolder.init_project_governance(self.temp_dir, "test-proj", force=True)
+        result = TemplateScaffolder._init_governance_binding_compatibility(self.temp_dir, "test-proj", force=True)
 
         self.assertIn(str(missing), result["updated_files"])
 
@@ -146,7 +147,7 @@ class TestScaffolder(unittest.TestCase):
         agents = self.temp_dir / "AGENTS.md"
         agents.write_text("# user-owned guide\n", encoding="utf-8")
 
-        result = TemplateScaffolder.init_project_governance(self.temp_dir, "test-proj", force=True)
+        result = TemplateScaffolder._init_governance_binding_compatibility(self.temp_dir, "test-proj", force=True)
 
         self.assertEqual("# user-owned guide\n", agents.read_text(encoding="utf-8"))
         self.assertFalse((self.temp_dir / "CLAUDE.md").exists())
@@ -154,7 +155,7 @@ class TestScaffolder(unittest.TestCase):
         self.assertIn(str(TemplateScaffolder.GOVERNANCE_PATH), result["updated_files"])
 
     def test_installed_bundle_matches_package_resources(self):
-        TemplateScaffolder.init_project_governance(self.temp_dir, "test-proj")
+        TemplateScaffolder._init_governance_binding_compatibility(self.temp_dir, "test-proj")
         for relative_path, resource_name in TemplateScaffolder.BUNDLE_FILES.items():
             self.assertEqual(
                 (self.temp_dir / relative_path).read_text(encoding="utf-8"),
@@ -200,9 +201,9 @@ class TestScaffolder(unittest.TestCase):
     def test_governance_binding_preserves_existing_guide_and_is_idempotent(self):
         guide = self.temp_dir / "AGENTS.md"
         guide.write_text("# Local rules\n", encoding="utf-8")
-        TemplateScaffolder.init_project_governance(self.temp_dir, "test-proj")
+        TemplateScaffolder._init_governance_binding_compatibility(self.temp_dir, "test-proj")
         first = guide.read_text(encoding="utf-8")
-        TemplateScaffolder.init_project_governance(self.temp_dir, "test-proj")
+        TemplateScaffolder._init_governance_binding_compatibility(self.temp_dir, "test-proj")
         self.assertEqual(first, guide.read_text(encoding="utf-8"))
         self.assertIn("# Local rules", first)
 
@@ -221,7 +222,7 @@ class TestScaffolder(unittest.TestCase):
         sentinel.write_text("# external\n", encoding="utf-8")
         (self.temp_dir / "GEMINI.md").symlink_to(sentinel)
 
-        result = TemplateScaffolder.init_project_governance(self.temp_dir, "test-proj")
+        result = TemplateScaffolder._init_governance_binding_compatibility(self.temp_dir, "test-proj")
 
         self.assertEqual(sentinel.read_text(encoding="utf-8"), "# external\n")
         self.assertTrue((self.temp_dir / "GEMINI.md").is_symlink())
@@ -235,7 +236,7 @@ class TestScaffolder(unittest.TestCase):
         gemini = self.temp_dir / "GEMINI.md"
         gemini.symlink_to("AGENTS.md")
 
-        result = TemplateScaffolder.init_project_governance(self.temp_dir, "test-proj")
+        result = TemplateScaffolder._init_governance_binding_compatibility(self.temp_dir, "test-proj")
 
         self.assertTrue(gemini.is_symlink())
         self.assertIn(TemplateScaffolder.BINDING_START, agents.read_text(encoding="utf-8"))
@@ -256,7 +257,7 @@ class TestScaffolder(unittest.TestCase):
         guide.write_text(TemplateScaffolder.BINDING_START + "\n", encoding="utf-8")
 
         with self.assertRaisesRegex(ValueError, "Invalid ForgeFlow governance binding markers"):
-            TemplateScaffolder.init_project_governance(self.temp_dir, "test-proj")
+            TemplateScaffolder._init_governance_binding_compatibility(self.temp_dir, "test-proj")
 
         self.assertFalse((self.temp_dir / ".forgeflow" / "config.json").exists())
         self.assertFalse((self.temp_dir / ".forgeflow" / "config.json").exists())
@@ -271,7 +272,7 @@ class TestScaffolder(unittest.TestCase):
         (self.temp_dir / "src").symlink_to(outside, target_is_directory=True)
 
         with self.assertRaisesRegex(ValueError, "Unsafe directory"):
-            TemplateScaffolder.init_project_governance(self.temp_dir, "test-proj")
+            TemplateScaffolder._init_governance_binding_compatibility(self.temp_dir, "test-proj")
 
         self.assertFalse((self.temp_dir / "docs").exists())
         self.assertFalse((self.temp_dir / "tests").exists())
@@ -279,14 +280,14 @@ class TestScaffolder(unittest.TestCase):
         self.assertFalse((self.temp_dir / ".forgeflow.json").exists())
 
     def test_refresh_governance_uses_numbered_backup_on_collision(self):
-        TemplateScaffolder.init_project_governance(self.temp_dir, "test-proj")
+        TemplateScaffolder._init_governance_binding_compatibility(self.temp_dir, "test-proj")
         central = self.temp_dir / TemplateScaffolder.GOVERNANCE_PATH
         original = "# Local governance\n"
         central.write_text(original, encoding="utf-8")
         fixed_backup = central.with_name(central.name + ".bak")
         fixed_backup.write_text("# Existing backup\n", encoding="utf-8")
 
-        TemplateScaffolder.init_project_governance(
+        TemplateScaffolder._init_governance_binding_compatibility(
             self.temp_dir, "test-proj", refresh_governance=True
         )
 
@@ -294,11 +295,12 @@ class TestScaffolder(unittest.TestCase):
         self.assertEqual(
             central.with_name(central.name + ".bak.1").read_text(encoding="utf-8"), original
         )
-        self.assertIn("forgeflow check --all --strict", central.read_text(encoding="utf-8"))
+        self.assertIn("workflow", central.read_text(encoding="utf-8"))
+        self.assertIn("Ready/integrated/cleaned", central.read_text(encoding="utf-8"))
 
     def test_init_reports_refreshed_governance_as_updated(self):
-        TemplateScaffolder.init_project_governance(self.temp_dir, "test-proj")
-        result = TemplateScaffolder.init_project_governance(
+        TemplateScaffolder._init_governance_binding_compatibility(self.temp_dir, "test-proj")
+        result = TemplateScaffolder._init_governance_binding_compatibility(
             self.temp_dir, "test-proj", refresh_governance=True
         )
 
@@ -336,7 +338,7 @@ class TestScaffolder(unittest.TestCase):
 
         with patch("forgeflow.scaffold.os.replace", side_effect=fail_on_claude):
             with self.assertRaisesRegex(OSError, "simulated replace failure"):
-                TemplateScaffolder.init_project_governance(self.temp_dir, "test-proj")
+                TemplateScaffolder._init_governance_binding_compatibility(self.temp_dir, "test-proj")
 
         self.assertFalse((self.temp_dir / ".forgeflow" / "config.json").exists())
         self.assertFalse((self.temp_dir / ".forgeflow.json").exists())
@@ -386,7 +388,7 @@ class TestScaffolder(unittest.TestCase):
         guide = self.temp_dir / "AGENTS.md"
         guide.write_text("# Local rules\n\n" + TemplateScaffolder.LEGACY_BINDING + "\n", encoding="utf-8")
 
-        TemplateScaffolder.init_project_governance(
+        TemplateScaffolder._init_governance_binding_compatibility(
             self.temp_dir, "test-proj", migrate_governance_binding=True
         )
 

@@ -154,21 +154,23 @@ class TestDoctorCLI(unittest.TestCase):
         types = [a.anomaly_type for a in anomalies]
         self.assertIn("MISSING_SPECKIT_PREREQUISITE", types)
 
-    def test_doctor_detects_legacy_config_amnesia(self):
+    def test_doctor_preserves_old_versions_without_date_based_diagnosis(self):
         config_file = self.root / ".forgeflow.json"
         # 1. Version < 0.1.0
         config_file.write_text(json.dumps({"forgeflow_version": "0.0.9"}), encoding="utf-8")
         analyzer = DiagnosticAnalyzer(repo_root=self.root)
         anomalies = analyzer.analyze()
         types = [a.anomaly_type for a in anomalies]
-        self.assertIn("LEGACY_CONFIG_DETECTED", types)
+        self.assertNotIn("LEGACY_CONFIG_DETECTED", types)
+        self.assertNotIn("INVALID_CONFIG", types)
 
         # 2. Past pre-reset version (0.22.1 / 0.23.0) without constitution.md
         config_file.write_text(json.dumps({"forgeflow_version": "0.22.1"}), encoding="utf-8")
         analyzer = DiagnosticAnalyzer(repo_root=self.root)
         anomalies = analyzer.analyze()
         types = [a.anomaly_type for a in anomalies]
-        self.assertIn("LEGACY_CONFIG_DETECTED", types)
+        self.assertNotIn("LEGACY_CONFIG_DETECTED", types)
+        self.assertNotIn("INVALID_CONFIG", types)
 
     def test_doctor_allows_newer_forgeflow_version(self):
         config_file = self.root / ".forgeflow.json"
@@ -201,7 +203,8 @@ class TestDoctorCLI(unittest.TestCase):
         analyzer = DiagnosticAnalyzer(repo_root=self.root)
         anomalies = analyzer.analyze()
         types = [a.anomaly_type for a in anomalies]
-        self.assertIn("LEGACY_CONFIG_DETECTED", types)
+        self.assertIn("STRICT_COMPATIBILITY_CONFIG", types)
+        self.assertNotIn("INVALID_CONFIG", types)
 
     def test_doctor_detects_invalid_auto_create_branch(self):
         config_file = self.root / ".forgeflow.json"
@@ -223,6 +226,15 @@ class TestDoctorCLI(unittest.TestCase):
         anomalies = analyzer.analyze()
         types = [a.anomaly_type for a in anomalies]
         self.assertNotIn("INVALID_AUTO_CREATE_BRANCH", types)
+
+    def test_doctor_reports_invalid_schema_without_replacing_user_file(self):
+        config_file = self.root / ".forgeflow.json"
+        for content in ('{"workflow":', '{"governance": []}',
+                        '{"workflow": {"checks": ["python3 -m unittest"]}}'):
+            config_file.write_text(content)
+            anomalies = DiagnosticAnalyzer(repo_root=self.root).analyze()
+            self.assertIn("INVALID_CONFIG", [item.anomaly_type for item in anomalies])
+            self.assertEqual(config_file.read_text(), content)
 
 
 if __name__ == "__main__":

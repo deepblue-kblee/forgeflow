@@ -1,7 +1,6 @@
 version: "1.0"
-hooks:
-  before_implement:
-    - extension: forgeflow-gatekeeper
-      command: forgeflow check --stage 2 --quiet
-      optional: false
-      prompt: "ForgeFlow Gate 1 승인 증적(GATE1_REVIEW.md)의 유효성을 검증한다. 미승인 시 즉시 중단한다."
+# 기본 workflow에 universal strict hook을 주입하지 않습니다.
+# 명시적으로 설정한 프로젝트 hook은 다음처럼 연결할 수 있습니다:
+#   python3 .forgeflow/run.py --runtime-identity <task-baseline-digest> workflow check <task-id>
+# Strict compatibility는 task-specific stage-2 hook을 의도적으로 유지할 수 있습니다.
+hooks: {}

@@ -1,11 +1,13 @@
 # ✅ QA Sign-Off - Release {{RELEASE_ID}}
 
+> 명시적 strict compatibility 템플릿입니다. 기본 workflow에는 필요하지 않습니다. 패키지의 git-sha/sha-free 정책과 실제 evidence를 기록합니다. Package 완료는 Git merge/cleanup을 뜻하지 않으며 operation 권한은 별도입니다.
+
 > Gate 2의 QA Sign-off입니다. 구현 snapshot(`QA-SHA` 또는 SHA-free 무결성)과 자동 검증·기술 review를 승인하며, 최종 release package의 사용자 승인은 Gate 3 `RELEASE_SIGNOFF.md`에서 별도로 기록합니다.
 
 - **릴리즈 식별자**: `{{RELEASE_ID}}`
 - **위험도 등급**: **Tier {{TIER}} ({{TIER_NAME}})**
 - **심사 일자**: {{DATE}}
-- **최종 판정**: **APPROVED (100% Pass)**
+- **최종 판정**: **PENDING — 실제 검증 후 판정**
 
 ---
 
@@ -55,7 +57,7 @@ snapshot, supersession, destructive recovery, 또는 retention decision은 같�
 ## 4. 최종 서명
 
 - **QA 리드**: ForgeFlow Automated Gatekeeper
-- **상태**: **APPROVED**
+- **상태**: **PENDING**
 - **서명 일시**: {{DATE}} KST
 
 ---
@@ -87,11 +89,11 @@ Task-Branch: PENDING
 Base-SHA: PENDING
 QA-SHA: PENDING
 Stage: PACKAGE_REVIEW_PENDING
-Gate-1: APPROVED
-Gate-2: APPROVED
-Reviewer: id=security; perspective=Security; verdict=APPROVED; qa-sha=PENDING
-Reviewer: id=reliability; perspective=Reliability; verdict=APPROVED; qa-sha=PENDING
-Reviewer: id=maintainability; perspective=Maintainability; verdict=APPROVED; qa-sha=PENDING
-Verification: id=unit; command=PENDING; result=PASS; exit-code=0; qa-sha=PENDING
+Gate-1: PENDING
+Gate-2: PENDING
+Reviewer: id=security; perspective=Security; verdict=PENDING; qa-sha=PENDING
+Reviewer: id=reliability; perspective=Reliability; verdict=PENDING; qa-sha=PENDING
+Reviewer: id=maintainability; perspective=Maintainability; verdict=PENDING; qa-sha=PENDING
+Verification: id=unit; command=PENDING; result=PENDING; exit-code=PENDING; qa-sha=PENDING
 Next-Action: RELEASE_SIGNOFF
 ```

@@ -1,132 +1,51 @@
-# 🌊 ForgeFlow 시스템 통합 에이전트 지침 (AGENTS.md)
+# ForgeFlow 저장소 작업 지침
 
-이 문서는 `forgeflow` 리포지토리에서 작업하는 모든 AI 에이전트(Antigravity, Claude Code, OpenClaw 등)가 작업 시작 전 반드시 숙지해야 하는 최상위 단일 진실 공급원(SSOT) 루트 지침이다.
+## 목적과 단일 기준
 
----
+ForgeFlow는 요구사항·계획·구현·검증·허용된 통합·정리를 완료까지 조정합니다. 계획은 Spec Kit, 검증은 project tools, repository operations는 Git/owning host에 위임합니다. Core는 Python 3.10+ 표준 라이브러리만 사용하며 third-party runtime dependency를 추가하지 않습니다.
 
-### 1. 핵심 정체성 및 목적 (Core Identity & Purpose)
-- **프레임워크의 본질**: ForgeFlow는 AI 에이전트 협업 환경에서 기획, 설계, 검증, 격리 구현, QA Sign-Off, 운영 승격, 완료 보고서 작성까지의 전 과정을 **표준화된 자율 폐루프(Closed-Loop)**로 제어하는 **자율 거버넌스 엔진 및 하네스 게이트 CLI 도구**이다.
-- **도메인 완전 분리**:
-  - `forgeflow` 리포지토리는 프레임워크 자체의 규격(`docs/spec/`), CLI 소스(`src/forgeflow/`), 표준 템플릿(`src/forgeflow/templates/`), 자체 테스트 스위트(`tests/`)만을 관리한다.
-  - 타 프로젝트의 실행 결과물이나 외부 프로젝트 릴리즈 문서는 본 리포지토리에 절대 혼입하지 않는다.
-- **Zero-Dependency 원칙**:
-  - 프레임워크 코어와 CLI는 외부 서드파티 런타임 의존성 없이 **Python 3.10+ 표준 라이브러리(Standard Library)만으로 100% 동작**해야 한다.
-  - 외부 패키지 의존성 추가는 엄격히 금지된다.
+Session 시작 시 docs/session-state/next-actions.md와 docs/spec/README.md를 읽고 현재 작업의 소유 계약을 참조합니다. docs/spec/가 공식 편집 원본이며 src/forgeflow/spec/는 기계적 배포 복제본입니다. 양쪽 정책을 독립 유지하지 않습니다.
 
----
+tasks/completed/와 과거 docs/releases/는 불변 evidence이며 현행 행동 규칙이 아닙니다. 필요한 compatibility 맥락만 선별 조회합니다. 날짜만으로 사용자 자료를 삭제하지 않습니다.
 
-### 2. 하네스 게이트 및 거버넌스 규범 (Harness & Governance Standard)
+## 기본 개발 계약
 
-모든 요청은 repository write 전에 `non-change`, Tier 1, Tier 2, Tier 3으로 triage한다. 비변경 요청은 lifecycle 대상이 아니며, 변경 작업은 정의된 거버넌스 경로를 준수한다.
+구현 전 scope·observable acceptance·proportionate plan·필수 checks를 확정합니다. 통합 전 해당 검증 성공과 operation 권한을 확인합니다. 작은 변경에 다중 서명·seal을 요구하지 않습니다. 큰 변경에는 Spec Kit spec/plan/tasks를 활용하며 추가 심사는 실제 위험·프로젝트 요구에 따릅니다.
 
-```text
-Stage 1: 기획 & 명세 (/speckit.specify ➔ /speckit.clarify ➔ spec.md 작성)
-  └── Gate 1: 명세 승인 (Tier 1/2/3 리스크 판정 및 GATE1_REVIEW.md "APPROVED" 승인)
-        └── Stage 2: 기술 설계 & 태스크 분해 (/speckit.plan ➔ plan.md, /speckit.tasks ➔ tasks.md)
-              └── Stage 3: 격리 구현 & 자가 치유 루프 (Loop 2: 수정-테스트 5회 자율 치유 / Loop 3: 스펙 회귀)
-                    └── Gate 2: QA 품질 승인 (QA_SIGNOFF.md) ➔ Gate 3: 릴리즈 승인 및 밀봉 (RELEASE_SIGNOFF.md ➔ tasks/completed/ 이동)
-```
+docs/spec/FLOW_SPEC.md의 workflow CLI/state를 사용합니다. 기본 실행 단일 근거는 .forgeflow/workflows/<id>.json입니다. Project workflow.checks를 task 입력으로 제거할 수 없습니다. 선택적 forgeflow review 임계치를 universal blocker로 삼지 않습니다.
 
-1. **위험도 기반 동적 티어링 (Dynamic Risk Tiering)**:
-   - **Tier 1 (Minor)**: 동작 불변 문구·formatting·일반 documentation 또는 인터페이스 변경이 없는 단일 모듈의 재현 가능한 국소 bugfix에 한정한다. `spec.md`, `GATE1_REVIEW.md`에는 계획된 변경 경로(planned paths)를 명시하고 Self-Review PASS를 기록한다. Gate 2 QA Sign-Off 시 전체 테스트 통과 및 계획된 경로와 실제 변경 경로 일치를 검증한다.
-   - **Tier 2 (Standard Features)**: 일반 신규 기능 및 복수 모듈 개선. 독립 시니어 심사관 1인 정밀 검토 및 승인.
-   - **Tier 3 (Core/Architecture/Breaking Changes)**: 3인 독립 패널(보안, 안정성, 유지보수성) 병렬 심사 및 사용자 구두 승인. 보안, 권한, secrets, dependency, configuration, external API, data operation, CI/CD, core interface, 또는 governance control-plane 변경은 규모와 무관하게 Tier 3이다.
-2. **사전 승인 전 구현 금지 (No Code Before Gate 1 Pass)**:
-   - `tasks/in-progress/<release-id>/GATE1_REVIEW.md`의 공식 승인(APPROVED) 증적이 존재하기 전에는 `src/**`에 구현 코드를 작성하거나 수정할 수 없다. Spec Kit의 `before_implement` 훅(`forgeflow check --stage 2`)이 이를 물리적으로 fail-closed 차단한다.
-3. **하이브리드 거버넌스 필수 산출물 체계**:
-   - 실행 엔진 산출물 (Spec Kit): `spec.md` (기능 요구사항), `plan.md` (기술 아키텍처/데이터모델), `tasks.md` (원자적 TDD 체크리스트)
-   - 거버넌스 엔진 산출물 (ForgeFlow): `GATE1_REVIEW.md` (Gate 1 명세 승인), `QA_SIGNOFF.md` (Gate 2 QA 승인), `RELEASE_SIGNOFF.md` (Gate 3 릴리즈 승인 및 밀봉)
-4. **과거 버전 및 흔적 강제 폐기 규범 (Date-Based Amnesia Policy)**:
-   - **기준일**: **2026-10-20** (ForgeFlow v0.1.0 공식 릴리즈일).
-   - 2026-10-20 이전에 생성된 모든 레거시 설정(구버전 `.forgeflow.json` 등), 메모리, 과거 릴리즈 산출물, 구버전 spec/PRD/DESIGN 등은 일체 폐기한다.
-   - 과거 버전의 하위 호환성을 유지하려 하지 않으며, 과거 메모리나 산출물을 계승하지 않는다. 사용자 요구사항에 따라 공식 v0.1.0 표준으로 `spec.md`를 새롭게 작성한다.
-5. **ForgeFlow 자체 버전 규칙**:
-   - `src/forgeflow/**`, `tests/**`, `docs/spec/**`, `AGENTS.md`, `README.md`, `pyproject.toml`, 또는 `install.sh`를 변경하는 ForgeFlow self-maintenance 릴리즈는 canonical `src/forgeflow/_version.py`를 단일 진실 공급원(SSOT)으로 삼아 갱신한다.
-   - **패치 버전 승격 정책**: 당분간은 `0.1.X` 체계에서 `X`(패치 버전, 예: 0.1.9 ➔ 0.1.10) 부분만 1씩 증가시킨다. 마이너 버전(`0.2.0` 등)은 프레임워크의 대규모 아키텍처 변화 시 사용자와 사전 상의하여 합의된 시점에만 승격한다.
-6. **조건부 OIDR (Operational Incident and Delivery Readiness) 규범**:
-   - 인시던트 해결(`incident-fix`)을 표방하거나 공용 표면(`public-surface-change`)을 변경하는 릴리즈는 OIDR 트랙이 필수 활성화된다.
-   - Gate 1에서는 정제된 `Incident Brief`, 프로퍼티 보존 픽스처 매핑, 유효한 평결(`supported` | `explicitly-excluded` | `discovery-only`)을 입증해야 하며, 허위 해결 주장은 fail-closed 차단된다.
-   - Gate 2에서는 소스 체크아웃이 아닌 격리 설치 환경에서 비파괴 프로브를 실행하여 런타임 전달성을 증명해야 하며, 활성 타깃 미검증 시 명시적 waiver(`delivery ready; active target unverified`)를 요구한다.
+기존 release/task/lifecycle는 명시적 strict compatibility입니다. Package-review/signoff/manifest/seal 순서·binding policy는 docs/spec/GATES_AND_LOOPS.md가 정의합니다. 패키지 완료를 통합 증거 없이 merged로 보고하지 않습니다.
 
----
+## Repository ownership과 권한
 
-### 3. 개발 및 테스트 품질 규범 (Quality & Testing Protocol)
+이미 받은 사용자 승인을 재사용합니다. Source·target·owner·integration route·각 permission을 한 번 기록합니다. Readiness 자체는 push/merge/delete/deploy 권한이 아닙니다. Local integration에 PR을 강제하지 않습니다.
 
-- **환경 격리**: macOS PEP 668 환경을 준수하여 로컬 가상환경(`.venv`) 기반으로 개발 및 테스트를 수행한다.
-- **테스트 무결성**:
-  - `pytest` 또는 `python3 -m unittest discover -s tests -p "test_*.py"`를 실행하여 단위/통합 테스트 100% Pass를 보장한다.
-  - 자체 거버넌스 감사 CLI인 `forgeflow check --all --strict`(증분 감사 적용, 호환 별칭 `harness check`)가 결함 없이 🟢 통과해야 한다.
-- **테스트 케이스 변경 주의**: 기능 구현 중 테스트가 실패할 경우, 테스트 케이스 자체를 임의로 완화하거나 주석 처리하지 않고 구현 코드의 결함을 먼저 수정한다.
+Host-owned checkout에 다른 branch/worktree를 중복 생성하지 않습니다. Host cleanup은 소유 도구를 사용합니다. Standalone operation은 task-owned paths/branches만 다룹니다. 무관한 staged/unstaged/untracked 변경을 몰래 commit/stash/reset하지 않으며 자동 destructive rollback을 금지합니다.
 
----
+Ready/integrated/cleaned와 요청 범위 완료 finalization_complete를 구분합니다. Merge 성공·cleanup 실패 시 정리만 재개합니다. 관찰된 Git/host 결과를 확인한 뒤 성공을 보고합니다.
 
-### 4. 오케스트레이터 통합 지침 (Orchestrator Integration Boundary)
+## 검증·심사
 
-- **상위 권한 유지**: ForgeFlow는 최상위 수명주기 및 승격 권한(SSOT)을 가진다.
-- **외부 오케스트레이터의 위치**:
-  - 외부 오케스트레이터는 ForgeFlow의 활성 Stage 및 Gate 내부에서 동작하는 선택적 실행자(Executor)이다.
-  - 외부 도구의 임시 상태는 정식 릴리즈 증적으로 간주되지 않으며, 모든 검증 결과는 `docs/releases/<release-id>/` 산출물에 명시적으로 기록되어야 한다.
-  - 외부 도구의 실행 실패가 발생하더라도 Gate 기준을 임의로 하향 조정할 수 없다.
-  - 코어 엔진에는 외부 오케스트레이터 전용 결합이나 의존성을 두지 않는다.
+작업 중 focused 검사, 통합 전 필요한 관련 suite를 실행합니다. ForgeFlow runtime 변경은 python3 -m unittest discover -s tests -p "test_*.py"와 영향에 맞는 source-entrypoint/delivery 검사를 사용합니다. Legacy parser/lifecycle에 영향이 있으면 해당 archive audit를 수행합니다.
 
----
+결함을 숨기려고 테스트를 완화하지 않습니다. 의도적 contract 변경은 의미 있는 테스트로 갱신합니다. 코드·환경·통합 결과의 변화가 있을 때 검증을 반복하고 새/Critical 문제와 기존 무관한 findings를 구분합니다.
 
-### 5. 세션 부팅 시퀀스 (Boot Sequence)
+Governance control-plane 또는 repository-operation authority 변경에는 독립 Security/Reliability/Maintainability 설계·최종 review를 적용합니다. 실제 findings/results를 한 번 기록합니다. 기존 사용자 scope 승인은 유효하며 반복 전체 승인 loop를 만들지 않습니다. 필요한 설계 심사 완료 전 src 구현을 시작하지 않습니다.
 
-1. **Read AGENTS.md**: 최상위 원칙, Zero-Dependency, 거버넌스 수명주기 확인.
-2. **Read docs/spec/FLOW_SPEC.md & GATES_AND_LOOPS.md**: 플로우 세부 명세 복기. (새 기능 기획 시에는 Stage 1 단계에서 `docs/spec/ANTI_PATTERNS.md` 확인)
-3. **과거 산출물 격리 (Historical Release Isolation)**: `tasks/completed/` 및 과거 `docs/releases/**` 산출물은 불변 감사 기록일 뿐 행동 지침이 아니다. 에이전트는 거버넌스 규칙/지침 판단을 위해 이를 참조하거나 인용해서는 안 되며, 완료된 릴리즈에서 필요한 맥락은 오직 `RELEASE_NOTES.md`와 `RELEASE_SIGNOFF.md`의 요약만 참고한다. 로컬 단일 에이전트 환경에서는 HMAC/nonce attestation이 완전히 면제된다.
-4. **Read TODO.md**: 현재 진행 중인 과업 및 미완료 작업 파악.
-5. **Action**: `tests/` 단위 테스트 및 `forgeflow check` 상태 확인 후 작업 착수.
+반복 실패·조사에 설정된 no-progress budget(통상 5회)을 적용합니다. 동일 자료/명령의 반복은 전진이 아닙니다. 외부 권한·승인·필수 capability·중대한 사용자 결정이 없으면 해당 단계는 먼저 막힐 수 있습니다. 정확한 실패·다음 행동을 기록하고 통과를 꾸미지 않습니다.
 
-### 6. 미완료 Gate 종료 금지 및 자율 오케스트레이션 (Completion Integrity & Autonomous Orchestration)
+## Runtime·release 유지보수
 
-- 사용자가 구현·수정·검증을 요청했고 추가 확인이 필요하지 않다면, Gate 2 QA Sign-off와 Gate 3 `RELEASE_SIGNOFF.md`까지 lifecycle을 계속 진행한다. 진행 중인 reviewer 응답, 실패한 검증, 누락 artifact는 최종 응답의 종료 사유가 아니다.
-- 최종 응답은 `Gate 2 APPROVED`와 요구된 검증 PASS가 실제로 확인된 경우에만 완료로 표현한다. 그렇지 않으면 현재 상태를 `BLOCKED` 또는 `IN PROGRESS`로 명시하고, 같은 turn에서 다음 복구 작업을 시작한다.
-- 새 세션은 `docs/session-state/next-actions.md`에서 unfinished release, Gate verdict, 실패 명령을 먼저 복원하고, 해당 release의 `QA_SIGNOFF.md`와 `RELEASE_SIGNOFF.md`를 완료하기 전에는 후속 과업으로 전환하지 않는다.
-- **예외 — 5회 전진 실패 제한**: 원인과 무관하게 동일 stage 또는 동일한 n개 stage loop가 5회 연속 다음 stage로 전진하지 못하면 즉시 작업을 중지하고 사용자 입력을 기다린다. 이때 `docs/session-state/next-actions.md`에 release ID, 현재 stage, 5회 시도별 명령·결과·실패 원인, 마지막 변경 SHA/diff, 다음 전진에 필요한 사용자 결정을 기록한다. 5회 이전에는 실패를 최종 종료 사유로 사용하지 않는다.
+Active 작업은 content identity와 executable local snapshot을 유지합니다. 재개는 해당 state의 baseline.command를 통한 doc show 또는 baseline.path/spec를 사용하며 여러 task의 기준을 project 기본 spec 링크로 대체하지 않습니다. Global current/same-version replacement가 조용히 규칙을 바꿀 수 없습니다. 새 baseline adoption은 명시적 이유·영향 검토를 기록하며 완료 evidence를 보존합니다.
 
-#### 진짜 멈춤 vs 가짜 멈춤 표준 체크리스트 (True vs False Stopping Conditions)
-- **가짜 멈춤 (Non-Stop — 즉시 내부 Loop 2 자가 치유 재진입, 사용자 보고 및 턴 종료 절대 금지)**:
-  - 단위/통합 테스트 실패 (`AssertionError` 등): 즉시 코드/픽스처 수정 재시도
-  - 코드 리뷰어 `REJECT` 판정: `REM-xxx` 지적사항 장부 등록 후 즉시 코드 수정 착수
-  - 픽스처 누락, 포맷/타입/린트 오류: 즉시 픽스처/타입 수정 후 재검증 실행
-  - 서브에이전트 작업 완료: 결과 취합 후 다음 단계 즉시 디스패치
-- **진짜 멈춤 (True Stop — 오직 이 경우에만 사용자 대기 허용)**:
-  - 동일 failure fingerprint 정확히 5회 연속 무진전: `BLOCKED` 전이 및 사용자 에스컬레이션
-  - 사용자 외부 권한 경계: Git push, 비밀번호/토큰 요구 등 명시적 권한 승인 대기
-  - 아키텍처/명세 모순 (Loop 3 회귀): 설계 결함 및 회귀 근거 제시 후 사용자 승인 대기
-  - Gate 2 승인 후 Gate 3 사용자 릴리즈 대기: `PACKAGE_REVIEW_PENDING`에서 사용자 Go/No-Go 대기
+Runtime/tests/공식 specs/지침/배포를 바꾸는 self-maintenance는 src/forgeflow/_version.py와 spec/VERSION을 일치시킵니다. 현재 0.1.X patch 정책을 유지하고 minor 변경은 별도 합의합니다. Runtime·packaged specs/templates·generator·installer 계약을 일치시킵니다.
 
-#### Supervisor-Worker 다중 에이전트 협업 규범
-- **Supervisor (메인 에이전트)**: 라이프사이클 상태 기계(`LifecycleStore`), 증적 장부(`loop_record`), 루프 예산(5회 한도), Git 커밋 충돌 방지를 총괄하며, 직접 대량 코드를 수정하지 않고 결과를 취합·검증·심사 배치한다.
-- **Worker (서브에이전트)**: 독립된 도메인(Reliability, Maintainability, Security 등)별로 파일 경로를 엄격히 격리(`File-Path Partitioning`)하여 수정을 수행하며, Supervisor가 순차 병합(Serialized Staging)을 통제한다.
+응집된 단위로 commit하고 저장소가 요구하는 attribution을 지킵니다. Commit/push/merge는 기존 권한 안에서만 수행합니다. Issue close/comment는 해당 사용자 범위가 필요하며 branch push를 merge로 취급하지 않습니다. 개발에 전역 설치 update를 암묵적으로 포함하지 않습니다.
 
----
-
-### 7. ForgeFlow 자체 유지보수용 이슈 트래커 (Self-Maintenance Issue Tracker)
-
-- **적용 범위**: 본 이슈 트래커 기능은 ForgeFlow 프레임워크 자체의 기능 개발, 개선, 버그 수정 시 에이전트의 프롬프트 토큰 절감 및 초고속 조회를 위해 사용된다.
-- **내장 CLI**: 별도의 외부 스크립트 없이 `forgeflow issue` CLI(`create`, `list`, `view`, `edit`, `close`, `delete`)를 통해 GitHub Issues 연동 및 `.cache/issues/` 로컬 캐시를 투명하게 사용한다.
-- **파이프라인 연계**: 이슈 등록(`forgeflow issue create`) ➔ 구현 브랜치 분기 및 거버넌스 수행 ➔ Gate 3 릴리즈 완료 후 이슈 종결(`forgeflow issue close <number>`) 절차를 따른다.
-
----
-
-### 8. 피쳐 및 릴리즈 최종 클로즈 규범 (Feature Close & Post-Completion Fast-Path)
-
-- **과잉 검증 금지**: 이미 Gate 3 Release Sign-off, Package Seal, `lifecycle complete` 전이가 완료되었거나 `main` 브랜치에 머지된 릴리즈에 대해 "클로즈", "정리", "마무리" 요청을 받은 경우, 전체 단위 테스트, 하네스 감사, Self-governance 등의 무거운 검증 명령을 재실행하는 것을 엄격히 금지한다.
-- **클로즈 수행 경계 (Fast-Path)**:
-  1. `git status` 및 `git branch -a`로 잔여 작업 브랜치(`feat/...`) 존재 여부 확인.
-  2. 잔여 로컬/원격 작업 브랜치가 있다면 삭제(`git branch -d` 등).
-  3. 완료 상태 요약 및 최종 종료 보고 (0.5초 이내 완결).
-- **브랜치 맥락 준수**: `check --self-governance` 등의 사전 개발 검증 명령은 `feat/...` 격리 브랜치 개발 단계(Stage 4) 전용이므로, `main` 브랜치나 이미 완료된 릴리즈 상태에서 호출해서는 안 된다.
+Handoff 전 docs/session-state/next-actions.md에 관찰된 진행·검증·미완·다음 행동을 갱신합니다. 구현 완료·차단·미착수를 정확히 보고합니다.
 
 <!-- forgeflow:boot-anchor:start -->
-## 🌊 ForgeFlow Session Boot Sequence (Harness Governance)
+## ForgeFlow session 진입점
 
-작업 착수 전 필수 확인 및 준수:
-1. **헌법 확인**: `.specify/memory/constitution.md` 원칙 준수
-2. **사양서 색인 참조**: `.forgeflow/spec/README.md` 확인 후 해당 작업 단계 사양서만 선별 참조
-3. **최신 버전 동기화 & 기억 리셋**: `.forgeflow/spec/VERSION` 확인. 버전 변경 감지 또는 세션 진입 시 과거 버전 지식 즉시 폐기(Amnesia) 및 `README.md` 재독 필수
-4. **버전 격리**: `~/.local/share/forgeflow/packages/` 내 과거 버전 일체 참조 금지 (`current` 최신본만 사용)
+docs/session-state/next-actions.md, .forgeflow/config.json, docs/spec/README.md를 읽습니다. Active task의 pinned runtime·기존 권한을 재사용하고 현 작업의 소유 계약을 따릅니다. 사용자 지침·과거 evidence를 보존합니다.
 <!-- forgeflow:boot-anchor:end -->
