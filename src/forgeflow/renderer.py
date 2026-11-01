@@ -124,7 +124,7 @@ class ReportRenderer:
             lines.append(
                 f"• 기준선 통계: 기존 {b_stats.get('baseline_warnings', 0)}건 | "
                 f"신규 {b_stats.get('new_warnings', 0)}건 (차단) | "
-                f"수정영역 {b_stats.get('modified_scope_warnings', 0)}건 (차단) | "
+                f"수정영역 {b_stats.get('modified_scope_warnings', 0)}건 (주의/통과) | "
                 f"면제 {b_stats.get('exempt_warnings', 0)}건 (승인) | "
                 f"해결 {b_stats.get('resolved_warnings', 0)}건"
             )

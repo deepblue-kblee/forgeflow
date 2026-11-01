@@ -245,7 +245,7 @@ class TestBaselineAwareReview(unittest.TestCase):
         warnings = [s for s in res.smells if s.severity == "WARNING"]
         self.assertEqual(len(warnings), 1)
 
-    def test_baseline_aware_modified_function_with_warning_fails(self):
+    def test_baseline_aware_modified_function_with_non_increasing_warning_passes(self):
         target = self.root / "src" / "service.py"
         target.write_text(
             "def warned_func():\n    try:\n        pass\n    except ValueError:\n        pass\n",
@@ -253,17 +253,37 @@ class TestBaselineAwareReview(unittest.TestCase):
         )
         self._commit("base commit")
 
-        # In candidate, modify warned_func
+        # In candidate, modify warned_func with a comment or bugfix, keeping existing warning non-increasing
         target.write_text(
-            "def warned_func():\n    # modified line inside warned function\n    try:\n        pass\n    except ValueError:\n        pass\n",
+            "def warned_func():\n    # minor fix or comment inside warned function\n    try:\n        pass\n    except ValueError:\n        pass\n",
             encoding="utf-8"
         )
         engine = ReviewEngine(repo_root=self.root)
 
         res = engine.run_review(targets=[target], strict=True, findings_baseline="HEAD")
-        self.assertFalse(res.passed, "Existing warning in modified function must NOT be exempt")
+        self.assertTrue(res.passed, "Existing warning in modified function must not block Gate 2 if no new warnings are added")
         self.assertEqual(res.baseline_stats["modified_scope_warnings"], 1)
+        self.assertEqual(res.baseline_stats["new_warnings"], 0)
         self.assertEqual(res.baseline_stats["exempt_warnings"], 0)
+
+    def test_baseline_aware_modified_function_with_new_warning_fails(self):
+        target = self.root / "src" / "service.py"
+        target.write_text(
+            "def warned_func():\n    try:\n        pass\n    except ValueError:\n        pass\n",
+            encoding="utf-8"
+        )
+        self._commit("base commit")
+
+        # In candidate, modify warned_func AND introduce a NEW warning (e.g. another silent except)
+        target.write_text(
+            "def warned_func():\n    try:\n        pass\n    except ValueError:\n        pass\n    try:\n        pass\n    except KeyError:\n        pass\n",
+            encoding="utf-8"
+        )
+        engine = ReviewEngine(repo_root=self.root)
+
+        res = engine.run_review(targets=[target], strict=True, findings_baseline="HEAD")
+        self.assertFalse(res.passed, "Adding a NEW warning inside modified function must fail strict gate")
+        self.assertGreaterEqual(res.baseline_stats["new_warnings"], 1)
 
     def test_baseline_aware_line_shift_does_not_duplicate_warning(self):
         target = self.root / "src" / "shifted.py"

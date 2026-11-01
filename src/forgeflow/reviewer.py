@@ -193,8 +193,9 @@ class ReviewEngine:
         resolved_smells: List[CodeSmell] = []
 
         if verified_baseline_sha:
+            from collections import Counter
             baseline_all_smells: List[CodeSmell] = []
-            baseline_fp_map: Dict[str, CodeSmell] = {}
+            baseline_fp_counts: Counter[str] = Counter()
             file_modified_scopes: Dict[str, Set[str]] = {}
 
             for file_p in files_to_scan:
@@ -210,7 +211,7 @@ class ReviewEngine:
                         baseline_all_smells.extend(b_smells)
                         for bs in b_smells:
                             if bs.severity == "WARNING":
-                                baseline_fp_map[bs.fingerprint(rel_p)] = bs
+                                baseline_fp_counts[bs.fingerprint(rel_p)] += 1
 
                     mod_lines = ReviewScanner.get_modified_lines(self.repo_root, verified_baseline_sha, rel_p)
                     cand_code = file_contents.get(file_p, "")
@@ -218,7 +219,7 @@ class ReviewEngine:
                     file_modified_scopes[rel_p] = mod_scopes
 
             cand_warnings = [s for s in all_smells if s.severity == "WARNING"]
-            cand_fp_set = set()
+            baseline_total_warnings = sum(baseline_fp_counts.values())
 
             for s in cand_warnings:
                 try:
@@ -232,27 +233,28 @@ class ReviewEngine:
                     rel_f = Path(s.file_path).name
 
                 fp = s.fingerprint(rel_f)
-                cand_fp_set.add(fp)
 
-                if fp not in baseline_fp_map:
-                    new_smells.append(s)
-                else:
+                if baseline_fp_counts[fp] > 0:
+                    # Matched an existing baseline warning slot (Delta-zero)
+                    baseline_fp_counts[fp] -= 1
                     mod_scopes = file_modified_scopes.get(rel_f, set())
                     if s.scope and s.scope in mod_scopes:
                         modified_scope_smells.append(s)
                     else:
                         exempt_smells.append(s)
+                else:
+                    # Brand new warning or exceeded quantity
+                    new_smells.append(s)
 
-            for fp, bs in baseline_fp_map.items():
-                if fp not in cand_fp_set:
-                    resolved_smells.append(bs)
+            # Unmatched baseline counts represent resolved warnings
+            resolved_count = sum(baseline_fp_counts.values())
 
             baseline_stats = {
-                "baseline_warnings": len(baseline_fp_map),
+                "baseline_warnings": baseline_total_warnings,
                 "new_warnings": len(new_smells),
                 "modified_scope_warnings": len(modified_scope_smells),
                 "exempt_warnings": len(exempt_smells),
-                "resolved_warnings": len(resolved_smells),
+                "resolved_warnings": resolved_count,
             }
 
         is_strict = strict or fail_on_warning
@@ -263,8 +265,7 @@ class ReviewEngine:
                 passed = effective_critical == 0 and warning_count == 0
             else:
                 new_w = baseline_stats["new_warnings"] if baseline_stats else 0
-                mod_w = baseline_stats["modified_scope_warnings"] if baseline_stats else 0
-                passed = effective_critical == 0 and new_w == 0 and mod_w == 0
+                passed = effective_critical == 0 and new_w == 0
 
         saved_report_path = self._save_markdown_report(
             scope_desc=scope_desc,
@@ -395,8 +396,8 @@ class ReviewEngine:
                     "### 🎯 기준선(Baseline) 비교 판정 현황",
                     f"- **기준선 기존 경고**: {baseline_stats.get('baseline_warnings', 0)}건",
                     f"- **신규 발생 경고**: {baseline_stats.get('new_warnings', 0)}건 (🔴 차단)",
-                    f"- **수정 영역 경고**: {baseline_stats.get('modified_scope_warnings', 0)}건 (🔴 차단/재검토 대상)",
-                    f"- **유지된 무관 경고**: {baseline_stats.get('exempt_warnings', 0)}건 (🟢 면제 승인)",
+                    f"- **수정 영역 잔존 경고**: {baseline_stats.get('modified_scope_warnings', 0)}건 (🟡 주의/감사 기록, 비증가 승인)",
+                    f"- **수정 외 영역 경고**: {baseline_stats.get('exempt_warnings', 0)}건 (🟢 면제 승인)",
                     f"- **해결된 경고**: {baseline_stats.get('resolved_warnings', 0)}건 (🎉 해소)",
                 ])
 

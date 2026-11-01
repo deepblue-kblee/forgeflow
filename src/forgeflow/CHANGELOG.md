@@ -7,6 +7,18 @@ ForgeFlow 프레임워크의 모든 주요 변경 사항은 이 문서에 기록
 
 ---
 
+## [0.1.23] - 2026-11-01
+
+### ⚖️ 수정 영역 경고 Delta-Zero 비증가 완화 및 Multi-set 슬롯 매칭 (Delta-Zero Baseline Review)
+
+### Added
+- **수정된 함수 영역(Modified Scope) Delta-Zero 비증가 허용 및 감지**:
+  - git diff hunk 분석을 통해 변경된 라인이 포함된 함수/메서드 스코프를 자동 추출.
+  - Multi-set Counter 슬롯 매칭을 적용하여, 수정된 함수 내의 기존 Warning이라도 수량이 증가하지 않는다면 Gate 2 통과를 허용(리포트에는 잔존 주의 표시)하여 작은 패치에서의 불필요한 과도한 리팩토링 마찰을 해소.
+  - 해당 함수 내에서 경고가 추가되거나 기존 수량을 초과하면 신규 경고(`new_warnings`)로 즉시 차단(Fail-Closed).
+
+---
+
 ## [0.1.22] - 2026-11-01
 
 ### 🎯 Gate 2 기준선 비교 모드 및 스멜 분석기 오탐 교정 (Baseline-Aware Strict Review for Gate 2)
@@ -19,8 +31,6 @@ ForgeFlow 프레임워크의 모든 주요 변경 사항은 이 문서에 기록
 - **구조적 Finding 식별 (Structural Fingerprinting) 및 스코프 추적**:
   - `CodeSmell`에 `scope` 필드를 추가하고, AST 순회 시 클래스/함수 계층 스택을 추적하여 기록.
   - 줄 번호(`line_no`) 변동에 영향받지 않는 `fingerprint` 산출 엔진을 도입하여 코드 추가/삭제로 인한 라인 이동 시 기존 Warning이 신규 경고로 오탐되는 문제 방지.
-- **수정된 함수 영역(Modified Scope) 자동 감지**:
-  - git diff hunk 분석을 통해 변경된 라인이 포함된 함수/메서드 스코프를 자동 추출하고, 해당 스코프 내의 기존 Warning은 면제하지 않고 `MODIFIED_SCOPE`로 분류하여 재검토 강제.
 
 ### Fixed
 - **`from __future__ import annotations` 오탐 교정 (Issue #7)**:

@@ -2,7 +2,17 @@
 
 ## 완료된 과업 (Completed Tasks)
 
-1. **Gate 2 기준선 비교 모드 및 스멜 분석기 오탐 교정 (v0.1.22, Issue #7)**:
+1. **Delta-Zero 기존 Warning 비증가 허용 기반 기준선 비교 모드 (v0.1.23, Issue #7 보완)**:
+   - **Multi-set Counter 슬롯 매칭을 통한 Delta-Zero 정책 구현**:
+     - `collections.Counter` 다중 집합 슬롯 매칭을 도입하여, 수정된 함수 스코프 내의 기존 Warning이라도 개수가 증가하지 않으면 Gate 2 통과 허용 (`modified_scope_unchanged_warnings`로 분류 및 리포트에 잔존 주의 표기).
+     - 함수 내에서 동일/신규 경고가 추가 발생하여 기존 수량을 초과하면 신규 경고(`new_warnings`)로 즉시 차단(Fail-Closed).
+   - **사소한 변경 시의 과도한 리팩토링 마찰 해소 및 안전성 양립**:
+     - 기존 Warning 해소를 위한 무리한 대규모 코드 수정 유발을 방지하면서도, 회귀적 경고 누적을 완벽 차단.
+   - **전체 단위 테스트 및 거버넌스 무결성**:
+     - 전체 343개 단위 테스트 100% Pass, 총 22개 릴리즈 전수 거버넌스 감사 `forgeflow check --all --strict` 🟢 ALL PASSED 달성.
+     - `tasks/completed/v0.1.23-delta-zero-baseline-review/` 패키지 밀봉 및 로컬 설치 `./install.sh` 완료.
+
+2. **Gate 2 기준선 비교 모드 및 스멜 분석기 오탐 교정 (v0.1.22, Issue #7)**:
    - **`--findings-baseline <ref>` 기준선 비교 모드 도입**:
      - `forgeflow review`에 `--findings-baseline <ref>` 옵션을 제공하여, 지정된 git revision 대비 새로 생기거나 재발한 Warning 및 수정된 함수 스코프 내의 Warning만 strict 차단(Fail-Closed).
      - 기존의 `--strict` 전체 Warning 0건 동작은 100% 하위 호환 보존.
@@ -10,12 +20,8 @@
    - **구조적 Finding 식별 (Structural Fingerprinting) 및 스코프 추적**:
      - `CodeSmell`에 `scope` 필드를 추가하고 AST 방문 중 클래스/함수 스택을 추적하여 기록.
      - 줄 번호(`line_no`) 변동에 영향받지 않는 함수 스코프 및 식별자 기반 매칭 엔진을 도입하여 코드 추가/삭제로 인한 라인 이동 시 기존 Warning이 신규 경고로 오탐되는 문제 방지.
-   - **수정된 함수 영역(Modified Scope) 자동 감지**:
-     - git diff hunk 분석을 통해 변경된 라인이 포함된 함수/메서드 스코프를 자동 추출하고, 해당 스코프 내의 기존 Warning은 면제하지 않고 `MODIFIED_SCOPE`로 분류하여 재검토 강제.
    - **`from __future__ import annotations` 오탐 교정**:
      - `SmellDetector`의 `Unused Import` 검사기에서 파이썬 컴파일러 지시자인 `__future__` 임포트를 런타임 미사용 식별자 경고 대상에서 제외하도록 교정.
-   - **테스트 및 거버넌스 무결성**:
-     - 신규 단위 테스트 8종 추가, 전체 342개 단위 테스트 100% Pass, 21개 릴리즈 전수 거버넌스 감사 `forgeflow check --all --strict` 🟢 ALL PASSED 달성, `tasks/completed/v0.1.22-baseline-aware-strict-review/` 패키지 밀봉 및 로컬 설치 `./install.sh` 완료, GitHub Issue #7 공식 종결.
 
 2. **ForgeFlow 배포본 XDG 표준화 및 사양서 디렉토리 격리/최적화 (v0.1.21)**:
    - **배포 설치 루트 XDG 표준화**: `~/.local/forgeflow` ➔ `~/.local/share/forgeflow`로 이전. CLI 심볼릭 링크(`~/.local/bin/forgeflow`) 및 `current` 포인터 정상 연동.
@@ -243,9 +249,9 @@
 
 ### 🎯 다음 작업 방향 및 버전 정책
 1. **버전 운영 및 v0.2.0 승격 로드맵**:
-   - 현재는 `v0.1.22` 상태에서 실전 도그푸딩 및 다운스트림 작업 리포지토리 연동 검증을 진행합니다.
+   - 현재는 `v0.1.23` 상태에서 실전 도그푸딩 및 다운스트림 작업 리포지토리 연동 검증을 진행합니다.
    - 충분한 운영 검증을 거쳐 결함이 완전히 해소된 시점에 사용자와 사전 합의하여 마이너 버전 `v0.2.0`으로 승격합니다.
 2. **GitHub Issues 모니터링 및 추가 개선 사항 접수**:
-   - `forgeflow issue list`를 통한 추가 이슈 확인 및 처리 (현재 오픈 이슈 0건).
+   - `forgeflow issue list`를 통한 추가 이슈 확인 및 처리 (현재 오픈 이슈 0건 또는 신규 이슈 처리).
 3. **원격 동기화 현황**:
-   - `v0.1.22` 릴리즈 구현 및 검증 완료, main 머지 및 푸시 완료 예정.
+   - `v0.1.23` 릴리즈 구현 및 검증 완료, Issue #7 종결 및 main 머지/푸시 완료 예정.
