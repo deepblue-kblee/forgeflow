@@ -16,11 +16,13 @@ v0.1.25-lean-development-flow를 구현·검증·commit·origin branch push하�
 - 공식 spec을 thin default·명시적 strict compatibility로 재작성; completed historical evidence 불변
 - 전체 415 tests와 completed strict archive 23개 PASS. 마지막 installer-only 보완 후 distribution 11개와 실제 wheel/격리 설치 delivery PASS
 - 독립 최종 Security/Reliability/Maintainability 모두 APPROVED. 해소 findings와 실제 검사 범위는 docs/design/lean-development-flow/{final-review,verification}.md
+- 구현 commit 8c6197638df6862c71525551b1add38e25ff6438을 origin/codex/lean-development-flow에 push했고 ls-remote의 동일 SHA를 확인
+- 로컬 working tree는 구현 push 직후 clean. 이 checkpoint 보완은 같은 branch의 후속 문서 commit으로 전달
 
-## 남은 작업·다음 행동
+## 다음 행동
 
-1. 최종 diff/status·배포 정합을 확인하고 codex/lean-development-flow에 commit
-2. 승인된 origin branch push와 원격 SHA 일치를 관찰
-3. 실제 전달 결과로 이 checkpoint를 보완하고 사용자에게 branch 검토 링크 제공
+1. 사용자가 origin/codex/lean-development-flow의 변경과 docs/design/lean-development-flow/{final-review,verification}.md를 검토
+2. 추가 수정은 이 branch와 현재 검사 결과를 기준으로 진행하고 변경된 입력에 맞는 검사만 다시 실행
+3. Main merge·전역 설치·배포·PR 생성·issue #9/#10 종결은 별도 사용자 범위가 정해졌을 때 진행
 
-구현·검증은 완료했고 commit/push는 아직 수행 전입니다. Main merge·PR 생성·배포·전역 설치·issue 종결은 범위 밖입니다. 동작 변경이 없으면 문서 전달 기록 보완만으로 전체 테스트를 반복하지 않습니다.
+승인된 구현·검증·commit·branch push 범위는 완료했습니다. Main에 통합된 상태는 아닙니다. 동작 변경이 없으면 문서 전달 기록 보완만으로 전체 테스트를 반복하지 않습니다.

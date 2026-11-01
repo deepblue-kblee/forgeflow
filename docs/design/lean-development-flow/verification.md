@@ -42,4 +42,4 @@ Wheel은 metadata/resource만 검사하지 않고 임시 venv에 실제 설치�
 
 Standalone 통합은 --ff-only이며 divergence를 자동 해결하지 않습니다. PR은 owner=host에 위임합니다. Host checkout archive는 owning tool의 외부 완료 경계로 남습니다. 검증 입력에서 필요한 dependency를 제외하거나 외부 receipt를 위조해 성공을 보고하지 않습니다.
 
-Main merge·PR 생성·배포·전역 설치·issue #9/#10 종결은 수행하지 않습니다. Commit/push의 관찰 결과는 session checkpoint와 최종 전달에서 별도로 기록합니다.
+구현 commit 8c6197638df6862c71525551b1add38e25ff6438을 origin/codex/lean-development-flow에 push했고 원격 SHA 일치를 확인했습니다. 이후 전달 기록은 같은 branch의 문서 commit에 포함합니다. Main merge·PR 생성·배포·전역 설치·issue #9/#10 종결은 수행하지 않았습니다.
