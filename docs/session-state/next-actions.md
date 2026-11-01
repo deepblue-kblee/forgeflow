@@ -6,7 +6,7 @@
 
 v0.1.25-lean-development-flow를 구현·검증·commit·origin branch push하여 사용자 원격 검토에 전달합니다. 사용자는 모든 active spec/지침의 전수 최신화와 필요한 파일 재작성/삭제를 승인했습니다.
 
-시작점은 clean main의 2a5de5bb5be8c8cabc65b298d031f6cf6545ece0입니다. GitHub #9/#10을 확인했으며 open 상태를 유지합니다. Main merge·배포·전역 설치는 범위 밖입니다.
+시작점은 clean main의 2a5de5bb5be8c8cabc65b298d031f6cf6545ece0입니다. GitHub #9는 open입니다. #10은 사용자의 철회 요청에 따라 이번 lean 재설계로 대체된 제안으로 판단해 CLOSED/NOT_PLANNED 처리했고 GitHub에서 상태를 확인했습니다. 이력은 보존했습니다. 사용자는 직접 merge를 먼저 진행할 계획이며, 에이전트의 main merge·배포·전역 설치는 범위 밖입니다.
 
 ## 관찰된 진행
 
@@ -31,6 +31,6 @@ v0.1.25-lean-development-flow를 구현·검증·commit·origin branch push하�
 
 1. 사용자가 origin/codex/lean-development-flow의 변경과 docs/design/lean-development-flow/{final-review,verification,behavior-verification}.md를 검토
 2. 추가 수정은 이 branch와 현재 검사 결과를 기준으로 진행하고 변경된 입력에 맞는 검사만 다시 실행
-3. Main merge·전역 설치·배포·PR 생성·issue #9/#10 종결은 별도 사용자 범위가 정해졌을 때 진행
+3. 사용자가 main merge와 배포를 진행. #9의 결함 수정이 main에 반영되면 해당 이슈의 완료 종결을 검토. #10은 이미 철회됐으므로 중복 처리하지 않음
 
 승인된 구현·검증·commit·branch push 범위는 완료했습니다. Main에 통합된 상태는 아닙니다. 동작 변경이 없으면 문서 전달 기록 보완만으로 전체 테스트를 반복하지 않습니다.
