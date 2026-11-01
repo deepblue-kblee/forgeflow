@@ -3,10 +3,13 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+from forgeflow.harness import HarnessEngine
 from forgeflow.renderer import ReportRenderer
 from forgeflow.review_scanner import ReviewScanner
 from forgeflow.reviewer import ReviewEngine, ReviewResult
+from forgeflow.scaffold import TemplateScaffolder
 from forgeflow.smell_detector import CodeSmell, SmellDetector
 
 
@@ -322,6 +325,59 @@ class TestBaselineAwareReview(unittest.TestCase):
         self.assertEqual(res.baseline_stats["resolved_warnings"], 1)
         self.assertEqual(res.baseline_stats["baseline_warnings"], 1)
         self.assertEqual(res.baseline_stats["new_warnings"], 0)
+
+    def test_baseline_aware_gate2_integration_with_sha_free(self):
+        target = self.root / "src" / "service.py"
+        target.write_text("def op():\n    try:\n        pass\n    except ValueError:\n        pass\n", encoding="utf-8")
+        self._commit("base commit with existing warning")
+
+        # Case A: Modify outside warning, no new warning
+        target.write_text("def op():\n    try:\n        pass\n    except ValueError:\n        pass\ndef helper():\n    return 42\n", encoding="utf-8")
+        engine = ReviewEngine(repo_root=self.root)
+        res_pass = engine.run_review(targets=[target], strict=True, findings_baseline="HEAD")
+        self.assertTrue(res_pass.passed)
+        self.assertEqual(res_pass.baseline_stats["new_warnings"], 0)
+
+        # In SHA-free lifecycle, Gate 2 verdict is APPROVED without binding to a commit SHA
+        harness = HarnessEngine(self.root)
+        rel_id = "v0.1.0-sha-free-flow"
+        rel_dir = self.root / "docs" / "releases" / rel_id
+        TemplateScaffolder.create_release_scaffold(rel_dir, rel_id, tier=3)
+        harness.lifecycle_start(rel_id)
+
+        # Write QA_SIGNOFF with sha-free policy using review results
+        qa_signoff = rel_dir / "QA_SIGNOFF.md"
+        qa_signoff.write_text(f"""## ForgeFlow Evidence v2
+```text
+Schema-Version: 2
+Release-ID: {rel_id}
+Tier: 3
+Binding-Policy: sha-free
+Task-Branch: main
+Base-SHA: sha-free
+QA-SHA: sha-free
+Stage: PACKAGE_REVIEW_PENDING
+Gate-1: APPROVED
+Gate-2: APPROVED
+Reviewer: id=sec; perspective=Security; verdict=APPROVED; qa-sha=sha-free
+Reviewer: id=rel; perspective=Reliability; verdict=APPROVED; qa-sha=sha-free
+Reviewer: id=maint; perspective=Maintainability; verdict=APPROVED; qa-sha=sha-free
+Verification: id=v1; command=pytest; result=PASS; exit-code=0
+Next-Action: RELEASE_SIGNOFF
+```
+""", encoding="utf-8")
+        (rel_dir / "DESIGN.md").write_text("# Design\n## Requirements Traceability Matrix (RTM)\n| REQ | Design |\n## Gate 1 Verdict\nAPPROVED\n", encoding="utf-8")
+        (rel_dir / "COMPLETION_REPORT.md").write_text("# Completion Report\nLine 1\nLine 2\nLine 3\nLine 4\nLine 5\n", encoding="utf-8")
+
+        with patch.object(harness, "_is_clean_worktree", return_value=True):
+            status_payload = harness.lifecycle_package_review(rel_id)
+            self.assertEqual(status_payload["status"], "PACKAGE_REVIEW_PENDING")
+
+        # Case B: Newly added warning fails Gate 2
+        target.write_text("def op():\n    try:\n        pass\n    except ValueError:\n        pass\ndef bad():\n    try:\n        pass\n    except Exception:\n        pass\n", encoding="utf-8")
+        res_fail = engine.run_review(targets=[target], strict=True, findings_baseline="HEAD")
+        self.assertFalse(res_fail.passed)
+        self.assertGreaterEqual(res_fail.baseline_stats["new_warnings"], 1)
 
 
 if __name__ == "__main__":

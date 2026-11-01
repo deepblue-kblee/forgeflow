@@ -70,6 +70,46 @@ class LifecycleCliArgsTests(unittest.TestCase):
             _run_lifecycle_command(parsed)
         self.assertEqual(ctx.exception.code, 2)
 
+    @patch("forgeflow.cli.HarnessEngine")
+    @patch("sys.exit")
+    def test_sha_free_cli_flag_invocations(self, mock_exit, mock_harness_engine_cls):
+        mock_engine = MagicMock()
+        mock_engine.lifecycle_package_review.return_value = {"ok": True}
+        mock_engine.lifecycle_seal.return_value = {"ok": True}
+        mock_harness_engine_cls.return_value = mock_engine
+
+        # Test package-review --sha-free
+        parsed1 = parse_forgeflow_args(["lifecycle", "package-review", "v0.1.0-test", "--sha-free"])
+        self.assertTrue(parsed1.sha_free)
+        _run_lifecycle_command(parsed1)
+        mock_engine.lifecycle_package_review.assert_called_with("v0.1.0-test", "sha-free")
+
+        # Test seal --sha-free
+        parsed2 = parse_forgeflow_args(["lifecycle", "seal", "v0.1.0-test", "--sha-free"])
+        self.assertTrue(parsed2.sha_free)
+        _run_lifecycle_command(parsed2)
+        mock_engine.lifecycle_seal.assert_called_with("v0.1.0-test", "sha-free")
+
+    @patch("forgeflow.cli.HarnessEngine")
+    @patch("sys.exit")
+    def test_sha_free_auto_detection_from_evidence(self, mock_exit, mock_harness_engine_cls):
+        mock_engine = MagicMock()
+        mock_engine.lifecycle_package_review.return_value = {"ok": True}
+        mock_engine.lifecycle_seal.return_value = {"ok": True}
+        mock_engine._read_regular_text.return_value = "## ForgeFlow Evidence v2\nBinding-Policy: sha-free\n"
+        mock_engine._core_controller.return_value.state = {"identity": {"qa_sha": "sha-free"}}
+        mock_harness_engine_cls.return_value = mock_engine
+
+        # package-review with no args should auto-detect sha-free from evidence
+        parsed1 = parse_forgeflow_args(["lifecycle", "package-review", "v0.1.0-test"])
+        _run_lifecycle_command(parsed1)
+        mock_engine.lifecycle_package_review.assert_called_with("v0.1.0-test", "sha-free")
+
+        # seal with no args should auto-detect sha-free from evidence/controller
+        parsed2 = parse_forgeflow_args(["lifecycle", "seal", "v0.1.0-test"])
+        _run_lifecycle_command(parsed2)
+        mock_engine.lifecycle_seal.assert_called_with("v0.1.0-test", "sha-free")
+
 
 if __name__ == "__main__":
     unittest.main()

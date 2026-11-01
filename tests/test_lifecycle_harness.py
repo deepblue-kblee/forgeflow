@@ -6,6 +6,7 @@ from unittest.mock import patch
 from pathlib import Path
 
 from forgeflow.harness import HarnessEngine, LifecycleError
+from forgeflow.lifecycle import Status
 from forgeflow.scaffold import TemplateScaffolder
 
 
@@ -376,6 +377,105 @@ Schema-Version 2
         with self.assertRaises(ValueError) as ctx:
             self.engine._parse_evidence_v2(malformed_line)
         self.assertIn("lines in Evidence v2 must match 'Key: Value'", str(ctx.exception))
+
+    def test_evidence_v2_sha_free_validation(self):
+        sha_free_text = f"""## ForgeFlow Evidence v2
+```text
+Schema-Version: 2
+Release-ID: {self.release_id}
+Tier: 3
+Binding-Policy: sha-free
+Task-Branch: feat/sample-feature
+Base-SHA: sha-free
+QA-SHA: sha-free
+Stage: PACKAGE_REVIEW_PENDING
+Gate-1: APPROVED
+Gate-2: APPROVED
+Next-Action: RELEASE_SIGNOFF
+Reviewer: id=reviewer-sec; perspective=Security; verdict=APPROVED; qa-sha=sha-free
+Reviewer: id=reviewer-rel; perspective=Reliability; verdict=APPROVED
+Reviewer: id=reviewer-maint; perspective=Maintainability; verdict=APPROVED
+Verification: id=unit-tests; command=pytest; result=PASS; exit-code=0
+```
+"""
+        evidence = self.engine._parse_evidence_v2(sha_free_text)
+        self.engine._validate_evidence_v2(self.release_id, sha_free_text, evidence)
+        self.assertEqual(evidence["Binding-Policy"], "sha-free")
+        self.assertEqual(evidence["QA-SHA"], "sha-free")
+
+    def test_lifecycle_sha_free_full_transition_and_audit(self):
+        self.engine.lifecycle_start(self.release_id)
+        controller = self.engine._core_controller(self.release_id)
+        branch = controller.state["identity"].get("branch") or "main"
+
+        # 1. QA_SIGNOFF.md with SHA-free policy
+        qa_signoff = self.release / "QA_SIGNOFF.md"
+        qa_signoff.write_text(f"""## ForgeFlow Evidence v2
+```text
+Schema-Version: 2
+Release-ID: {self.release_id}
+Tier: 3
+Binding-Policy: sha-free
+Task-Branch: {branch}
+Base-SHA: sha-free
+QA-SHA: sha-free
+Stage: PACKAGE_REVIEW_PENDING
+Gate-1: APPROVED
+Gate-2: APPROVED
+Reviewer: id=security; perspective=Security; verdict=APPROVED; qa-sha=sha-free
+Reviewer: id=reliability; perspective=Reliability; verdict=APPROVED; qa-sha=sha-free
+Reviewer: id=maintainability; perspective=Maintainability; verdict=APPROVED; qa-sha=sha-free
+Verification: id=unit; command=pytest; result=PASS; exit-code=0
+Next-Action: RELEASE_SIGNOFF
+```
+""", encoding="utf-8")
+        (self.release / "DESIGN.md").write_text("# Design\n## Requirements Traceability Matrix (RTM)\n| REQ | Design |\n## Gate 1 Verdict\nAPPROVED\n", encoding="utf-8")
+        (self.release / "COMPLETION_REPORT.md").write_text("# Completion Report\nLine 1\nLine 2\nLine 3\nLine 4\nLine 5\n", encoding="utf-8")
+
+        # 2. Package review with clean worktree
+        with patch.object(self.engine, "_is_clean_worktree", return_value=True):
+            res = self.engine.lifecycle_package_review(self.release_id)
+            self.assertEqual(res["status"], "PACKAGE_REVIEW_PENDING")
+            self.assertEqual(controller.state["identity"]["qa_sha"], "sha-free")
+
+        # Dirty worktree should be rejected in sha-free
+        with patch.object(self.engine, "_is_clean_worktree", return_value=False):
+            # Reset controller status to test dirty check
+            controller._update(lambda s: s["progress"].update(status="ACTIVE"))
+            with self.assertRaises(LifecycleError) as ctx:
+                self.engine.lifecycle_package_review(self.release_id)
+            self.assertEqual(ctx.exception.code, "worktree_dirty")
+
+        # Re-enter PACKAGE_REVIEW_PENDING
+        with patch.object(self.engine, "_is_clean_worktree", return_value=True):
+            self.engine.lifecycle_package_review(self.release_id)
+
+        # 3. Release sign-off & seal
+        manifest, _ = self.engine._package_manifest(self.release_id, self.release)
+        (self.release / "RELEASE_SIGNOFF.md").write_text(f"""## ForgeFlow Release Sign-off v1
+```text
+Release-ID: {self.release_id}
+Package-Manifest-SHA256: {manifest}
+Gate-3: APPROVED
+User-Verdict: GO
+```
+""", encoding="utf-8")
+
+        with patch.object(self.engine, "_is_clean_worktree", return_value=True):
+            seal_res = self.engine.lifecycle_seal(self.release_id)
+            self.assertEqual(seal_res["status"], "PACKAGE_SEALED")
+            self.assertEqual(controller.state["identity"]["candidate_sha"], "sha-free")
+
+        # 4. Completion & terminal audit
+        controller.transition(Status.COMPLETE, reason="release sealed and verified")
+        ready, reasons = controller.completion_ready()
+        self.assertTrue(ready, f"completion_ready failed: {reasons}")
+
+        evidence = self.engine._parse_evidence_v2(qa_signoff.read_text(encoding="utf-8"))
+        unmet = self.engine._validate_v2_package_evidence(
+            self.release_id, self.release, controller.state, evidence, require_terminal_state=True
+        )
+        self.assertEqual(unmet, [], f"Terminal package evidence validation unmet reasons: {unmet}")
 
 
 if __name__ == "__main__":

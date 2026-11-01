@@ -1,6 +1,6 @@
 # ✅ QA Sign-Off - Release {{RELEASE_ID}}
 
-> Gate 2의 QA Sign-off입니다. 구현 snapshot(`QA-SHA`)과 자동 검증·기술 review를 승인하며, 최종 release package의 사용자 승인은 Gate 3 `RELEASE_SIGNOFF.md`에서 별도로 기록합니다.
+> Gate 2의 QA Sign-off입니다. 구현 snapshot(`QA-SHA` 또는 SHA-free 무결성)과 자동 검증·기술 review를 승인하며, 최종 release package의 사용자 승인은 Gate 3 `RELEASE_SIGNOFF.md`에서 별도로 기록합니다.
 
 - **릴리즈 식별자**: `{{RELEASE_ID}}`
 - **위험도 등급**: **Tier {{TIER}} ({{TIER_NAME}})**
@@ -9,11 +9,24 @@
 
 ---
 
-## 1. 테스트 실행 요약
+## 1. 테스트 실행 및 코드 리뷰 요약
 
+### 1.1 테스트 러너 실행 결과
 - **테스트 러너**: Python `unittest` / `pytest`
 - **실행 대상**: {{TOTAL_TESTS}}개 테스트
 - **결과**: **{{PASSED_TESTS}} Passed / 0 Failed / 0 Error (100% Pass)**
+
+### 1.2 정적 코드 리뷰 정책 (Review Policy)
+- **채택 정책**: `raw strict` | `baseline-aware strict` (선택 1)
+  - `raw strict`: 선택된 검사 범위의 모든 Warning 0건 (기본 모드: `forgeflow review --strict`)
+  - `baseline-aware strict`: Critical 0건 & 신규 Warning 0건 (기준선 모드: `forgeflow review --strict --findings-baseline <ref>`)
+- **기준선(Findings Baseline)**: `{{FINDINGS_BASELINE_REF_OR_NONE}}`
+- **리뷰 결과 집계**:
+  - Critical Findings: `0`
+  - Baseline Existing Findings: `{{BASELINE_WARNINGS_OR_ZERO}}`
+  - New Findings: `0`
+  - Resolved Findings: `{{RESOLVED_WARNINGS_OR_ZERO}}`
+  - Modified Scope Warnings (Delta-Zero): `{{MODIFIED_SCOPE_WARNINGS_OR_ZERO}}`
 
 ---
 
@@ -32,7 +45,7 @@
 - **base SHA / 작업 브랜치 / workspace / clean 상태**: {{BASE_SHA}} / {{TASK_BRANCH}} / {{WORKSPACE}} / {{CLEAN_STATUS}}
 
 | 순서 | record digest | commit SHA | parent SHA | 경계 | 검증 명령·환경 | exit code | 결과 | candidate |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | C0 | {{RECORD_DIGEST}} | {{COMMIT_SHA}} | {{PARENT_SHA}} | isolation baseline | {{COMMAND}} | {{EXIT_CODE}} | {{RESULT}} | no |
 
 snapshot, supersession, destructive recovery, 또는 retention decision은 같은 ledger에 append-only로 기록합니다.
@@ -69,6 +82,7 @@ snapshot, supersession, destructive recovery, 또는 retention decision은 같�
 Schema-Version: 2
 Release-ID: {{RELEASE_ID}}
 Tier: {{TIER}}
+Binding-Policy: git-sha
 Task-Branch: PENDING
 Base-SHA: PENDING
 QA-SHA: PENDING

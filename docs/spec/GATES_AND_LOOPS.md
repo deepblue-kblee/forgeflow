@@ -70,8 +70,12 @@ ForgeFlow는 실행과 통제를 분리하는 이중 엔진 모델을 채택한�
 - **통과 요건**:
   1. `spec.md`에 명시된 모든 인수 조건 충족.
   2. 단위 및 통합 테스트 100% Pass (Fail = 0, Error = 0).
-  3. Linter 및 정적 분석(`forgeflow review --strict`) 오류 0건 (인지 복잡도 ≤ 15, 함수 LOC ≤ 50).
-  4. 테스트가 통과된 최종 커밋 SHA를 `QA_SIGNOFF.md`에 결속 및 서명 발급.
+  3. **코드 리뷰 품질 승인 (2가지 지원 정책)**:
+     - **정책 A (raw strict, 기본 모드)**: `forgeflow review --strict` 실행 시 선택된 검사 범위의 모든 Warning이 0건이어야 통과 (인지 복잡도 ≤ 15, 함수 LOC ≤ 50 등).
+     - **정책 B (baseline-aware strict, 기준선 비교 모드)**: `forgeflow review --strict --findings-baseline <ref>` 실행 시 Critical 0건 및 신규 Warning 0건일 때 통과. 기준선 이전의 기존 Warning은 결과 리포트에 투명하게 보존·분류되며, 수정된 함수 스코프 내의 기존 Warning이라도 수량이 증가하지 않는 한(Delta-Zero) 통과가 허용됨. 기준선 ref는 Gate 1에서 합의되어 기록됨.
+  4. **스냅샷 바인딩 정책 (Binding Policy)**:
+     - **Git SHA 바인딩 (`git-sha`, 기본값)**: 테스트가 통과된 최종 커밋 SHA를 `QA_SIGNOFF.md`의 `QA-SHA`에 결속.
+     - **SHA-free 무결성 (`sha-free`, ADR 001 정책)**: Git 커밋 SHA를 강제하지 않고, 마크다운 게이트 서명, 100% 테스트 무결성, Clean Working Tree, 패키지 매니페스트 SHA-256 검증을 통해 `QA-SHA: sha-free`로 승인.
   5. Tier 3 변경의 경우 격리 환경에서의 비파괴 런타임 프로브(Non-mutating probe) 전달성 검증 완료.
 - **패키지 전용 변경 면제 (Verified Package-Only Exemption)**: Gate 2 통과 후 실제 코드/테스트 diff가 전혀 없는 순수 패키지 메타데이터 정리(`tasks.md` 완료 체크, 릴리즈 노트 작성 등)는 QA 바인딩을 깨뜨리지 않고 안전하게 보존된다.
 

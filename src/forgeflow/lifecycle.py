@@ -1022,8 +1022,8 @@ class LifecycleController:
         return self.state.get("control", {}).get("loop_record")
 
     def mark_package_review_pending(self, *, qa_sha: str) -> dict[str, Any]:
-        if not _HEX_SHA.fullmatch(qa_sha):
-            raise ValidationError("QA SHA must be a 40-character lowercase hex SHA")
+        if qa_sha.lower() != "sha-free" and not _HEX_SHA.fullmatch(qa_sha):
+            raise ValidationError("QA SHA must be a 40-character lowercase hex SHA or 'sha-free'")
         state = self.state
         if state["progress"]["status"] == Status.PACKAGE_REVIEW_PENDING.value:
             if state["identity"].get("qa_sha") == qa_sha:
@@ -1045,7 +1045,7 @@ class LifecycleController:
         return self.transition(Status.PACKAGE_REVIEW_PENDING, reason="QA Sign-off approved; awaiting release package review")
 
     def seal_package(self, *, release_candidate_sha: str, package_manifest_sha256: str) -> dict[str, Any]:
-        if not _HEX_SHA.fullmatch(release_candidate_sha) or not _SHA256.fullmatch(package_manifest_sha256):
+        if (release_candidate_sha.lower() != "sha-free" and not _HEX_SHA.fullmatch(release_candidate_sha)) or not _SHA256.fullmatch(package_manifest_sha256):
             raise ValidationError("invalid package seal identity")
         state = self.state
         if state["progress"]["status"] == Status.PACKAGE_SEALED.value:

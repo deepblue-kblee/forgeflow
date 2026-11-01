@@ -235,10 +235,12 @@ ForgeFlow 환경의 장기적 유지보수와 복수 프로젝트 간 일관성�
 ### 3.5 Gate 2: QA 품질 승인 (QA Sign-off)
 1. **품질 검증 통과 요건**:
    - 모든 태스크 완료 후 QA 심사를 수행한다.
-   - `forgeflow review --strict`: 함수 복잡도, 중첩, 린트 Warning 0건을 확인한다.
+   - **정적 코드 리뷰 정책 (선택 1)**:
+     - `raw strict`: `forgeflow review --strict`로 선택 범위 내 Warning 0건 확인 (기본 모드).
+     - `baseline-aware strict`: `forgeflow review --strict --findings-baseline <ref>`로 Critical 0건 및 신규 Warning 0건 확인. 기존 Warning은 기준선에 의해 분류되어 감사 보존되며 Delta-Zero(수정 스코프 기존 경고 비증가)가 적용됨.
    - 단위 및 통합 테스트 100% Pass (Fail=0, Error=0).
-2. **QA 승인 증적 발행**:
-   - 검증된 최종 커밋 SHA를 바인딩하여 `QA_SIGNOFF.md`를 발행하고 `Gate 2 Verdict: APPROVED`를 기록한다.
+2. **QA 승인 증적 발행 및 라이프사이클 전이**:
+   - 승인된 바인딩 정책(`git-sha` 커밋 SHA 바인딩 또는 `sha-free` 실용적 4대 불변식 무결성)에 따라 `QA_SIGNOFF.md`를 발행하고 `Gate 2 Verdict: APPROVED`를 기록한다.
    - `PACKAGE_REVIEW_PENDING` 상태로 전이되어 최종 릴리즈 승격 준비가 완료된다.
 
 ### 3.6 Gate 3: 릴리즈 승인 및 패키지 밀봉 (Release & Seal)

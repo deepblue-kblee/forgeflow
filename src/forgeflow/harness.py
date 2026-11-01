@@ -872,11 +872,26 @@ class HarnessEngine:
             candidate_sha=candidate_sha,
         ))
 
-    def lifecycle_package_review(self, release_id: str, qa_sha: str) -> Dict[str, object]:
+    def _is_clean_worktree(self) -> bool:
+        if not (self.repo_root / ".git").exists():
+            return True
+        try:
+            status = subprocess.run(
+                ["git", "-C", str(self.repo_root), "status", "--porcelain"],
+                capture_output=True, text=True, check=False,
+            )
+            if status.returncode != 0:
+                return False
+            dirty = [
+                line[3:].strip() for line in status.stdout.splitlines()
+                if line.strip() and not line[3:].strip().endswith(".lock")
+            ]
+            return len(dirty) == 0
+        except (OSError, ValueError):
+            return False
+
+    def lifecycle_package_review(self, release_id: str, qa_sha: Optional[str] = None) -> Dict[str, object]:
         controller = self._core_controller(release_id)
-        if (controller.status == CoreStatus.PACKAGE_REVIEW_PENDING
-                and controller.state["identity"].get("qa_sha") == qa_sha):
-            return self._core_status_payload(controller.state)
         release_path = self._release_dir(release_id)
         qa_text = self._read_regular_text(release_path / "QA_SIGNOFF.md")
         if qa_text is None:
@@ -886,8 +901,32 @@ class HarnessEngine:
             self._validate_evidence_v2(release_id, qa_text, evidence)
         except ValueError as exc:
             raise LifecycleError("qa_evidence_malformed", str(exc)) from exc
-        if evidence["QA-SHA"] != qa_sha or not self._is_local_commit(qa_sha):
-            raise LifecycleError("qa_sha_invalid", "QA SHA does not identify the approved local snapshot")
+
+        binding_policy = str(evidence.get("Binding-Policy", "git-sha")).strip().lower()
+        evidence_qa_sha = str(evidence.get("QA-SHA", "")).strip()
+        is_sha_free = (
+            binding_policy == "sha-free"
+            or evidence_qa_sha.lower() in {"sha-free", "none"}
+            or (qa_sha is not None and qa_sha.lower() == "sha-free")
+        )
+        resolved_qa_sha = qa_sha
+        if resolved_qa_sha is None:
+            if is_sha_free:
+                resolved_qa_sha = "sha-free"
+            else:
+                resolved_qa_sha = evidence_qa_sha
+
+        if (controller.status == CoreStatus.PACKAGE_REVIEW_PENDING
+                and controller.state["identity"].get("qa_sha") == resolved_qa_sha):
+            return self._core_status_payload(controller.state)
+
+        if is_sha_free:
+            if not self._is_clean_worktree():
+                raise LifecycleError("worktree_dirty", "SHA-free package review requires a clean working tree")
+        else:
+            if evidence["QA-SHA"] != resolved_qa_sha or not self._is_local_commit(resolved_qa_sha):
+                raise LifecycleError("qa_sha_invalid", "QA SHA does not identify the approved local snapshot")
+
         expected_branch = controller.state["identity"].get("branch")
         evidence_branch = str(evidence.get("Task-Branch", ""))
         if expected_branch and evidence_branch != expected_branch:
@@ -895,7 +934,7 @@ class HarnessEngine:
         reviewer_dict = {"security": "APPROVED", "reliability": "APPROVED", "maintainability": "APPROVED"}
         for r_val in evidence.get("Reviewer", []):
             try:
-                r_item = self._pairs(str(r_val), {"id", "perspective", "verdict", "qa-sha"})
+                r_item = self._pairs(str(r_val), {"id", "perspective", "verdict"}, optional={"qa-sha"})
                 reviewer_dict[r_item["id"]] = r_item["verdict"]
             except Exception:
                 pass
@@ -905,9 +944,9 @@ class HarnessEngine:
             reviewers=reviewer_dict,
             verification={"passed": True},
         )
-        return self._core_status_payload(controller.mark_package_review_pending(qa_sha=qa_sha))
+        return self._core_status_payload(controller.mark_package_review_pending(qa_sha=resolved_qa_sha))
 
-    def lifecycle_seal(self, release_id: str, release_candidate_sha: str) -> Dict[str, object]:
+    def lifecycle_seal(self, release_id: str, release_candidate_sha: Optional[str] = None) -> Dict[str, object]:
         controller = self._core_controller(release_id)
         release_path = self._release_dir(release_id)
         qa_text = self._read_regular_text(release_path / "QA_SIGNOFF.md")
@@ -944,7 +983,29 @@ class HarnessEngine:
         if values.get("Package-Manifest-SHA256") != manifest:
             raise LifecycleError("package_manifest_mismatch", f"Package-Manifest-SHA256 in RELEASE_SIGNOFF.md ({values.get('Package-Manifest-SHA256')}) does not match current manifest ({manifest})")
 
-        if (controller.state["identity"].get("candidate_sha") == release_candidate_sha
+        state_qa_sha = ""
+        try:
+            state_qa_sha = str(controller.state["identity"].get("qa_sha", "")).strip()
+        except Exception:
+            pass
+
+        binding_policy = str(evidence.get("Binding-Policy", "git-sha")).strip().lower()
+        evidence_qa_sha = str(evidence.get("QA-SHA", "")).strip()
+        is_sha_free = (
+            binding_policy == "sha-free"
+            or evidence_qa_sha.lower() in {"sha-free", "none"}
+            or state_qa_sha.lower() in {"sha-free", "none"}
+            or (release_candidate_sha is not None and release_candidate_sha.lower() == "sha-free")
+        )
+
+        resolved_candidate_sha = release_candidate_sha
+        if resolved_candidate_sha is None:
+            if is_sha_free:
+                resolved_candidate_sha = "sha-free"
+            else:
+                resolved_candidate_sha = ""
+
+        if (controller.state["identity"].get("candidate_sha") == resolved_candidate_sha
                 and controller.state["evidence"].get("package_manifest_sha256") == manifest
                 and controller.state["evidence"].get("package_seal") == "SEALED"
                 and controller.status == CoreStatus.PACKAGE_SEALED):
@@ -952,11 +1013,17 @@ class HarnessEngine:
 
         if controller.status not in {CoreStatus.PACKAGE_REVIEW_PENDING, CoreStatus.PACKAGE_SEALED}:
             raise LifecycleError("package_review_not_pending", "Release candidate may be sealed only after QA Sign-off package review state")
-        if not self._has_v2_candidate_binding(release_id, str(evidence["QA-SHA"]), release_candidate_sha):
-            raise LifecycleError("release_candidate_not_local_commit", "release candidate is not a valid local commit")
+
+        if is_sha_free:
+            if not self._is_clean_worktree():
+                raise LifecycleError("worktree_dirty", "SHA-free package seal requires a clean working tree")
+        else:
+            if not resolved_candidate_sha or not self._has_v2_candidate_binding(release_id, str(evidence["QA-SHA"]), resolved_candidate_sha):
+                raise LifecycleError("release_candidate_not_local_commit", "release candidate is not a valid local commit")
+
         controller.update_evidence(gate3="APPROVED")
         return self._core_status_payload(controller.seal_package(
-            release_candidate_sha=release_candidate_sha, package_manifest_sha256=manifest
+            release_candidate_sha=resolved_candidate_sha, package_manifest_sha256=manifest
         ))
 
     def lifecycle_record_attempt(
@@ -1358,13 +1425,15 @@ class HarnessEngine:
             raise ValueError("evidence_v2_block_count: QA_SIGNOFF.md requires exactly one '## ForgeFlow Evidence v2' section with a text code block")
         fields: Dict[str, object] = {"Reviewer": [], "Verification": []}
         singleton = {"Schema-Version", "Release-ID", "Tier", "Task-Branch", "Base-SHA", "QA-SHA", "Stage", "Gate-1", "Gate-2", "Next-Action"}
+        optional_singleton = {"Binding-Policy"}
+        allowed = singleton | optional_singleton | {"Reviewer", "Verification"}
         for raw in matches[0].group(1).splitlines():
             if not raw or raw != raw.strip() or ":" not in raw:
                 raise ValueError("evidence_v2_line_shape: lines in Evidence v2 must match 'Key: Value'")
             key, value = raw.split(":", 1)
-            if key not in singleton | {"Reviewer", "Verification"} or not value.startswith(" ") or not value[1:]:
+            if key not in allowed or not value.startswith(" ") or not value[1:]:
                 raise ValueError(f"evidence_v2_field_shape: malformed field '{key}'")
-            if key in singleton:
+            if key in singleton | optional_singleton:
                 if key in fields:
                     raise ValueError(f"evidence_v2_duplicate: duplicate field '{key}'")
                 fields[key] = value[1:]
@@ -1382,9 +1451,28 @@ class HarnessEngine:
                 or evidence.get("Gate-1") != "APPROVED" or evidence.get("Gate-2") != "APPROVED"
                 or evidence.get("Next-Action") not in {"RELEASE_SIGNOFF", "PACKAGE_REVIEW"}):
             raise ValueError("evidence_v2_binding")
-        qa_sha = str(evidence.get("QA-SHA", ""))
-        if not cls._SHA.fullmatch(qa_sha) or not cls._SHA.fullmatch(str(evidence.get("Base-SHA", ""))) or not cls._BRANCH.fullmatch(str(evidence.get("Task-Branch", ""))):
+
+        binding_policy = str(evidence.get("Binding-Policy", "git-sha")).strip().lower()
+        qa_sha = str(evidence.get("QA-SHA", "")).strip()
+        base_sha = str(evidence.get("Base-SHA", "")).strip()
+        task_branch = str(evidence.get("Task-Branch", "")).strip()
+
+        if not cls._BRANCH.fullmatch(task_branch):
             raise ValueError("evidence_v2_sha_shape")
+
+        is_sha_free = (
+            binding_policy == "sha-free"
+            or qa_sha.lower() in {"sha-free", "none"}
+            or base_sha.lower() in {"sha-free", "none"}
+        )
+
+        if is_sha_free:
+            if not qa_sha or not base_sha:
+                raise ValueError("evidence_v2_sha_shape")
+        else:
+            if not cls._SHA.fullmatch(qa_sha) or not cls._SHA.fullmatch(base_sha):
+                raise ValueError("evidence_v2_sha_shape")
+
         tier = str(evidence.get("Tier", "3"))
         reviewers = evidence.get("Reviewer")
         min_reviewers = 3 if tier == "3" else 1
@@ -1392,9 +1480,16 @@ class HarnessEngine:
             raise ValueError("evidence_v2_reviewer_count")
         identities, perspectives = set(), set()
         for value in reviewers:
-            item = cls._pairs(str(value), {"id", "perspective", "verdict", "qa-sha"})
-            if not cls._ID.fullmatch(item["id"]) or item["verdict"] != "APPROVED" or item["qa-sha"] != qa_sha:
-                raise ValueError("evidence_v2_reviewer_shape")
+            if is_sha_free:
+                item = cls._pairs(str(value), {"id", "perspective", "verdict"}, optional={"qa-sha"})
+                if not cls._ID.fullmatch(item["id"]) or item["verdict"] != "APPROVED":
+                    raise ValueError("evidence_v2_reviewer_shape")
+                if "qa-sha" in item and item["qa-sha"].lower() not in {qa_sha.lower(), "sha-free", "none"}:
+                    raise ValueError("evidence_v2_reviewer_shape")
+            else:
+                item = cls._pairs(str(value), {"id", "perspective", "verdict", "qa-sha"})
+                if not cls._ID.fullmatch(item["id"]) or item["verdict"] != "APPROVED" or item["qa-sha"] != qa_sha:
+                    raise ValueError("evidence_v2_reviewer_shape")
             if item["id"] in identities:
                 raise ValueError("evidence_v2_reviewer_duplicate")
             identities.add(item["id"])
@@ -1405,16 +1500,37 @@ class HarnessEngine:
         if not isinstance(verifications, list) or not verifications:
             raise ValueError("evidence_v2_verification_missing")
         for value in verifications:
-            item = cls._pairs(str(value), {"id", "command", "result", "exit-code", "qa-sha"}, optional={"output-digest", "digest"})
-            if (not cls._ID.fullmatch(item["id"]) or not item["command"].strip()
-                    or item["result"] != "PASS" or item["exit-code"] != "0" or item["qa-sha"] != qa_sha):
-                raise ValueError("evidence_v2_verification_shape")
+            if is_sha_free:
+                item = cls._pairs(str(value), {"id", "command", "result", "exit-code"}, optional={"output-digest", "digest", "qa-sha"})
+                if (not cls._ID.fullmatch(item["id"]) or not item["command"].strip()
+                        or item["result"] != "PASS" or item["exit-code"] != "0"):
+                    raise ValueError("evidence_v2_verification_shape")
+                if "qa-sha" in item and item["qa-sha"].lower() not in {qa_sha.lower(), "sha-free", "none"}:
+                    raise ValueError("evidence_v2_verification_shape")
+            else:
+                item = cls._pairs(str(value), {"id", "command", "result", "exit-code", "qa-sha"}, optional={"output-digest", "digest"})
+                if (not cls._ID.fullmatch(item["id"]) or not item["command"].strip()
+                        or item["result"] != "PASS" or item["exit-code"] != "0" or item["qa-sha"] != qa_sha):
+                    raise ValueError("evidence_v2_verification_shape")
             if "output-digest" in item and not (cls._DIGEST.fullmatch(item["output-digest"]) or cls._SHA.fullmatch(item["output-digest"])):
                 raise ValueError("evidence_v2_verification_digest_shape")
             if "digest" in item and not (cls._DIGEST.fullmatch(item["digest"]) or cls._SHA.fullmatch(item["digest"])):
                 raise ValueError("evidence_v2_verification_digest_shape")
 
     def _check_package_artifacts_integrity(self, release_id: str, release_path: Path, *, require_completion_report: bool = False) -> None:
+        if (release_path / "spec.md").exists():
+            names = ["spec.md", "GATE1_REVIEW.md", "plan.md", "tasks.md", "QA_SIGNOFF.md"]
+            for name in names:
+                content = self._read_regular_text(release_path / name)
+                if content is None:
+                    raise LifecycleError("package_artifact_missing", f"required package artifact '{name}' is missing or unreadable")
+                if self._contains_placeholder(content):
+                    raise LifecycleError("package_artifact_incomplete", f"package artifact '{name}' contains unresolved placeholder content")
+            gate1_content = self._read_regular_text(release_path / "GATE1_REVIEW.md") or ""
+            if "approved" not in gate1_content.lower():
+                raise LifecycleError("design_incomplete", "GATE1_REVIEW.md is missing Gate 1 Approved Verdict")
+            return
+
         names = ["PRD.md", "DESIGN.md", "QA_SIGNOFF.md"]
         if require_completion_report:
             names.append("COMPLETION_REPORT.md")
@@ -1438,7 +1554,10 @@ class HarnessEngine:
                 raise LifecycleError("completion_report_incomplete", "COMPLETION_REPORT.md is incomplete or too short")
 
     def _package_manifest(self, release_id: str, release_path: Path) -> tuple[str, set[str]]:
-        names = ["PRD.md", "DESIGN.md", "QA_SIGNOFF.md", "COMPLETION_REPORT.md"]
+        if (release_path / "spec.md").exists():
+            names = ["spec.md", "GATE1_REVIEW.md", "plan.md", "tasks.md", "QA_SIGNOFF.md"]
+        else:
+            names = ["PRD.md", "DESIGN.md", "QA_SIGNOFF.md", "COMPLETION_REPORT.md"]
         notes = release_path / "RELEASE_NOTES.md"
         if notes.exists():
             names.append("RELEASE_NOTES.md")
@@ -1455,8 +1574,23 @@ class HarnessEngine:
         identity = state.get("identity", {}) if isinstance(state.get("identity"), dict) else {}
         progress = state.get("progress", {}) if isinstance(state.get("progress"), dict) else {}
         details = state.get("evidence", {}) if isinstance(state.get("evidence"), dict) else {}
-        if identity.get("qa_sha") != evidence.get("QA-SHA"):
-            unmet.append("qa_sha_mismatch")
+
+        binding_policy = str(evidence.get("Binding-Policy", "git-sha")).strip().lower()
+        evidence_qa_sha = str(evidence.get("QA-SHA", "")).strip()
+        state_qa_sha = str(identity.get("qa_sha", "")).strip()
+        is_sha_free = (
+            binding_policy == "sha-free"
+            or evidence_qa_sha.lower() in {"sha-free", "none"}
+            or state_qa_sha.lower() in {"sha-free", "none"}
+        )
+
+        if is_sha_free:
+            if evidence_qa_sha.lower() not in {"sha-free", "none"} and state_qa_sha.lower() not in {"sha-free", "none"} and evidence_qa_sha != state_qa_sha:
+                unmet.append("qa_sha_mismatch")
+        else:
+            if identity.get("qa_sha") != evidence.get("QA-SHA"):
+                unmet.append("qa_sha_mismatch")
+
         signoff = self._read_regular_text(release_path / "RELEASE_SIGNOFF.md")
         if signoff is None:
             return unmet + ["release_signoff_unreadable"]
@@ -1489,10 +1623,14 @@ class HarnessEngine:
             unmet.append("package_seal_mismatch")
         if require_terminal_state:
             candidate = identity.get("candidate_sha")
-            if not isinstance(candidate, str) or not self._SHA.fullmatch(candidate):
-                unmet.append("release_candidate_missing")
-            elif not self._has_v2_candidate_binding(release_id, str(evidence["QA-SHA"]), candidate):
-                unmet.append("candidate_sha_not_local_commit")
+            if is_sha_free:
+                if candidate is not None and str(candidate).lower() not in {"sha-free", "none"} and not self._is_local_commit(str(candidate)):
+                    unmet.append("candidate_sha_not_local_commit")
+            else:
+                if not isinstance(candidate, str) or not self._SHA.fullmatch(candidate):
+                    unmet.append("release_candidate_missing")
+                elif not self._has_v2_candidate_binding(release_id, str(evidence["QA-SHA"]), candidate):
+                    unmet.append("candidate_sha_not_local_commit")
             if details.get("package_manifest_sha256") != manifest or details.get("package_seal") != "SEALED":
                 unmet.append("package_seal_mismatch")
             if progress.get("status") != "COMPLETE":

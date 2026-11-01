@@ -322,11 +322,13 @@ def parse_forgeflow_args(args=None):
     add_lifecycle_common(package_review_parser)
     package_review_parser.add_argument("qa_sha_pos", nargs="?", default=None, help="QA commit SHA (positional)")
     package_review_parser.add_argument("--qa-sha", default=None, help="QA commit SHA (flag)")
+    package_review_parser.add_argument("--sha-free", action="store_true", help="Use SHA-free lifecycle verification")
 
     seal_parser = lifecycle_sub.add_parser("seal", help="Seal a Gate 3-approved release candidate")
     add_lifecycle_common(seal_parser)
     seal_parser.add_argument("candidate_sha_pos", nargs="?", default=None, help="Release candidate commit SHA (positional)")
     seal_parser.add_argument("--release-candidate-sha", default=None, help="Release candidate commit SHA (flag)")
+    seal_parser.add_argument("--sha-free", action="store_true", help="Use SHA-free lifecycle seal")
 
     close_parser = lifecycle_sub.add_parser("close", help="Close a completed release and clean up task branch on main")
     add_lifecycle_common(close_parser)
@@ -539,11 +541,33 @@ def _run_lifecycle_command(parsed):
             result = engine.lifecycle_complete(parsed.release_id, explicit_python=parsed.python)
         elif command == "package-review":
             qa_sha = parsed.qa_sha or getattr(parsed, "qa_sha_pos", None)
+            if not qa_sha and getattr(parsed, "sha_free", False):
+                qa_sha = "sha-free"
+            if not qa_sha:
+                try:
+                    rel_dir = engine._release_dir(parsed.release_id)
+                    qa_txt = engine._read_regular_text(rel_dir / "QA_SIGNOFF.md")
+                    if qa_txt and ("Binding-Policy: sha-free" in qa_txt or "QA-SHA: sha-free" in qa_txt.lower()):
+                        qa_sha = "sha-free"
+                except Exception:
+                    pass
             if not qa_sha:
                 raise LifecycleError("missing_qa_sha", "QA SHA is required (provide as positional argument or --qa-sha)")
             result = engine.lifecycle_package_review(parsed.release_id, qa_sha)
         elif command == "seal":
             candidate_sha = parsed.release_candidate_sha or getattr(parsed, "candidate_sha_pos", None)
+            if not candidate_sha and getattr(parsed, "sha_free", False):
+                candidate_sha = "sha-free"
+            if not candidate_sha:
+                try:
+                    rel_dir = engine._release_dir(parsed.release_id)
+                    qa_txt = engine._read_regular_text(rel_dir / "QA_SIGNOFF.md")
+                    ctrl = engine._core_controller(parsed.release_id)
+                    state_qa = ctrl.state["identity"].get("qa_sha")
+                    if state_qa == "sha-free" or (qa_txt and ("Binding-Policy: sha-free" in qa_txt or "QA-SHA: sha-free" in qa_txt.lower())):
+                        candidate_sha = "sha-free"
+                except Exception:
+                    pass
             if not candidate_sha:
                 raise LifecycleError("missing_candidate_sha", "Release candidate SHA is required (provide as positional argument or --release-candidate-sha)")
             result = engine.lifecycle_seal(parsed.release_id, candidate_sha)
