@@ -70,6 +70,31 @@ class TestCliIntegration(unittest.TestCase):
         self.assertEqual(res.returncode, 0, f"CLI review failed: {res.stderr}")
         self.assertIn('"passed": true', res.stdout)
 
+    def test_forgeflow_review_findings_baseline_cli(self):
+        repo_src = Path(__file__).resolve().parent.parent / "src"
+        # Initialize git repo in self.temp_dir
+        subprocess.run(["git", "init"], cwd=str(self.temp_dir), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        subprocess.run(["git", "config", "user.name", "Tester"], cwd=str(self.temp_dir), check=True)
+        subprocess.run(["git", "config", "user.email", "tester@example.com"], cwd=str(self.temp_dir), check=True)
+
+        sample_file = self.temp_dir / "src" / "sample.py"
+        sample_file.parent.mkdir(parents=True, exist_ok=True)
+        sample_file.write_text("def add(a: int, b: int) -> int:\n    return a + b\n")
+        subprocess.run(["git", "add", "."], cwd=str(self.temp_dir), check=True)
+        subprocess.run(["git", "commit", "-m", "init"], cwd=str(self.temp_dir), check=True)
+
+        cmd = [
+            sys.executable,
+            "-c",
+            f"import sys; sys.path.insert(0, '{repo_src}'); from forgeflow.cli import main; main(['review', '--repo-root', '{self.temp_dir}', '--strict', '--findings-baseline', 'HEAD', '--json'])",
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        self.assertEqual(res.returncode, 0, f"CLI review with findings-baseline failed: {res.stderr}")
+        payload = json.loads(res.stdout)
+        self.assertTrue(payload["passed"])
+        self.assertEqual(payload["findings_baseline"], "HEAD")
+        self.assertIsNotNone(payload["baseline_stats"])
+
     def test_forgeflow_init_project_cli(self):
         repo_src = Path(__file__).resolve().parent.parent / "src"
         target_dir = self.temp_dir / "new_project"

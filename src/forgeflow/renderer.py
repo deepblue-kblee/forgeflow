@@ -116,6 +116,18 @@ class ReportRenderer:
         lines.append(
             f"📊 검사 결과: 파일 {len(result.files_scanned)}개 | 결함 {len(result.smells)}건 (Critical: {crit_count}, Warning: {warn_count}, Info: {info_count})"
         )
+        if getattr(result, "findings_baseline", None):
+            b_stats = getattr(result, "baseline_stats", {}) or {}
+            lines.append(f"• 기준선(Baseline): {result.findings_baseline}")
+            if getattr(result, "candidate_sha", None):
+                lines.append(f"• 후보 SHA: {result.candidate_sha}")
+            lines.append(
+                f"• 기준선 통계: 기존 {b_stats.get('baseline_warnings', 0)}건 | "
+                f"신규 {b_stats.get('new_warnings', 0)}건 (차단) | "
+                f"수정영역 {b_stats.get('modified_scope_warnings', 0)}건 (차단) | "
+                f"면제 {b_stats.get('exempt_warnings', 0)}건 (승인) | "
+                f"해결 {b_stats.get('resolved_warnings', 0)}건"
+            )
         lines.append("-" * 60)
 
         if not result.smells:

@@ -2,7 +2,22 @@
 
 ## 완료된 과업 (Completed Tasks)
 
-8. **ForgeFlow 배포본 XDG 표준화 및 사양서 디렉토리 격리/최적화 (v0.1.21)**:
+1. **Gate 2 기준선 비교 모드 및 스멜 분석기 오탐 교정 (v0.1.22, Issue #7)**:
+   - **`--findings-baseline <ref>` 기준선 비교 모드 도입**:
+     - `forgeflow review`에 `--findings-baseline <ref>` 옵션을 제공하여, 지정된 git revision 대비 새로 생기거나 재발한 Warning 및 수정된 함수 스코프 내의 Warning만 strict 차단(Fail-Closed).
+     - 기존의 `--strict` 전체 Warning 0건 동작은 100% 하위 호환 보존.
+     - 수정되지 않은 함수에 위치한 기존 Warning은 Gate 2 차단에서 면제하되, 결과 리포트에 계속 투명하게 보존.
+   - **구조적 Finding 식별 (Structural Fingerprinting) 및 스코프 추적**:
+     - `CodeSmell`에 `scope` 필드를 추가하고 AST 방문 중 클래스/함수 스택을 추적하여 기록.
+     - 줄 번호(`line_no`) 변동에 영향받지 않는 함수 스코프 및 식별자 기반 매칭 엔진을 도입하여 코드 추가/삭제로 인한 라인 이동 시 기존 Warning이 신규 경고로 오탐되는 문제 방지.
+   - **수정된 함수 영역(Modified Scope) 자동 감지**:
+     - git diff hunk 분석을 통해 변경된 라인이 포함된 함수/메서드 스코프를 자동 추출하고, 해당 스코프 내의 기존 Warning은 면제하지 않고 `MODIFIED_SCOPE`로 분류하여 재검토 강제.
+   - **`from __future__ import annotations` 오탐 교정**:
+     - `SmellDetector`의 `Unused Import` 검사기에서 파이썬 컴파일러 지시자인 `__future__` 임포트를 런타임 미사용 식별자 경고 대상에서 제외하도록 교정.
+   - **테스트 및 거버넌스 무결성**:
+     - 신규 단위 테스트 8종 추가, 전체 342개 단위 테스트 100% Pass, 21개 릴리즈 전수 거버넌스 감사 `forgeflow check --all --strict` 🟢 ALL PASSED 달성, `tasks/completed/v0.1.22-baseline-aware-strict-review/` 패키지 밀봉 및 로컬 설치 `./install.sh` 완료, GitHub Issue #7 공식 종결.
+
+2. **ForgeFlow 배포본 XDG 표준화 및 사양서 디렉토리 격리/최적화 (v0.1.21)**:
    - **배포 설치 루트 XDG 표준화**: `~/.local/forgeflow` ➔ `~/.local/share/forgeflow`로 이전. CLI 심볼릭 링크(`~/.local/bin/forgeflow`) 및 `current` 포인터 정상 연동.
    - **사양서 디렉토리 독립 & CHANGELOG 격리**: `templates/spec/`에서 `src/forgeflow/spec/`으로 분리. `CHANGELOG.md`를 `spec/` 밖(`~/.local/share/forgeflow/CHANGELOG.md`)으로 격리하여 AI 에이전트의 불필요한 과거 버전 이력 탐색 차단.
    - **사양서 색인 및 상황별 라우터(`spec/README.md`) 신설**: 기획·명세, 사전 심사, 기술 설계, 격리 구현, QA 승인, 릴리즈 밀봉 단계별로 필수 확인 사양서만 선별 참조하도록 안내하는 라우터 구축.
@@ -228,9 +243,9 @@
 
 ### 🎯 다음 작업 방향 및 버전 정책
 1. **버전 운영 및 v0.2.0 승격 로드맵**:
-   - 현재는 `v0.1.20` 상태에서 실전 도그푸딩 및 다운스트림 작업 리포지토리 연동 검증을 진행합니다.
+   - 현재는 `v0.1.22` 상태에서 실전 도그푸딩 및 다운스트림 작업 리포지토리 연동 검증을 진행합니다.
    - 충분한 운영 검증을 거쳐 결함이 완전히 해소된 시점에 사용자와 사전 합의하여 마이너 버전 `v0.2.0`으로 승격합니다.
 2. **GitHub Issues 모니터링 및 추가 개선 사항 접수**:
-   - `forgeflow issue list`를 통한 추가 이슈 확인 및 처리.
+   - `forgeflow issue list`를 통한 추가 이슈 확인 및 처리 (현재 오픈 이슈 0건).
 3. **원격 동기화 현황**:
-   - `v0.1.20` 릴리즈 구현 완료 및 main 머지/푸시 예정.
+   - `v0.1.22` 릴리즈 구현 및 검증 완료, main 머지 및 푸시 완료 예정.

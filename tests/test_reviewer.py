@@ -166,7 +166,142 @@ class TestReviewEngine(unittest.TestCase):
 
         # with fail_on_warning
         res_fail = engine.run_review(targets=[warn_file], fail_on_warning=True)
-        self.assertFalse(res_fail.passed)
+        self.assertEqual(res_fail.passed, False)
+
+
+class TestBaselineAwareReview(unittest.TestCase):
+    def setUp(self):
+        import subprocess
+        self.tmp_dir = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp_dir.name)
+        subprocess.run(["git", "init"], cwd=str(self.root), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        subprocess.run(["git", "config", "user.name", "Tester"], cwd=str(self.root), check=True)
+        subprocess.run(["git", "config", "user.email", "tester@example.com"], cwd=str(self.root), check=True)
+        (self.root / "src").mkdir(parents=True, exist_ok=True)
+
+    def tearDown(self):
+        self.tmp_dir.cleanup()
+
+    def _commit(self, msg: str):
+        import subprocess
+        subprocess.run(["git", "add", "."], cwd=str(self.root), check=True)
+        subprocess.run(["git", "commit", "-m", msg], cwd=str(self.root), check=True)
+
+    def test_invalid_git_baseline_ref_raises_value_error(self):
+        engine = ReviewEngine(repo_root=self.root)
+        target = self.root / "src" / "test.py"
+        target.write_text("x = 1\n", encoding="utf-8")
+        with self.assertRaises(ValueError) as ctx:
+            engine.run_review(targets=[target], findings_baseline="non-existent-ref-12345")
+        self.assertIn("Invalid or non-existent git baseline reference", str(ctx.exception))
+
+    def test_strict_without_baseline_fails_on_any_warning(self):
+        target = self.root / "src" / "warn.py"
+        target.write_text("def silent():\n    try:\n        pass\n    except ValueError:\n        pass\n", encoding="utf-8")
+        self._commit("add warning file")
+        engine = ReviewEngine(repo_root=self.root)
+
+        res_strict = engine.run_review(targets=[target], strict=True)
+        self.assertFalse(res_strict.passed, "Strict without baseline must fail on any warning")
+
+    def test_baseline_aware_clean_baseline_fails_on_new_warning(self):
+        target = self.root / "src" / "calc.py"
+        target.write_text("def add(a: int, b: int) -> int:\n    return a + b\n", encoding="utf-8")
+        self._commit("base clean commit")
+
+        # In candidate, introduce a warning (empty except)
+        target.write_text("def add(a: int, b: int) -> int:\n    try:\n        return a + b\n    except ValueError:\n        pass\n", encoding="utf-8")
+        engine = ReviewEngine(repo_root=self.root)
+
+        res = engine.run_review(targets=[target], strict=True, findings_baseline="HEAD")
+        self.assertFalse(res.passed, "Candidate adding a new warning over clean baseline must fail")
+        self.assertIsNotNone(res.baseline_stats)
+        self.assertEqual(res.baseline_stats["new_warnings"], 1)
+
+    def test_baseline_aware_unchanged_existing_warning_passes(self):
+        target = self.root / "src" / "service.py"
+        target.write_text(
+            "def existing_warn():\n    try:\n        pass\n    except ValueError:\n        pass\n\n"
+            "def clean_func():\n    return 42\n",
+            encoding="utf-8"
+        )
+        self._commit("base commit with existing warning")
+
+        # In candidate, modify ONLY clean_func, leaving existing_warn unchanged
+        target.write_text(
+            "def existing_warn():\n    try:\n        pass\n    except ValueError:\n        pass\n\n"
+            "def clean_func():\n    # modified comment\n    return 100\n",
+            encoding="utf-8"
+        )
+        engine = ReviewEngine(repo_root=self.root)
+
+        res = engine.run_review(targets=[target], strict=True, findings_baseline="HEAD")
+        self.assertTrue(res.passed, "Existing warning in untouched function must be exempt and pass")
+        self.assertEqual(res.baseline_stats["baseline_warnings"], 1)
+        self.assertEqual(res.baseline_stats["new_warnings"], 0)
+        self.assertEqual(res.baseline_stats["modified_scope_warnings"], 0)
+        self.assertEqual(res.baseline_stats["exempt_warnings"], 1)
+        # Verify that warning is still presented in smells
+        warnings = [s for s in res.smells if s.severity == "WARNING"]
+        self.assertEqual(len(warnings), 1)
+
+    def test_baseline_aware_modified_function_with_warning_fails(self):
+        target = self.root / "src" / "service.py"
+        target.write_text(
+            "def warned_func():\n    try:\n        pass\n    except ValueError:\n        pass\n",
+            encoding="utf-8"
+        )
+        self._commit("base commit")
+
+        # In candidate, modify warned_func
+        target.write_text(
+            "def warned_func():\n    # modified line inside warned function\n    try:\n        pass\n    except ValueError:\n        pass\n",
+            encoding="utf-8"
+        )
+        engine = ReviewEngine(repo_root=self.root)
+
+        res = engine.run_review(targets=[target], strict=True, findings_baseline="HEAD")
+        self.assertFalse(res.passed, "Existing warning in modified function must NOT be exempt")
+        self.assertEqual(res.baseline_stats["modified_scope_warnings"], 1)
+        self.assertEqual(res.baseline_stats["exempt_warnings"], 0)
+
+    def test_baseline_aware_line_shift_does_not_duplicate_warning(self):
+        target = self.root / "src" / "shifted.py"
+        target.write_text(
+            "def warned_func():\n    try:\n        pass\n    except ValueError:\n        pass\n",
+            encoding="utf-8"
+        )
+        self._commit("base commit")
+
+        # In candidate, prepend 10 lines of comments at the very top (shifting line numbers)
+        comments = "\n".join(f"# comment line {i}" for i in range(10))
+        target.write_text(
+            f"{comments}\n\ndef warned_func():\n    try:\n        pass\n    except ValueError:\n        pass\n",
+            encoding="utf-8"
+        )
+        engine = ReviewEngine(repo_root=self.root)
+
+        # Notice: diff is outside warned_func body lines (lines 1-10 are modified, warned_func is at lines 12+)
+        # warned_func scope itself was not touched
+        res = engine.run_review(targets=[target], strict=True, findings_baseline="HEAD")
+        self.assertTrue(res.passed, "Line shifting outside function must not treat existing warning as new")
+        self.assertEqual(res.baseline_stats["new_warnings"], 0)
+        self.assertEqual(res.baseline_stats["exempt_warnings"], 1)
+
+    def test_baseline_aware_resolved_warning_reported(self):
+        target = self.root / "src" / "fix.py"
+        target.write_text("def fixed():\n    try:\n        pass\n    except ValueError:\n        pass\n", encoding="utf-8")
+        self._commit("base with warning")
+
+        # In candidate, resolve the warning
+        target.write_text("def fixed():\n    pass\n", encoding="utf-8")
+        engine = ReviewEngine(repo_root=self.root)
+
+        res = engine.run_review(targets=[target], strict=True, findings_baseline="HEAD")
+        self.assertTrue(res.passed)
+        self.assertEqual(res.baseline_stats["resolved_warnings"], 1)
+        self.assertEqual(res.baseline_stats["baseline_warnings"], 1)
+        self.assertEqual(res.baseline_stats["new_warnings"], 0)
 
 
 if __name__ == "__main__":

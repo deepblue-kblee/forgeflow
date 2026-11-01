@@ -125,3 +125,142 @@ class ReviewScanner:
             if p.exists():
                 standards.append(p.resolve())
         return standards
+
+    @classmethod
+    def verify_git_ref(cls, repo_root: Path, ref: str) -> str:
+        """Verify that ref is a valid git commit object and return its 40-char SHA."""
+        try:
+            res = subprocess.run(
+                ["git", "rev-parse", "--verify", f"{ref}^{{commit}}"],
+                cwd=str(repo_root),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
+            )
+            if res.returncode != 0:
+                raise ValueError(f"Invalid or non-existent git baseline reference: '{ref}'")
+            return res.stdout.strip()
+        except Exception as e:
+            if isinstance(e, ValueError):
+                raise
+            raise ValueError(f"Failed to verify git reference '{ref}': {e}") from e
+
+    @classmethod
+    def get_candidate_sha(cls, repo_root: Path) -> str:
+        """Get the current HEAD commit SHA or fallback identifier."""
+        try:
+            res = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=str(repo_root),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
+            )
+            if res.returncode == 0 and res.stdout.strip():
+                return res.stdout.strip()
+        except Exception:
+            pass
+        return "HEAD"
+
+    @classmethod
+    def get_file_at_ref(cls, repo_root: Path, ref: str, rel_path: str) -> Optional[str]:
+        """Read file contents at a given git revision via git show."""
+        try:
+            res = subprocess.run(
+                ["git", "show", f"{ref}:{rel_path}"],
+                cwd=str(repo_root),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
+            )
+            if res.returncode == 0:
+                return res.stdout
+            return None
+        except Exception:
+            return None
+
+    @classmethod
+    def get_modified_lines(cls, repo_root: Path, base_ref: str, rel_path: str) -> Set[int]:
+        """Extract modified/added line numbers in candidate file compared to base_ref."""
+        import re
+        modified_lines: Set[int] = set()
+        try:
+            res = subprocess.run(
+                ["git", "diff", "-U0", base_ref, "--", rel_path],
+                cwd=str(repo_root),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
+            )
+            if res.returncode != 0:
+                return modified_lines
+
+            hunk_pattern = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
+            for line in res.stdout.splitlines():
+                m = hunk_pattern.match(line)
+                if m:
+                    start = int(m.group(1))
+                    count = int(m.group(2)) if m.group(2) is not None else 1
+                    if count > 0:
+                        for l_num in range(start, start + count):
+                            modified_lines.add(l_num)
+        except Exception:
+            pass
+        return modified_lines
+
+    @classmethod
+    def get_function_scopes_and_lines(cls, source_code: str) -> List[tuple[int, int, str]]:
+        """Extract (start_line, end_line, scope_name) for functions/methods via AST."""
+        import ast
+        scopes: List[tuple[int, int, str]] = []
+        try:
+            tree = ast.parse(source_code)
+        except Exception:
+            return scopes
+
+        class ScopeVisitor(ast.NodeVisitor):
+            def __init__(self):
+                self.stack: List[str] = []
+
+            def visit_ClassDef(self, node: ast.ClassDef):
+                self.stack.append(node.name)
+                self.generic_visit(node)
+                self.stack.pop()
+
+            def visit_FunctionDef(self, node: ast.FunctionDef):
+                self.stack.append(node.name)
+                scope_name = ".".join(self.stack)
+                start = node.lineno
+                end = getattr(node, "end_lineno", node.lineno)
+                scopes.append((start, end, scope_name))
+                self.generic_visit(node)
+                self.stack.pop()
+
+            def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
+                self.stack.append(node.name)
+                scope_name = ".".join(self.stack)
+                start = node.lineno
+                end = getattr(node, "end_lineno", node.lineno)
+                scopes.append((start, end, scope_name))
+                self.generic_visit(node)
+                self.stack.pop()
+
+        visitor = ScopeVisitor()
+        visitor.visit(tree)
+        return scopes
+
+    @classmethod
+    def get_modified_scopes(cls, source_code: str, modified_lines: Set[int]) -> Set[str]:
+        """Return the set of function/method scope names that overlap with modified lines."""
+        if not modified_lines:
+            return set()
+        scope_ranges = cls.get_function_scopes_and_lines(source_code)
+        modified_scopes: Set[str] = set()
+        for start, end, scope_name in scope_ranges:
+            if any(start <= line <= end for line in modified_lines):
+                modified_scopes.add(scope_name)
+        return modified_scopes

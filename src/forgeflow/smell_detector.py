@@ -24,9 +24,18 @@ class CodeSmell:
     severity: str  # CRITICAL, WARNING, INFO
     message: str
     suggestion: str
+    scope: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
+
+    def fingerprint(self, rel_path: Optional[str] = None) -> str:
+        """Calculate a structural fingerprint resilient to line-number shifting."""
+        import re
+        p = rel_path or Path(self.file_path).name
+        # Strip digits to avoid line-number variations in messages
+        norm_msg = re.sub(r"\b\d+\b", "", self.message)
+        return f"{p}:{self.smell_type}:{self.scope}:{norm_msg.strip()}"
 
 
 def calculate_cognitive_complexity(func_node: ast.AST, func_name: Optional[str] = None) -> int:
@@ -133,6 +142,7 @@ class _ASTSmellVisitor(ast.NodeVisitor):
         self.file_path = file_path
         self.source_lines = source_lines
         self.smells: List[CodeSmell] = []
+        self._scope_stack: List[str] = []
         self._current_nesting = 0
         self._loop_depth = 0
         self._current_class_methods = 0
@@ -146,6 +156,7 @@ class _ASTSmellVisitor(ast.NodeVisitor):
 
     def _add_smell(self, node: ast.AST, smell_type: str, severity: str, message: str, suggestion: str):
         line = getattr(node, "lineno", 1)
+        scope = ".".join(self._scope_stack)
         self.smells.append(
             CodeSmell(
                 file_path=self.file_path,
@@ -154,6 +165,7 @@ class _ASTSmellVisitor(ast.NodeVisitor):
                 severity=severity,
                 message=message,
                 suggestion=suggestion,
+                scope=scope,
             )
         )
 
@@ -219,9 +231,11 @@ class _ASTSmellVisitor(ast.NodeVisitor):
             mod = node.module.split(".")[0]
             self._imported_modules.add(mod)
         if self._scope_depth == 0:
-            for alias in node.names:
-                if alias.name != "*":
-                    self._imports[alias.asname or alias.name] = node.lineno
+            # __future__ imports are compiler directives, not unused runtime symbols
+            if node.module != "__future__":
+                for alias in node.names:
+                    if alias.name != "*":
+                        self._imports[alias.asname or alias.name] = node.lineno
         self.generic_visit(node)
 
     def visit_Name(self, node: ast.Name):
@@ -275,16 +289,20 @@ class _ASTSmellVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
     def visit_FunctionDef(self, node: ast.FunctionDef):
+        self._scope_stack.append(node.name)
         self._scope_depth += 1
         self._check_function(node)
         self.generic_visit(node)
         self._scope_depth -= 1
+        self._scope_stack.pop()
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
+        self._scope_stack.append(node.name)
         self._scope_depth += 1
         self._check_function(node)
         self.generic_visit(node)
         self._scope_depth -= 1
+        self._scope_stack.pop()
 
     def visit_With(self, node: ast.With):
         self._with_depth += 1
@@ -496,6 +514,7 @@ class _ASTSmellVisitor(ast.NodeVisitor):
             )
 
     def visit_ClassDef(self, node: ast.ClassDef):
+        self._scope_stack.append(node.name)
         # Class size check
         method_count = sum(
             1 for item in node.body if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
@@ -509,6 +528,7 @@ class _ASTSmellVisitor(ast.NodeVisitor):
                 suggestion="클래스의 책임을 단일화하고 일부 역할을 컴포지션으로 분리하세요.",
             )
         self.generic_visit(node)
+        self._scope_stack.pop()
 
     def visit_ExceptHandler(self, node: ast.ExceptHandler):
         # 1. Bare Except Check

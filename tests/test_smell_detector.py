@@ -176,6 +176,55 @@ def calculate():
         shadowing = [s for s in smells if s.smell_type == "Builtin Shadowing"]
         self.assertEqual(len(shadowing), 2)
 
+    def test_future_import_annotations_not_reported_as_unused(self):
+        code = """
+from __future__ import annotations
+
+def calculate(x: int) -> int:
+    return x * 2
+"""
+        smells = SmellDetector.analyze_code(code)
+        unused = [s for s in smells if s.smell_type == "Unused Import"]
+        self.assertEqual(len(unused), 0, "from __future__ import annotations must not trigger Unused Import")
+
+    def test_scope_tracking_in_smells(self):
+        code = """
+class MyService:
+    def process_data(self):
+        sum = 10
+        return sum
+
+def standalone_func():
+    id = 42
+    return id
+"""
+        smells = SmellDetector.analyze_code(code)
+        shadowing = [s for s in smells if s.smell_type == "Builtin Shadowing"]
+        self.assertEqual(len(shadowing), 2)
+        scopes = {s.scope for s in shadowing}
+        self.assertIn("MyService.process_data", scopes)
+        self.assertIn("standalone_func", scopes)
+
+    def test_code_smell_fingerprint_resilience(self):
+        code1 = """
+def calculate():
+    sum = 100
+    return sum
+"""
+        code2 = """
+# Adding some comment lines
+# to shift the line numbers
+
+def calculate():
+    sum = 100
+    return sum
+"""
+        smells1 = SmellDetector.analyze_code(code1, file_path="calc.py")
+        smells2 = SmellDetector.analyze_code(code2, file_path="calc.py")
+
+        self.assertNotEqual(smells1[0].line_no, smells2[0].line_no)
+        self.assertEqual(smells1[0].fingerprint("calc.py"), smells2[0].fingerprint("calc.py"))
+
 
 if __name__ == "__main__":
     unittest.main()

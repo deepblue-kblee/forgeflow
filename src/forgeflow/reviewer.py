@@ -27,6 +27,9 @@ class ReviewResult:
     passed: bool
     strict: bool
     cache_stats: Optional[Dict[str, Any]] = None
+    findings_baseline: Optional[str] = None
+    candidate_sha: Optional[str] = None
+    baseline_stats: Optional[Dict[str, int]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -41,6 +44,9 @@ class ReviewResult:
             "report_path": self.report_path,
             "passed": self.passed,
             "strict": self.strict,
+            "findings_baseline": self.findings_baseline,
+            "candidate_sha": self.candidate_sha,
+            "baseline_stats": self.baseline_stats,
             "cache_stats": self.cache_stats or {"enabled": False, "hits": 0, "misses": 0},
             "summary": {
                 "total_files": len(self.files_scanned),
@@ -83,7 +89,13 @@ class ReviewEngine:
         fail_on_warning: bool = False,
         no_cache: bool = False,
         report_dest: Optional[Path] = None,
+        findings_baseline: Optional[str] = None,
     ) -> ReviewResult:
+        candidate_sha = ReviewScanner.get_candidate_sha(self.repo_root)
+        verified_baseline_sha: Optional[str] = None
+        if findings_baseline:
+            verified_baseline_sha = ReviewScanner.verify_git_ref(self.repo_root, findings_baseline)
+
         if targets:
             files_to_scan = [t.resolve() for t in targets if t.exists() and t.is_file()]
             scope_desc = f"Explicit ({len(files_to_scan)} files)"
@@ -100,11 +112,13 @@ class ReviewEngine:
 
         cache_mgr = ReviewCacheManager(repo_root=self.repo_root, enabled=not no_cache)
         all_smells: List[CodeSmell] = []
+        file_contents: Dict[Path, str] = {}
 
         for file_p in files_to_scan:
             if file_p.suffix == ".py":
                 try:
                     content = file_p.read_text(encoding="utf-8")
+                    file_contents[file_p] = content
                 except UnicodeDecodeError as exc:
                     all_smells.append(
                         CodeSmell(
@@ -171,10 +185,86 @@ class ReviewEngine:
 
         warning_count = sum(1 for s in all_smells if s.severity == "WARNING")
 
-        if strict or fail_on_warning:
-            passed = effective_critical == 0 and warning_count == 0
-        else:
+        # Baseline-aware analysis
+        baseline_stats: Optional[Dict[str, int]] = None
+        new_smells: List[CodeSmell] = []
+        modified_scope_smells: List[CodeSmell] = []
+        exempt_smells: List[CodeSmell] = []
+        resolved_smells: List[CodeSmell] = []
+
+        if verified_baseline_sha:
+            baseline_all_smells: List[CodeSmell] = []
+            baseline_fp_map: Dict[str, CodeSmell] = {}
+            file_modified_scopes: Dict[str, Set[str]] = {}
+
+            for file_p in files_to_scan:
+                if file_p.suffix == ".py":
+                    try:
+                        rel_p = str(file_p.relative_to(self.repo_root))
+                    except Exception:
+                        rel_p = file_p.name
+
+                    base_content = ReviewScanner.get_file_at_ref(self.repo_root, verified_baseline_sha, rel_p)
+                    if base_content is not None:
+                        b_smells = SmellDetector.analyze_code(base_content, file_path=str(file_p))
+                        baseline_all_smells.extend(b_smells)
+                        for bs in b_smells:
+                            if bs.severity == "WARNING":
+                                baseline_fp_map[bs.fingerprint(rel_p)] = bs
+
+                    mod_lines = ReviewScanner.get_modified_lines(self.repo_root, verified_baseline_sha, rel_p)
+                    cand_code = file_contents.get(file_p, "")
+                    mod_scopes = ReviewScanner.get_modified_scopes(cand_code, mod_lines)
+                    file_modified_scopes[rel_p] = mod_scopes
+
+            cand_warnings = [s for s in all_smells if s.severity == "WARNING"]
+            cand_fp_set = set()
+
+            for s in cand_warnings:
+                try:
+                    p_obj = Path(s.file_path)
+                    rel_f = (
+                        str(p_obj.relative_to(self.repo_root))
+                        if p_obj.is_absolute() and self.repo_root in p_obj.parents
+                        else p_obj.name
+                    )
+                except Exception:
+                    rel_f = Path(s.file_path).name
+
+                fp = s.fingerprint(rel_f)
+                cand_fp_set.add(fp)
+
+                if fp not in baseline_fp_map:
+                    new_smells.append(s)
+                else:
+                    mod_scopes = file_modified_scopes.get(rel_f, set())
+                    if s.scope and s.scope in mod_scopes:
+                        modified_scope_smells.append(s)
+                    else:
+                        exempt_smells.append(s)
+
+            for fp, bs in baseline_fp_map.items():
+                if fp not in cand_fp_set:
+                    resolved_smells.append(bs)
+
+            baseline_stats = {
+                "baseline_warnings": len(baseline_fp_map),
+                "new_warnings": len(new_smells),
+                "modified_scope_warnings": len(modified_scope_smells),
+                "exempt_warnings": len(exempt_smells),
+                "resolved_warnings": len(resolved_smells),
+            }
+
+        is_strict = strict or fail_on_warning
+        if not is_strict:
             passed = effective_critical == 0
+        else:
+            if not verified_baseline_sha:
+                passed = effective_critical == 0 and warning_count == 0
+            else:
+                new_w = baseline_stats["new_warnings"] if baseline_stats else 0
+                mod_w = baseline_stats["modified_scope_warnings"] if baseline_stats else 0
+                passed = effective_critical == 0 and new_w == 0 and mod_w == 0
 
         saved_report_path = self._save_markdown_report(
             scope_desc=scope_desc,
@@ -183,9 +273,12 @@ class ReviewEngine:
             spec_path=spec_path,
             standards_paths=standards_paths,
             passed=passed,
-            strict=strict or fail_on_warning,
+            strict=is_strict,
             cache_stats=cache_stats,
             custom_dest=report_dest,
+            findings_baseline=findings_baseline,
+            candidate_sha=candidate_sha,
+            baseline_stats=baseline_stats,
         )
 
         return ReviewResult(
@@ -199,8 +292,11 @@ class ReviewEngine:
             spec_prompt=spec_prompt,
             report_path=str(saved_report_path.relative_to(self.repo_root)) if saved_report_path else None,
             passed=passed,
-            strict=strict or fail_on_warning,
+            strict=is_strict,
             cache_stats=cache_stats,
+            findings_baseline=findings_baseline,
+            candidate_sha=candidate_sha,
+            baseline_stats=baseline_stats,
         )
 
     def _build_standards_prompt(
@@ -233,6 +329,9 @@ class ReviewEngine:
         strict: bool,
         cache_stats: Optional[Dict[str, Any]] = None,
         custom_dest: Optional[Path] = None,
+        findings_baseline: Optional[str] = None,
+        candidate_sha: Optional[str] = None,
+        baseline_stats: Optional[Dict[str, int]] = None,
     ) -> Optional[Path]:
         try:
             if custom_dest:
@@ -272,6 +371,13 @@ class ReviewEngine:
                 f"- **검사 일시**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
                 f"- **검사 범위**: {scope_desc}",
                 f"- **엄격 모드(Strict)**: {strict_str}",
+            ]
+            if findings_baseline:
+                lines.append(f"- **기준선(Findings Baseline)**: `{findings_baseline}`")
+                if candidate_sha:
+                    lines.append(f"- **후보 Commit SHA**: `{candidate_sha}`")
+
+            lines.extend([
                 c_info,
                 f"- **스펙 소스**: `{spec_name}`",
                 f"- **참조 표준**: {standards_repr}",
@@ -281,11 +387,25 @@ class ReviewEngine:
                 "## 📊 요약 통계",
                 f"- 검사 파일 수: {len(files_scanned)}개",
                 f"- 검출 결함 총계: {len(smells)}건 (Critical: {crit_count}, Warning: {warn_count}, Info: {info_count})",
+            ])
+
+            if baseline_stats:
+                lines.extend([
+                    "",
+                    "### 🎯 기준선(Baseline) 비교 판정 현황",
+                    f"- **기준선 기존 경고**: {baseline_stats.get('baseline_warnings', 0)}건",
+                    f"- **신규 발생 경고**: {baseline_stats.get('new_warnings', 0)}건 (🔴 차단)",
+                    f"- **수정 영역 경고**: {baseline_stats.get('modified_scope_warnings', 0)}건 (🔴 차단/재검토 대상)",
+                    f"- **유지된 무관 경고**: {baseline_stats.get('exempt_warnings', 0)}건 (🟢 면제 승인)",
+                    f"- **해결된 경고**: {baseline_stats.get('resolved_warnings', 0)}건 (🎉 해소)",
+                ])
+
+            lines.extend([
                 "",
                 "---",
                 "",
                 "## 🛠️ 정적 AST 코드 스멜 & 메트릭 (Stage 1)",
-            ]
+            ])
 
             if not smells:
                 lines.append("- 🎉 정적 코드 스멜 및 결함이 검출되지 않았습니다.")

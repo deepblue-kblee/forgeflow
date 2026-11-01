@@ -73,6 +73,12 @@ def parse_harness_args(args=None):
         help="Base git ref for diff in review mode",
     )
     parser.add_argument(
+        "--findings-baseline",
+        type=str,
+        default=None,
+        help="Baseline git ref for comparing warnings in review mode",
+    )
+    parser.add_argument(
         "--spec",
         type=str,
         default=None,
@@ -137,6 +143,7 @@ def harness_main(args=None):
             fail_on_warning=getattr(parsed, "fail_on_warning", False),
             no_cache=getattr(parsed, "no_cache", False),
             report_dest=Path(parsed.report) if parsed.report else None,
+            findings_baseline=getattr(parsed, "findings_baseline", None),
         )
         if parsed.json:
             print(ReportRenderer.render_json_review(res))
@@ -338,6 +345,7 @@ def parse_forgeflow_args(args=None):
     rev_parser.add_argument("target", nargs="*", default=None, help="Target files or directories")
     rev_parser.add_argument("--all", action="store_true", help="Review all source files")
     rev_parser.add_argument("--base", type=str, default=None, help="Base git ref for diff")
+    rev_parser.add_argument("--findings-baseline", type=str, default=None, help="Baseline git ref for comparing warnings")
     rev_parser.add_argument("--spec", type=str, default=None, help="Explicit spec file path")
     rev_parser.add_argument("--strict", action="store_true", help="Fail on warning smells")
     rev_parser.add_argument("--fail-on-warning", action="store_true", help="Fail if any warning smells are found")
@@ -1177,6 +1185,8 @@ def main(args=None):
             harness_args.append("--all")
         if parsed.base:
             harness_args.extend(["--base", parsed.base])
+        if getattr(parsed, "findings_baseline", None):
+            harness_args.extend(["--findings-baseline", parsed.findings_baseline])
         if parsed.spec:
             harness_args.extend(["--spec", parsed.spec])
         if parsed.strict:
