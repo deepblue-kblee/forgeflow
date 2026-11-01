@@ -2,7 +2,24 @@
 
 ## 완료된 과업 (Completed Tasks)
 
-1. **Delta-Zero 기존 Warning 비증가 허용 기반 기준선 비교 모드 (v0.1.23, Issue #7 보완)**:
+1. **Gate 2 기준선 검토와 SHA-Free 라이프사이클 밀봉 경로 일치화 (v0.1.24, Issue #8)**:
+   - **Gate 2 공식 명세 및 QA 템플릿의 2대 코드 리뷰 정책 명시**:
+     - `raw strict`: 선택된 검사 범위의 모든 Warning 0건 요구 (기본 모드: `forgeflow review --strict`).
+     - `baseline-aware strict`: Critical 0건 & 신규 Warning 0건 요구 (기준선 모드: `forgeflow review --strict --findings-baseline <ref>`, Delta-Zero 비증가 포함).
+     - 기준선 승인 및 기록 방식(`GATE1_REVIEW.md`, `QA_SIGNOFF.md`, 리포트 통계) 표준화.
+   - **SHA-Free 라이프사이클 Evidence v2 경로 구축**:
+     - `Binding-Policy: sha-free` 지원으로 Git-SHA 바인딩을 금지하는 아키텍처 정책(ADR 001) 프로젝트 완벽 수용.
+     - `Base-SHA: sha-free`, `QA-SHA: sha-free`, Reviewer/Verification의 `qa-sha` 완화 지원.
+     - 실용적 4대 안전 불변식(필수 서명 승인, 100% 테스트 무결성, Clean Working Tree, 패키지 매니페스트 SHA-256 검증)으로 무결성 보증.
+   - **라이프사이클 전이 및 CLI 연동 최신화**:
+     - `lifecycle package-review` 및 `lifecycle seal`에서 `--sha-free` 플래그 및 Evidence 기반 자동 감지 지원.
+     - SHA-free 정책 하에서 커밋 SHA 또는 diff 범위 강제 없이 package review, Gate 3 seal, completion 일관 완료 보장.
+     - 기존 v2 sealed 릴리즈(23개 릴리즈) 100% 하위 호환 감사 보존.
+   - **전체 단위 테스트 및 거버넌스 무결성**:
+     - 전체 348개 단위 테스트 100% Pass, 총 23개 릴리즈 전수 거버넌스 감사 `forgeflow check --all --strict` 🟢 ALL PASSED 달성.
+     - `tasks/completed/v0.1.24-align-baseline-review-sha-free-seals/` 패키지 밀봉 및 로컬 설치 `./install.sh` 완료.
+
+2. **Delta-Zero 기존 Warning 비증가 허용 기반 기준선 비교 모드 (v0.1.23, Issue #7 보완)**:
    - **Multi-set Counter 슬롯 매칭을 통한 Delta-Zero 정책 구현**:
      - `collections.Counter` 다중 집합 슬롯 매칭을 도입하여, 수정된 함수 스코프 내의 기존 Warning이라도 개수가 증가하지 않으면 Gate 2 통과 허용 (`modified_scope_unchanged_warnings`로 분류 및 리포트에 잔존 주의 표기).
      - 함수 내에서 동일/신규 경고가 추가 발생하여 기존 수량을 초과하면 신규 경고(`new_warnings`)로 즉시 차단(Fail-Closed).
@@ -248,10 +265,11 @@
 ## 새 세션에서 바로 이어서 착수할 과업 (Next Actions)
 
 ### 🎯 다음 작업 방향 및 버전 정책
-1. **버전 운영 및 v0.2.0 승격 로드맵**:
-   - 현재는 `v0.1.23` 상태에서 실전 도그푸딩 및 다운스트림 작업 리포지토리 연동 검증을 진행합니다.
+1. **GitHub Issue #8 종결 및 피쳐 브랜치 머지 (사용자 승인 대기)**:
+   - `feat/v0.1.24-align-baseline-review-sha-free-seals` 브랜치 구현 및 348개 단위 테스트 100% Pass, 23개 릴리즈 하네스 전수 감사 🟢 ALL PASSED 완료.
+   - 사용자 확인 후 `main` 머지 및 `forgeflow issue close 8` 수행 예정.
+2. **버전 운영 및 v0.2.0 승격 로드맵**:
+   - 현재는 `v0.1.24` 상태에서 실전 도그푸딩 및 다운스트림 작업 리포지토리 연동 검증을 진행합니다.
    - 충분한 운영 검증을 거쳐 결함이 완전히 해소된 시점에 사용자와 사전 합의하여 마이너 버전 `v0.2.0`으로 승격합니다.
-2. **GitHub Issues 모니터링 및 추가 개선 사항 접수**:
-   - `forgeflow issue list`를 통한 추가 이슈 확인 및 처리 (현재 오픈 이슈 0건 또는 신규 이슈 처리).
-3. **원격 동기화 현황**:
-   - `v0.1.23` 릴리즈 구현 및 검증 완료, Issue #7 종결 및 main 머지/푸시 완료 예정.
+3. **GitHub Issues 모니터링 및 추가 개선 사항 접수**:
+   - `forgeflow issue list`를 통한 추가 이슈 확인 및 처리.
