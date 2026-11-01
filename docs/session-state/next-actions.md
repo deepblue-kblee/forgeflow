@@ -2,7 +2,21 @@
 
 ## 완료된 과업 (Completed Tasks)
 
-1. **Gate 2 기준선 검토와 SHA-Free 라이프사이클 밀봉 경로 일치화 (v0.1.24, Issue #8)**:
+1. **공식 명세 파일 전수 최신화 및 최적화 (`/kb-docs-maintainer`, Zero Information Loss)**:
+   - **대칭 동기화 및 단일 진실 공급원(SSOT) 확립**:
+     - `docs/spec/`과 `src/forgeflow/spec/` 간의 7대 공식 사양서 파일 전수를 100% 바이트 단위 대칭 일치화.
+     - ADR-004(`004-baseline-delta-zero-slot-matching.md`)를 `src/forgeflow/templates/adr/`로 동기화 복사.
+   - **사양서 어조 및 표현 정비 (규범 준수)**:
+     - `kb-docs-maintainer` 지침에 따라 대화체 존댓말(~합니다, ~있습니다 등)을 명사형/선언문 평서체 종결로 전면 정비.
+     - 기술 제약, 인터페이스, 엣지 케이스 완전 보존(Zero Information Loss).
+   - **v0.1.24 및 ADR 반영 최신화**:
+     - `FLOW_SPEC.md`, `GATES_AND_LOOPS.md`, `SPECKIT_HOOKS_AND_NORMS.md`: QA 바인딩을 `git-sha`(커밋 결속) 또는 `sha-free`(실용적 4대 불변식) 양방향 정책으로 최신화하고 제7장 로드맵을 완료된 아키텍처 상태로 정리.
+     - `ANTI_PATTERNS.md`: AP-07(변경 스코프 내 기존 경고 전면 강제 해결 및 단순 Set 매칭 금지 / ADR-004 슬롯 매칭 채택) 추가 및 AP-01 `Binding-Policy: sha-free` 연계.
+     - `PHILOSOPHY_AND_COMPASS.md`: 어조 평서형 통일 및 나침반 5대 질문 체계 정비.
+   - **전체 단위 테스트 및 거버넌스 무결성**:
+     - 348개 단위 테스트 100% Pass, 총 23개 릴리즈 전수 거버넌스 감사 `forgeflow check --all --strict` 🟢 ALL PASSED.
+
+2. **Gate 2 기준선 검토와 SHA-Free 라이프사이클 밀봉 경로 일치화 (v0.1.24, Issue #8)**:
    - **Gate 2 공식 명세 및 QA 템플릿의 2대 코드 리뷰 정책 명시**:
      - `raw strict`: 선택된 검사 범위의 모든 Warning 0건 요구 (기본 모드: `forgeflow review --strict`).
      - `baseline-aware strict`: Critical 0건 & 신규 Warning 0건 요구 (기준선 모드: `forgeflow review --strict --findings-baseline <ref>`, Delta-Zero 비증가 포함).

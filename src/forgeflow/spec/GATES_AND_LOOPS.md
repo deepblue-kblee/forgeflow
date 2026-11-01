@@ -44,8 +44,8 @@ ForgeFlow는 실행과 통제를 분리하는 이중 엔진 모델을 채택한�
 | 등급 | 정의 및 대상 범위 | 필수 산출물 및 Gate 1 요건 | Gate 2 QA Sign-Off 요건 |
 | :--- | :--- | :--- | :--- |
 | **Tier 1 (Minor)** | 동작 불변 문구, 포맷팅, 일반 문서 수정, 또는 인터페이스/보안 영향이 없는 단일 모듈의 국소 버그 수정 | `spec.md`, `GATE1_REVIEW.md` (Self-Review PASS, 계획된 변경 경로 명시) | 전체 테스트 통과, 계획된 경로와 실제 변경 경로 일치 인증 |
-| **Tier 2 (Standard)** | 새로운 기능 추가, 복수 모듈 수정, 단위/통합 테스트 추가 및 일반적인 리팩토링 | `spec.md`, `GATE1_REVIEW.md` (독립 시니어 리뷰어 1인 검토 및 승인) | 100% 테스트 통과, 정적 분석 오류 0건, 커밋 SHA 바인딩 |
-| **Tier 3 (Critical)** | 인증/인가, 보안, 암호화, 데이터베이스 마이그레이션, 공개 CLI/API 변경, 코어 거버넌스 규칙 수정 | `spec.md`, `GATE1_REVIEW.md` (Security, Reliability, Maintainability 3대 독립 패널 승인 + 사용자 승인) | 3대 패널 전원 코드/테스트 승인, 커밋 SHA 불변 바인딩, 비파괴 프로브 검증 |
+| **Tier 2 (Standard)** | 새로운 기능 추가, 복수 모듈 수정, 단위/통합 테스트 추가 및 일반적인 리팩토링 | `spec.md`, `GATE1_REVIEW.md` (독립 시니어 리뷰어 1인 검토 및 승인) | 100% 테스트 통과, 정적 분석 오류 0건, 스냅샷 승인 (`git-sha` 커밋 결속 또는 `sha-free` 무결성) |
+| **Tier 3 (Critical)** | 인증/인가, 보안, 암호화, 데이터베이스 마이그레이션, 공개 CLI/API 변경, 코어 거버넌스 규칙 수정 | `spec.md`, `GATE1_REVIEW.md` (Security, Reliability, Maintainability 3대 독립 패널 승인 + 사용자 승인) | 3대 패널 전원 승인, 불변 스냅샷 결속 (`git-sha` 또는 `sha-free` 무결성), 비파괴 프로브 검증 |
 
 ---
 
@@ -86,7 +86,7 @@ ForgeFlow는 실행과 통제를 분리하는 이중 엔진 모델을 채택한�
   1. `RELEASE_SIGNOFF.md` 및 `COMPLETION_REPORT.md` (또는 `RELEASE_NOTES.md`) 작성.
   2. 사용자 최종 승인(Go/No-Go) 확인.
   3. `tasks/in-progress/<release-id>` 디렉토리를 `tasks/completed/<release-id>`로 원자적 이동(Atomic Move)하여 패키지 영구 밀봉.
-  4. **Gate 3 최종 단일 릴리즈 바인딩**: Gate 2 이후의 문서 정리(부기)가 모두 완비된 최종 커밋 스냅샷을 단일 Release-SHA로 최종 결속하여 불필요한 중간 SHA 마찰 없이 패키지 무결성(Provenance)을 영구 보존.
+  4. **Gate 3 최종 릴리즈 밀봉 및 바인딩**: Gate 2 이후의 문서 정리(부기) 완료 후, `git-sha` 정책 시 최종 커밋 스냅샷을 단일 Release-SHA로 결속하고, `sha-free` 정책 시 패키지 매니페스트 SHA-256을 밀봉하여 불필요한 중간 마찰 없이 패키지 무결성(Provenance)을 영구 보존.
 
 ---
 

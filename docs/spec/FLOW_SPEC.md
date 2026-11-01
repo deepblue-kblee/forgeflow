@@ -57,7 +57,7 @@
 │   │       ├── GATE1_REVIEW.md         # [ForgeFlow] Gate 1 명세 승인 증적
 │   │       ├── plan.md                 # [Spec Kit] 기술 아키텍처 및 데이터 모델
 │   │       ├── tasks.md                # [Spec Kit] 의존성 순서의 원자적 태스크 목록
-│   │       ├── QA_SIGNOFF.md           # [ForgeFlow] Gate 2 QA 승인 증적 (SHA 바인딩)
+│   │       ├── QA_SIGNOFF.md           # [ForgeFlow] Gate 2 QA 승인 증적 (스냅샷/무결성 승인)
 │   │       └── RELEASE_SIGNOFF.md      # [ForgeFlow] Gate 3 릴리즈 승인 및 머지 준비
 │   └── completed/
 │       └── v0.1.1-query-engine/        # [ForgeFlow] 밀봉(Seal)된 과거 완료 패키지
@@ -350,12 +350,14 @@ tasks/in-progress/v1.0.0-auth-platform/         # Epic 릴리즈 패키지
 
 ## 1. Candidate Metadata
 - Release ID: <release-id>
-- Candidate Commit SHA: <40-char-git-sha>
+- Binding Policy: git-sha | sha-free
+- Candidate Snapshot: <40-char-git-sha> | sha-free
 - Sign-Off Date: YYYY-MM-DD HH:MM:SS
 
 ## 2. Quality & Verification Evidence
 - Unit / Focused Tests: <count> passed, 0 failed
-- Strict Review: 0 Warnings (forgeflow review --strict)
+- Review Policy: raw strict (0 Warnings) | baseline-aware strict (Critical 0 & New Warning 0)
+- Findings Baseline: <git-ref> | none
 - Golden Fixture Matrix: QE-01 through QE-20 PASSED
 - Sandbox Audit: Verified non-destructive isolated execution
 
@@ -366,11 +368,12 @@ tasks/in-progress/v1.0.0-auth-platform/         # Epic 릴리즈 패키지
 
 ---
 
-## 제7장. 결론 및 향후 계획
+## 제7장. 결론 및 프레임워크 로드맵
 
 본 상세설계서는 Spec Kit의 간결하고 유연한 대화형 작업 경험을 해치지 않으면서도, ForgeFlow가 요구하는 엄격한 엔지니어링 거버넌스를 100% 충족하는 하이브리드 아키텍처를 정의한다. 
 
-차후 구현 마일스톤:
-1. `~/.agents/skills/forgeflow/` 패키지 내 경량 오케스트레이션 지침(`SKILL.md`) 작성.
-2. `.specify/extensions.yml` 및 `constitution.md` 기본 템플릿 번들링.
-3. Spec Kit의 슬래시 커맨드와 ForgeFlow 상태 기계 연동 검증.
+완료된 프레임워크 아키텍처 및 로드맵:
+1. `~/.agents/skills/forgeflow/` 패키지 내 자율 오케스트레이션 지침(`SKILL.md`) 완비 및 배포 파이프라인 확립.
+2. `.specify/extensions.yml` 및 `constitution.md` 표준 거버넌스 템플릿 번들링 및 자동 스캐폴딩.
+3. Spec Kit 실행 엔진과 ForgeFlow 수명주기 상태 기계 간의 물리적 Fail-Closed 게이트키퍼 연동 완결.
+4. 기준선 비교(`--findings-baseline`) 및 SHA-free 라이프사이클 밀봉 경로 완비로 유연하고 견고한 거버넌스 제공.

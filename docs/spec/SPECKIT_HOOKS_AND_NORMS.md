@@ -23,7 +23,7 @@ ForgeFlow는 Spec Kit 자체의 코드를 변형하지 않고, Spec Kit이 공�
 │                         ForgeFlow (거버넌스 엔진)                       │
 │                                                                        │
 │  - Gate 1: 명세 승인 (GATE1_REVIEW.md)                                  │
-│  - Gate 2: QA 품질 승인 (QA_SIGNOFF.md, QA 커밋 SHA 바인딩)            │
+│  - Gate 2: QA 품질 승인 (QA_SIGNOFF.md, 스냅샷 승인 / SHA-free)          │
 │  - Gate 3: 릴리즈 승인 및 패키지 밀봉 (RELEASE_SIGNOFF.md)              │
 │  - 릴리즈 수명주기 보관소 (tasks/in-progress/ ➔ tasks/completed/)       │
 └────────────────────────────────────────────────────────────────────────┘
@@ -60,7 +60,7 @@ Spec Kit 공식 지원 훅은 커맨드 단위의 **사전 훅(`before_*`)**과 
 | `hooks.before_tasks` | `/speckit.tasks` 분해 시작 직전 | `plan.md` 유효성 검증 | 설계 산출물 검증 |
 | `hooks.after_tasks` | `/speckit.tasks` 분해 완료 후 | Stage 2 종료 및 체크포인트 2 | **체크포인트 2 커밋** (`docs: tasks ...`) |
 | `hooks.before_implement` | `/speckit.implement` 코드 작성 직전 | **Gate 1 승인 증적 물리적 차단** | `forgeflow check --stage 2 --quiet` (필수) |
-| `hooks.after_implement` | `/speckit.implement` 모든 태스크 종료 후 | Stage 3 종료 및 Gate 2 진입 준비 | **체크포인트 4 커밋 / QA Sign-Off 결속** |
+| `hooks.after_implement` | `/speckit.implement` 모든 태스크 종료 후 | Stage 3 종료 및 Gate 2 진입 준비 | **체크포인트 4 커밋 / QA Sign-Off 승인** |
 
 ### 2.2 거시 훅(Macro Hook) vs 미시 체크포인트(Micro Checkpoint)의 역할 분담
 
@@ -101,7 +101,7 @@ Spec Kit 공식 지원 훅은 커맨드 단위의 **사전 훅(`before_*`)**과 
    │      ├─ 📌 [체크포인트 4] Gate 2 QA 품질 승인 완료 시점
    │      │     산출물: QA_SIGNOFF.md (review --strict 통과, 전체 테스트 100% Pass)
    │      │     커밋: git commit -m "chore(qa): sign off gate 2 qa verification (<id>)"
-   │      │     ★ 이 시점의 Commit SHA가 QA-SHA로 영구 결속됨
+   │      │     ★ 승인 정책에 따라 QA-SHA(커밋 결속) 또는 sha-free(실용적 4대 불변식)로 결속됨
    │      │
    │      └─ 📌 [Gate 3 릴리즈 승인] 패키지 밀봉
    │            산출물: RELEASE_SIGNOFF.md + tasks/completed/ 이동
@@ -115,9 +115,9 @@ Spec Kit 공식 지원 훅은 커맨드 단위의 **사전 훅(`before_*`)**과 
 ```
 
 ### 3.1 브랜치 제어 및 단일 진실 공급원 (SSOT)
-- **worktree 격리 환경 호환**: 외부 AI 도구(Claude Code, OpenCode)나 개발자가 이미 별도의 git worktree 또는 격리 브랜치를 생성하여 작업하는 환경에서는 ForgeFlow가 중복 브랜치를 다시 생성하면 작업 트리가 복잡해집니다.
-- **auto_create_branch 거버넌스 옵션**: `.forgeflow/config.json`의 `governance.auto_create_branch` 옵션(기본값: `false`)으로 브랜치 생성 단계를 켜고 끕니다.
-- **지침 오염 방지**: 향후 프로젝트별로 브랜치 자동 생성을 기본으로 설정하고자 할 때 `AGENTS.md`나 프롬프트 문서를 오염시키지 않고, `.forgeflow/config.json`의 `auto_create_branch: true`를 통해서만 일관되게 제어합니다. 사용자가 CLI에서 `--create-branch`를 명시하거나 요청하면 설정값에 관계없이 브랜치가 생성됩니다.
+- **worktree 격리 환경 호환**: 외부 AI 도구(Claude Code, OpenCode)나 개발자가 이미 별도의 git worktree 또는 격리 브랜치를 생성하여 작업하는 환경에서는 ForgeFlow가 중복 브랜치를 다시 생성하여 작업 트리가 복잡해지는 문제를 방지.
+- **auto_create_branch 거버넌스 옵션**: `.forgeflow/config.json`의 `governance.auto_create_branch` 옵션(기본값: `false`)으로 브랜치 생성 단계를 제어.
+- **지침 오염 방지**: 향후 프로젝트별로 브랜치 자동 생성을 기본으로 설정하고자 할 때 `AGENTS.md`나 프롬프트 문서를 오염시키지 않고, `.forgeflow/config.json`의 `auto_create_branch: true`를 통해서만 일관되게 제어. 사용자가 CLI에서 `--create-branch`를 명시하거나 요청하면 설정값에 관계없이 브랜치가 생성됨.
 
 ### 3.2 체크포인트 커밋의 3대 안전 규칙
 1. **Never Commit Red**: 단위/통합 테스트가 실패 중인 중간 상태는 절대로 git commit하지 않는다.
