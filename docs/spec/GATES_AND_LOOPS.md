@@ -1,116 +1,58 @@
-# 🚦 ForgeFlow 게이트 기준 및 순환 루프 규범 (GATES_AND_LOOPS.md)
+# 검증·심사·복구 규칙
 
-이 문서는 ForgeFlow v0.1.0 하이브리드 아키텍처(GitHub Spec Kit + ForgeFlow) 환경에서 기능 기획, 명세 승인(Gate 1), 기술 설계, 격리 구현, QA Sign-Off, 릴리즈 승격까지의 전 수명주기를 통제하는 게이트 통과 기준과 자율 자가 치유 루프(Self-Healing Loop) 규범을 정의하는 단일 진실 공급원(SSOT) 표준 명세이다.
+기본 workflow는 [FLOW_SPEC.md](FLOW_SPEC.md)가 정의합니다. 이 문서는 검증 정책과 유지하는 strict lifecycle 호환 경계를 소유합니다.
 
----
+## 필수 검증
 
-## 1. 이중 엔진 거버넌스 및 워크플로우 개요
+프로젝트가 선언한 test/lint/build를 우선 사용합니다. Project workflow.checks는 필수이며 task checks는 이를 추가합니다. 실제 명령·환경·exit result·관련 content를 기록합니다. Task에서 project checks를 없애거나 결과를 위조하거나 서명을 실행 성공으로 대체할 수 없습니다.
 
-ForgeFlow는 실행과 통제를 분리하는 이중 엔진 모델을 채택한다:
-1. **실행 엔진 (Worker) — GitHub Spec Kit**: 대화형 인터뷰를 통한 요구사항 명세(`spec.md`), 아키텍처 계획(`plan.md`), 원자적 태스크 분해(`tasks.md`) 및 TDD 순차 구현 주도.
-2. **거버넌스 엔진 (Supervisor) — ForgeFlow**: 릴리즈 패키지(`tasks/in-progress/<release-id>`)의 상태 기계 관리, 게이트 통과 심사(Gate 1/2/3), 증적 바인딩 및 물리적 코드 작성 차단(Fail-Closed Gatekeeper).
+변경 동작·실제 연결·사용자가 받는 entrypoint를 확인합니다. 작업 중 focused 검사를 사용하고 통합 전 필요한 관련 suite를 실행합니다. 코드·환경·통합 결과·검증 입력이 바뀌면 해당 검사를 재실행합니다. 동일 증거를 단계마다 만들거나 report/checkbox 변경만으로 전체 테스트를 반복하지 않습니다.
 
-```text
-[Stage 1: 기획 & 명세]       /speckit.specify ➔ /speckit.clarify (spec.md 생성)
-        │
-        ▼
-[Gate 1: 명세 승인]          GATE1_REVIEW.md (티어링 판정, 승인 서명 APPROVED)
-        │
-        ├─► [Fail-Closed] before_implement 훅: Gate 1 미승인 시 코드 작성 물리적 차단 (exit 1)
-        ▼
-[Stage 2: 기술 설계 & 분해]   /speckit.plan (plan.md) ➔ /speckit.tasks (tasks.md)
-        │
-        ▼
-[Stage 3: 격리 구현 & 치유]   /speckit.implement (TDD 순차 구현)
-        │                   └── [Loop 2 자가 치유] 테스트 실패 시 자율 수정-검증 (최대 5회, 완료 시 커밋)
-        ▼
-[Gate 2: QA 품질 승인]       QA_SIGNOFF.md (review --strict 통과, 100% 테스트 통과, QA-SHA 결속)
-        │
-        ▼
-[Gate 3: 릴리즈 승인 & 밀봉] RELEASE_SIGNOFF.md, COMPLETION_REPORT.md
-                            └── 패키지 밀봉: tasks/in-progress/ ➔ tasks/completed/ 이동
-```
+verification_paths는 project/task 선언을 합치며 task 미지정 시 scope를 더합니다. 명시된 입력이 전혀 없으면 tracked dependencies를 보수적으로 확인합니다. 명시적 입력에서 tasks.md·session-state 등 완료 메타데이터를 제외하면 그 문서만 바뀐 경우 검증을 재사용할 수 있습니다. 정확한 입력을 선언하지 않은 채 의존 코드 변경을 메타데이터 변경으로 취급하지 않습니다.
 
----
+기본 환경 입력 PATH/PYTHONPATH/PYTHONHOME/VIRTUAL_ENV/CONDA_PREFIX/NODE_PATH/NODE_OPTIONS와 선언 환경의 digest를 확인합니다. 검증 기록에 민감한 환경 원문을 노출하지 않습니다.
 
-## 2. 위험도 등급 체계 (Risk Tiering Matrix)
+forgeflow review는 프로젝트가 필수로 선택한 경우 외에는 선택적 AST 보조 도구입니다. 수치 임계치를 모든 작업의 blocker로 삼지 않습니다.
 
-과업의 복잡도와 변경 위험도에 따라 심사 및 검증 강도를 3단계로 분기한다. 모든 과업은 첫 파일 작성 전에 등급을 판정해야 한다.
+- Raw strict: forgeflow review --strict는 선택 scope의 Warning 0건을 요구합니다.
+- Baseline strict: forgeflow review --strict --findings-baseline <ref>는 Critical·신규 Warning 0건을 요구합니다. 기존 findings는 표시하며 Counter slot matching으로 중복 발생량을 구분합니다.
 
-### 작업 분류 및 최우선 판정 규칙
-- **비변경 (Non-Change)**: 코드베이스, 설정, 인프라를 수정하지 않는 단순 질의, 설명, 상태 조회 요청은 거버넌스 수명주기 대상이 아니다.
-- **도메인 위험도 우선 원칙**: 코드 변경 라인 수보다 도메인 위험도와 불확실성이 항상 우선한다. 하나의 Tier 3 신호라도 감지되면 즉시 Tier 3으로 fail-closed 분류한다.
+선택한 정책으로 project 필수 검사를 무시하거나 실제 회귀를 숨길 수 없습니다. 관련 없는 기존 findings 때문에 작은 작업을 전면 refactor로 확대하지 않습니다.
 
-| 등급 | 정의 및 대상 범위 | 필수 산출물 및 Gate 1 요건 | Gate 2 QA Sign-Off 요건 |
-| :--- | :--- | :--- | :--- |
-| **Tier 1 (Minor)** | 동작 불변 문구, 포맷팅, 일반 문서 수정, 또는 인터페이스/보안 영향이 없는 단일 모듈의 국소 버그 수정 | `spec.md`, `GATE1_REVIEW.md` (Self-Review PASS, 계획된 변경 경로 명시) | 전체 테스트 통과, 계획된 경로와 실제 변경 경로 일치 인증 |
-| **Tier 2 (Standard)** | 새로운 기능 추가, 복수 모듈 수정, 단위/통합 테스트 추가 및 일반적인 리팩토링 | `spec.md`, `GATE1_REVIEW.md` (독립 시니어 리뷰어 1인 검토 및 승인) | 100% 테스트 통과, 정적 분석 오류 0건, 스냅샷 승인 (`git-sha` 커밋 결속 또는 `sha-free` 무결성) |
-| **Tier 3 (Critical)** | 인증/인가, 보안, 암호화, 데이터베이스 마이그레이션, 공개 CLI/API 변경, 코어 거버넌스 규칙 수정 | `spec.md`, `GATE1_REVIEW.md` (Security, Reliability, Maintainability 3대 독립 패널 승인 + 사용자 승인) | 3대 패널 전원 승인, 불변 스냅샷 결속 (`git-sha` 또는 `sha-free` 무결성), 비파괴 프로브 검증 |
+## 위험에 비례하는 심사
 
----
+작은 가역 변경에는 짧은 계획과 유효한 검증을 사용합니다. 실제 위험·프로젝트 정책이 요구할 때 설계 심사, 독립 security/reliability review, 설치 probe, 외부 승인을 추가합니다. 요구사항을 한 번 기록하고 유효한 증거를 재사용합니다.
 
-## 3. 게이트 정의 및 통과 기준 (Gate Criteria)
+ForgeFlow의 이번 default 전환은 governance·operation authority를 바꾸므로 독립 Security/Reliability/Maintainability 설계·최종 심사를 유지합니다. 이 전환 요건을 모든 downstream 변경의 상시 3인 panel 의무로 확대하지 않습니다.
 
-### Gate 1: 명세 승인 게이트 (Specification Sign-Off Gate)
-- **위치**: Stage 1(기획/명세) 종료 시점 (Stage 2 기술 설계 및 Stage 3 구현 착수 직전)
-- **통과 요건**:
-  1. `tasks/in-progress/<release-id>/spec.md` 명세서 작성 완료.
-  2. 요구사항별 검증 가능한 인수 조건(Acceptance Criteria) 명시.
-  3. 리스크 등급(Tier 1/2/3) 판정 및 심사 완료:
-     - Tier 1: 셀프 리뷰 체크리스트 완료 및 계획된 경로 확정.
-     - Tier 2: 독립 시니어 심사관 1인 자문 및 설계 보완.
-     - Tier 3: 보안, 안정성, 유지보수성 3대 관점의 독립 패널 병렬 심사 및 사용자 구두 승인.
-  4. `GATE1_REVIEW.md`에 `Gate 1 Verdict: APPROVED` 최종 판정 기록.
-- **Fail-Closed Gatekeeper 강제 훅**:
-  - Spec Kit의 `before_implement` 훅(`forgeflow check --stage 2`)이 실행되어 `GATE1_REVIEW.md` 부재 또는 미승인 시 물리적으로 코드 작성을 사전 차단(`exit 1`)한다.
+## Content·dirty 작업·provenance
 
-### Gate 2: QA 품질 승인 게이트 (QA Sign-Off Gate)
-- **위치**: Stage 3 구현 완료 후, Gate 3 릴리즈 승격 전
-- **승인 주체**: QA 엔지니어 또는 AI 에이전트 (기술적 품질 검증에 따른 자율 서명, 사용자 인간 승인 불필요)
-- **통과 요건**:
-  1. `spec.md`에 명시된 모든 인수 조건 충족.
-  2. 단위 및 통합 테스트 100% Pass (Fail = 0, Error = 0).
-  3. **코드 리뷰 품질 승인 (2가지 지원 정책)**:
-     - **정책 A (raw strict, 기본 모드)**: `forgeflow review --strict` 실행 시 선택된 검사 범위의 모든 Warning이 0건이어야 통과 (인지 복잡도 ≤ 15, 함수 LOC ≤ 50 등).
-     - **정책 B (baseline-aware strict, 기준선 비교 모드)**: `forgeflow review --strict --findings-baseline <ref>` 실행 시 Critical 0건 및 신규 Warning 0건일 때 통과. 기준선 이전의 기존 Warning은 결과 리포트에 투명하게 보존·분류되며, 수정된 함수 스코프 내의 기존 Warning이라도 수량이 증가하지 않는 한(Delta-Zero) 통과가 허용됨. 기준선 ref는 Gate 1에서 합의되어 기록됨.
-  4. **스냅샷 바인딩 정책 (Binding Policy)**:
-     - **Git SHA 바인딩 (`git-sha`, 기본값)**: 테스트가 통과된 최종 커밋 SHA를 `QA_SIGNOFF.md`의 `QA-SHA`에 결속.
-     - **SHA-free 무결성 (`sha-free`, ADR 001 정책)**: Git 커밋 SHA를 강제하지 않고, 마크다운 게이트 서명, 100% 테스트 무결성, Clean Working Tree, 패키지 매니페스트 SHA-256 검증을 통해 `QA-SHA: sha-free`로 승인.
-  5. Tier 3 변경의 경우 격리 환경에서의 비파괴 런타임 프로브(Non-mutating probe) 전달성 검증 완료.
-- **패키지 전용 변경 면제 (Verified Package-Only Exemption)**: Gate 2 통과 후 실제 코드/테스트 diff가 전혀 없는 순수 패키지 메타데이터 정리(`tasks.md` 완료 체크, 릴리즈 노트 작성 등)는 QA 바인딩을 깨뜨리지 않고 안전하게 보존된다.
+검증 freshness는 관련 content와 명령·환경을 따릅니다. Git ref·commit ID는 push/merge 같은 실행 사실을 기록할 수 있습니다. 기본 workflow는 QA-SHA/Candidate-SHA seal이나 prose-spec hash를 요구하지 않습니다.
 
-### Gate 3: 릴리즈 승인 및 패키지 밀봉 게이트 (Release & Package Seal Gate)
-- **위치**: 최종 배포 및 운영 승격 시점 (Stage 3 및 Gate 2 통과 후)
-- **승인 주체**: 사용자 (인간 최종 승인자, Go/No-Go 결정권자)
-- **통과 요건**:
-  1. `RELEASE_SIGNOFF.md` 및 `COMPLETION_REPORT.md` (또는 `RELEASE_NOTES.md`) 작성.
-  2. 사용자 최종 승인(Go/No-Go) 확인.
-  3. `tasks/in-progress/<release-id>` 디렉토리를 `tasks/completed/<release-id>`로 원자적 이동(Atomic Move)하여 패키지 영구 밀봉.
-  4. **Gate 3 최종 릴리즈 밀봉 및 바인딩**: Gate 2 이후의 문서 정리(부기) 완료 후, `git-sha` 정책 시 최종 커밋 스냅샷을 단일 Release-SHA로 결속하고, `sha-free` 정책 시 패키지 매니페스트 SHA-256을 밀봉하여 불필요한 중간 마찰 없이 패키지 무결성(Provenance)을 영구 보존.
+관련 없는 dirty 파일은 그대로 둡니다. 관련 미commit 변경이 특정 operation을 막으면 소유권을 해소합니다. 모든 작업에 global clean status를 강제하거나 사용자의 변경을 몰래 commit/stash/reset하지 않습니다.
 
----
+Push/통합 전에는 선언된 verification input의 working content가 accepted source commit tree에 포함되는지 확인합니다. Scope 밖의 미commit dependency를 사용해 PASS했지만 source commit에 그 내용이 없으면 verify-committed-inputs로 해당 operation을 차단하고 파일을 보존합니다. 기본 all-tracked 검사는 보수적으로 이 차이를 포함합니다. 실제로 무관한 파일은 verification_paths로 검증 입력을 정확히 선언해 제외할 수 있지만, 필요한 dependency를 검증에서 빼거나 몰래 commit해 통과시키지 않습니다. 필요하면 owning tool이 준비한 committed 결과를 독립 검증합니다.
 
-## 4. 자율 순환 루프 및 자가 치유 규범 (Remediation Loops)
+## 진행·중단 규칙
 
-### 4.1 Loop 2: 테스트-수정 자가 치유 루프 (Inner Remediation Loop)
-Stage 3 구현 도중 단위/통합 테스트 실패는 작업 중단 사유가 아니며, 에이전트는 아래 순환 루프를 자율 수행한다:
-1. **결함 식별**: 테스트 실패 메시지 및 스택 트레이스 분석.
-2. **코드 수정**: 실패 원인에 국한된 최소한의 소스 코드 수정 (테스트 케이스 자체 완화 금지).
-3. **재검증**: 관련 테스트 및 전체 테스트 스위트 재실행.
-4. **원자적 커밋**: 모든 테스트 통과 확인 후 최종 구현 커밋(`git commit`).
+실패 원인을 파악하고 관련 수정을 한 뒤 영향받는 검사를 실행합니다. 조사도 비용을 소모합니다. 같은 자료 조회·무변경 명령 반복은 전진이 아닙니다. Failure·시도한 해결·새 증거·다음 행동을 기록합니다.
 
-### 4.2 자율 실행 한도 및 중단 규칙 (Stopping Conditions)
-- **5회 자율 회복 한도**: 동일한 실패 지문(Failure Fingerprint)이 5회 연속 반복되면 무한 루프 방지를 위해 즉시 작업을 중지(`BLOCKED`)하고 사용자 입력을 대기한다.
-- **진짜 멈춤 vs 가짜 멈춤 규범**:
-  - **가짜 멈춤 (Non-Stop — 사용자 턴 종료 절대 금지)**: 단순 테스트 실패, 린트 오류, 사소한 문법 오류, 서브에이전트 단독 작업 완료. (즉시 Loop 2 재진입)
-  - **진짜 멈춤 (True Stop — 오직 이 경우에만 사용자 대기 허용)**:
-    1. 동일 결함 5회 연속 회복 실패 시.
-    2. 명시적 외부 권한 경계 (Git 원격 푸시, 외부 비공개 토큰 요구 등).
-    3. 아키텍처/명세 모순 발생 시 (Loop 3 회귀).
-    4. Gate 2 QA 통과 후 Gate 3 사용자 Go/No-Go 최종 승인 대기.
+반복 실패에는 설정된 no-progress budget(통상 5회)을 적용합니다. 외부 권한·필수 외부 승인·필수 capability·중대한 사용자 결정이 없으면 그 단계에서 먼저 막힐 수 있습니다. 차단 단계와 다음 행동을 보고하고 실제 재실행 성공 전에는 실패를 통과로 바꾸지 않습니다.
 
-### 4.3 Loop 3: 아키텍처/명세 모순 회귀 (Architecture Regression Loop)
-구현 도중 `spec.md`의 요구사항 간 상호 모순이나 설계 결함이 발견된 경우, 코드를 억지로 끼워 맞추지 않고 즉시 설계를 보완하는 Loop 3으로 전환한다:
-1. 모순 원인 및 대안을 명시하여 사용자에게 보고.
-2. `spec.md` 및 `plan.md` 수정.
-3. Gate 1 재승인(`GATE1_REVIEW.md` 갱신) 후 Stage 3 재진입.
+## 명시적 strict 호환 경로
+
+기존 release/task/lifecycle/archive-audit 명령은 과거 또는 의도적으로 선택한 strict 패키지를 지원합니다. 기본 workflow 명령을 정의하지 않습니다. 완료 패키지의 과거 정책·증거는 소급 변경하지 않습니다.
+
+Strict 패키지는 명시적으로 선택한 git-sha 또는 sha-free를 유지합니다. [ADR-005](../adr/005-lean-workflow-and-execution-ownership.md)는 과거 SHA 전면 금지의 적용 범위를 한정합니다. Historical strict binding과 일반 Git 실행 ID는 지원하며 lean 기본 흐름에는 QA/candidate seal이 없습니다.
+
+Strict 실행 순서:
+
+1. Spec/plan/tasks와 위험별 심사를 정리하고 구현 전 GATE1_REVIEW.md를 승인합니다. forgeflow check <id> --stage 2로 strict entry evidence를 확인합니다.
+2. 구현·필수 검증 후 실제 reviewer/result와 선택 policy를 갖춘 QA_SIGNOFF.md 및 Evidence v2를 준비합니다.
+3. forgeflow lifecycle package-review <id> <qa-sha> 또는 forgeflow lifecycle package-review <id> --sha-free로 package review에 진입합니다.
+4. 문서·manifest와 승인된 RELEASE_SIGNOFF.md를 준비하고 해당 패키지가 요구하는 인간 승인을 확인합니다.
+5. forgeflow lifecycle seal <id> <candidate-sha> 또는 forgeflow lifecycle seal <id> --sha-free 후 forgeflow lifecycle complete <id>를 실행합니다.
+
+Strict seal의 clean worktree·package manifest 조건은 사전에 선언합니다. 조건을 맞추려고 두 번째 worktree를 몰래 만들거나 무관한 사용자 작업을 바꾸지 않습니다. Package review와 RELEASE_SIGNOFF.md는 seal보다 먼저이며 strict 완료는 merge/push/delete 권한을 부여하지 않습니다.
+
+진행 중 승인 패키지의 정책을 명확히 할 때 유효한 구현·검증 증거는 유지하고 영향받는 evidence만 명시적 검토 후 갱신합니다. Runtime adoption과 strict-package policy migration은 별개이며 완료 증거는 불변입니다.

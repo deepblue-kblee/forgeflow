@@ -1,126 +1,56 @@
-# 📦 ForgeFlow 배포 및 설치 아키텍처 규격서 (DISTRIBUTION_SPEC.md)
+# Setup·배포·runtime 연속성
 
-이 문서는 ForgeFlow 프레임워크의 사용자 계정 로컬(User-Local) 배포 아키텍처, Zero-Clone 설치 모델, AI 에이전트 스킬 생태계 연동 및 무중단 업데이트 메커니즘을 정의하는 정식 표준 규격서이다.
+ForgeFlow는 Python 3.10+ 표준 라이브러리 CLI·공식 spec·templates·생성 skills를 한 배포 단위로 전달합니다. src/forgeflow/_version.py가 버전을, docs/spec/가 공식 spec 편집 원본을 소유합니다. src/forgeflow/spec/는 기계적으로 동기화합니다.
 
----
+## 설치
 
-## 1. 배경 및 설계 원칙
+install.sh는 ~/.local/share/forgeflow와 ~/.local/bin의 account-local 설치를 지원하며 current는 전역 기본 배포를 가리킵니다. forgeflow upgrade --check는 가용성을 읽고 forgeflow upgrade는 승인된 범위에서 설치합니다.
 
-### 1.1 Zero-Clone 원칙 (저장소 비복제 설치)
-- 개발자는 ForgeFlow 소스 저장소(`work/repo/forgeflow`)를 로컬 머신에 `git clone`할 필요가 없다.
-- 원격 배포 스크립트(`install.sh`)를 통해 필요한 핵심 라이브러리와 런처, 에이전트 스킬만을 대상 머신에 직접 다운로드 및 배치한다.
+새 전역 package key는 packages/<version>-<builddigest16>입니다. Metadata의 전체 content_identity는 runtime/spec/templates와 installer/skill-generator 입력을 포함합니다. 버전만으로 다른 bytes를 식별할 수 없습니다. 각 package는 scripts/install-skills.sh도 보관합니다. Install/rollback은 선택한 package generator로 필수 skills를 임시 생성·검사한 후 적용하고 current를 전환합니다. Rollback은 정확한 설치 key를 선택하며 generator가 없는 과거 package는 기존 current/skills를 보존하고 거절합니다. 해당 배포 전체를 명시적으로 재설치해야 합니다. Project runtime snapshot은 installer script를 제외한 별도 runtime content digest를 사용합니다.
 
-### 1.2 Non-Root / User-Local 원칙 (사용자 권한 격리)
-- 시스템 전역 관리자 권한(`sudo`)이나 `/opt`, `/usr/local/bin` 등의 시스템 공용 디렉토리 의존성을 완전히 배제한다.
-- 운영체제 표준 사용자 홈 디렉토리(`~/.local/share/forgeflow`, `~/.local/bin`)에 격리 배포하여 다중 사용자 충돌을 방지하고 일반 사용자 권한으로 안전하게 동작한다.
+scripts/install-skills.sh는 forgeflow/setup-forgeflow/update-forgeflow/forgeflow-graphify를 생성합니다. 테스트는 FORGEFLOW_SKILLS_DIR을 임시 디렉터리로 지정합니다. Npx를 통한 외부 Spec Kit 스킬 설치는 FORGEFLOW_INSTALL_SPECKIT_SKILLS=1 opt-in이며 core dependency가 아닙니다.
 
-### 1.3 Zero-Dependency 독립 실행 (Self-Contained Execution)
-- ForgeFlow 코어와 CLI는 외부 서드파티 런타임 의존성 없이 **Python 3.10+ 표준 라이브러리(Standard Library)만으로 100% 동작**한다.
-- 별도의 무거운 가상환경(`venv`) 생성이나 패키지 매니저(`pip`) 오버헤드 없이 순수 파이썬 라이브러리 디렉토리를 `PYTHONPATH`로 바인딩하는 독립 셸 런처를 통해 가볍고 즉각적인 실행을 보장한다.
+## 프로젝트 setup
 
-### 1.4 에이전트 스킬 생명주기 일원화
-- CLI 툴과 AI 에이전트 스킬(`setup-forgeflow`, `update-forgeflow`, `speckit-*`)을 단일 설치 파이프라인에서 함께 배포하여 도구와 스킬의 버전 불일치를 원천 차단한다.
+forgeflow init --speckit은 최소 config·runtime/spec entrypoint와 필요한 Spec Kit support를 구성합니다. 기존 사용자 config·constitution·hooks·templates·지침은 보존합니다. --force가 임의 사용자 문서·증거 폐기를 허용하지 않습니다.
 
----
+Project workflow.checks에는 실제 프로젝트 검사를 선언합니다. 새 프로젝트의 stack에 맞는 명령을 선택해야 하며 generic Python 명령으로 모든 프로젝트 검증을 대신하지 않습니다. 기본 setup에 대량 ADR/constitution 주입이나 universal strict hook을 요구하지 않습니다.
 
-## 2. 배포 디렉토리 구조 및 계층 표준
+날짜 기준 폐기·amnesia 정책은 없습니다. 파일 나이는 폐기 근거가 아닙니다. Legacy config를 읽거나 이전할 때 사용자 값을 보존하고 active/completed 작업을 유지합니다.
 
-설치 루트는 XDG 표준 데이터 디렉토리(`~/.local/share/forgeflow`)이며, 표준 디렉토리 계층은 다음과 같다:
+## 실행 가능한 baseline
 
-```text
-~/.local/share/forgeflow/
-├── CHANGELOG.md                    # 전체 릴리즈 변경 이력 (spec/ 외부로 격리)
-├── current -> packages/<version>   # 현재 활성화된 최신 버전 심볼릭 링크 (SSOT)
-├── bin/
-│   ├── forgeflow -> ../current/bin/forgeflow
-│   └── harness -> ../current/bin/harness
-└── packages/                       # 설치된 버전별 패키지 (AI 에이전트 직접 탐색 엄격 금지)
-    └── <version>/
-        ├── package.json            # 패키지 빌드 메타데이터
-        ├── bin/
-        │   ├── forgeflow           # 격리형 셸 런처 스크립트
-        │   └── harness             # 호환 별칭 심볼릭 링크
-        └── lib/
-            └── forgeflow/          # Zero-Dependency 순수 파이썬 패키지
-                ├── _version.py
-                ├── cli.py
-                ├── validator.py
-                ├── reviewer.py
-                ├── scaffold.py
-                ├── spec/           # 공식 거버넌스 사양서 및 라우터 (README.md, VERSION)
-                └── templates/      # 프로젝트 주입용 거버넌스 템플릿
+Active task는 실제 runtime/spec/templates의 content identity와 로컬 실행 snapshot을 유지합니다.
 
-~/.local/bin/ (사용자 PATH)
-├── forgeflow -> ~/.local/share/forgeflow/bin/forgeflow
-└── harness -> ~/.local/share/forgeflow/bin/harness
+~~~text
+.forgeflow/
+  config.json
+  workflows/<id>.json
+  runtime/<digest>/forgeflow/
+  run.py
+  spec -> runtime/<digest>/forgeflow/spec/
+~~~
 
-타깃 프로젝트/
-└── .forgeflow/
-    ├── config.json                 # 프로젝트 거버넌스 설정
-    └── spec -> ~/.local/share/forgeflow/current/lib/forgeflow/spec/  # 사양서 심볼릭 링크
-```
+Launcher는 global current 대신 pinned runtime을 실행합니다. 다른 설치 bytes가 active 작업에 새 규칙을 조용히 적용할 수 없으며 mismatch는 pinned 명령을 안내합니다. Runtime과 spec은 동일 baseline에 속하고 state 파일은 snapshot과 분리합니다.
 
-> [!IMPORTANT]
-> **패키지 직접 탐색 금지 규범**: AI 에이전트는 `packages/` 하위 디렉토리를 직접 열람하거나 과거 버전을 참조해서는 안 된다. 모든 사양과 바이너리는 반드시 `current` 심볼릭 링크를 통해서만 참조한다.
+Task state의 baseline.command를 사용합니다. 통상 python3 .forgeflow/run.py --runtime-identity <digest> workflow status <id> 형태입니다. 여러 task의 baseline이 다르면 identity 선택 없이 project 기본 launcher만 실행해서는 안 됩니다. Global current가 바뀌어도 해당 snapshot을 실행할 수 있으며 의존하는 active 작업이 있는 동안 보존합니다.
 
+재개할 때는 같은 baseline.command에 doc show FLOW_SPEC 등을 붙여 task 기준의 spec을 읽거나 baseline.path/spec를 확인합니다. .forgeflow/spec는 새 작업/프로젝트 기본 baseline의 편의 링크이며 다른 active task의 기준을 덮어쓰지 않습니다.
 
----
+명시적 adoption:
 
-## 3. 원클릭 설치 체계 (`install.sh`)
+~~~text
+forgeflow workflow adopt <id> --reason "이유" --impact "변경 및 증거 영향 검토"
+~~~
 
-### 3.1 설치 명령어
-터미널 또는 AI 에이전트 대화창에서 원클릭으로 설치를 완료한다:
-```bash
-curl -sSL https://raw.githubusercontent.com/deepblue-kblee/forgeflow/main/install.sh | bash
-```
+Adoption은 이전/새 identity·이유·영향을 기록합니다. 영향받는 검증을 다시 판단하며 prose/receipt 변경만으로 모든 단계를 반복하지 않습니다. 권한 확대나 완료 strict 패키지 수정은 adoption에 포함되지 않습니다.
 
-### 3.2 설치 프로세스 파이프라인
-1. **환경 사전 검증**:
-   - `python3` 3.10+ 설치 여부 검증.
-   - `git`, `curl`, `tar` 등 기본 도구 가용성 확인.
-2. **패키지 아카이브 다운로드 및 추출**:
-   - GitHub 공식 메인 브랜치에서 최신 소스 tarball을 다운로드하여 `~/.local/share/forgeflow/`에 패키징.
-   - 전체 변경 이력(`CHANGELOG.md`)을 `~/.local/share/forgeflow/CHANGELOG.md`로 배포하여 사양서(`spec/`)로부터 이력을 완전 격리.
-3. **격리형 런처(`bin/forgeflow`) 생성**:
-   - `packages/<version>/lib`를 `PYTHONPATH`로 주입하고 `python3 -m forgeflow.cli "$@"`를 호출하는 실행 스크립트 생성 (`chmod 755`).
-   - `current` 심볼릭 링크를 해당 패키지 버전으로 원자적 전환.
-4. **전역 PATH 심볼릭 링크 등록**:
-   - `~/.local/bin/forgeflow` 및 호환 별칭 `~/.local/bin/harness` 링크 생성.
-   - 사용자 셸 설정(`.zshrc`, `.bashrc` 등)에 `~/.local/bin` PATH 포함 여부 감지 및 안내.
-5. **에이전트 스킬 자동 설치 (`scripts/install-skills.sh`)**:
-   - `~/.agents/skills/setup-forgeflow/` 및 `update-forgeflow/` 복사.
-   - Spec Kit 공식 7종 스킬(`speckit-specify`, `speckit-clarify`, `speckit-plan`, `speckit-tasks`, `speckit-implement`, `speckit-constitution`, `speckit-analyze`)의 존재 여부를 감지하고, 미설치 시 `npx -y skills add`를 통해 자동 설치.
+## 프로젝트 update
 
----
+forgeflow update는 호출한 배포 기준으로 통합을 갱신하며 사용자 변경을 보존합니다. Active default workflow·strict package를 조용히 이전하지 않습니다. 보고된 경계는 explicit adoption/completion으로 해소하며 state 삭제로 우회하지 않습니다. finalization_complete인 readiness-only 작업은 완료된 위임 범위로 취급하되 baseline/snapshot은 보존합니다.
 
-## 4. 버전 관리 및 마이그레이션 (`upgrade` & `update`)
+update-forgeflow 스킬은 현재 baseline과 요청 범위를 먼저 확인합니다. 전역 upgrade 권한이 있으면 수행하고 허용된 project update를 연결합니다. 새 버전의 존재만으로 active 규칙 변경을 승인받은 것으로 보지 않습니다.
 
-프레임워크 버전 관리와 거버넌스 사양 마이그레이션은 역할에 따라 명확히 분리된 대칭 CLI와 스마트 파사드 스킬을 통해 비파괴적으로 수행된다.
+## 전달성 검증
 
-### 4.1 전역 런타임 업그레이드 (`forgeflow upgrade`)
-사용자 OS 계정 전역의 CLI 바이너리, 순수 파이썬 라이브러리(`~/.local/share/forgeflow`), 및 에이전트 스킬(`~/.agents/skills/`)을 최신 공식 릴리즈로 판올림한다:
-- **Cache-Busting & Inversion Guard**: GitHub Raw CDN의 기본 300초 캐시로 인한 구버전 반환 문제를 방지하기 위해 `Cache-Control: no-cache` 헤더 및 타임스탬프 쿼리(`?t=...`)를 적용하며, 캐시 전파 지연으로 원격 버전이 로컬 버전보다 낮을 경우 이상 감지 경고를 출력한다.
-- **실설치 버전 검증**: 업그레이드 완료 후 실제 설치/활성화된 패키지 버전을 직접 재검증하여 성공 메시지를 출력한다.
-```bash
-# 최신 버전 확인
-forgeflow upgrade --check
-
-# 전역 런타임 및 스킬 대화형 업그레이드 (버전 비교 후 y/n 확인)
-forgeflow upgrade
-
-# 확인 프롬프트 없이 즉시 강제 업그레이드/재설치
-forgeflow upgrade --force
-```
-
-### 4.2 로컬 프로젝트 거버넌스 사양 동기화 (`forgeflow update`)
-- 현재 개발 프로젝트 루트에서 실행하여 `.forgeflow/config.json`(구버전 .forgeflow.json 시 자동 마이그레이션), `.specify/scripts/bash/`(0o755 권한 부여), 템플릿, 헌법 및 훅을 현재 설치된 ForgeFlow 규격으로 원자적 갱신한다.
-- 현재 진행 중인 태스크(`tasks/in-progress/`)와 과거 완료 아카이브(`tasks/completed/`) 데이터는 100% 안전하게 보존된다:
-```bash
-forgeflow update
-```
-
-### 4.3 통합 스마트 파사드 스킬 (`/update-forgeflow`)
-AI 에이전트 대화창에서 원스톱으로 호출하여 1단계 전역 최신화 점검(`forgeflow upgrade`) ➔ 2단계 현재 프로젝트 거버넌스 갱신(`forgeflow update`)을 순차 실행한다:
-```text
-/update-forgeflow
-```
+배포 전 spec equality·버전 stamp·fresh generated skills·package data를 확인합니다. Source/새 build entrypoint를 격리 실행하며 과거 설치 CLI로 새 source를 검증했다고 주장하지 않습니다. Installer 테스트는 prefix·bin-dir·FORGEFLOW_SKILLS_DIR 모두 격리합니다. 완료된 historical evidence는 변경하지 않습니다.

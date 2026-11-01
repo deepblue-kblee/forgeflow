@@ -49,11 +49,12 @@ class TestDocCli(unittest.TestCase):
         self.assertEqual(code, 0)
         data = json.loads(stdout.getvalue())
         self.assertEqual(data["status"], "success")
-        self.assertEqual(data["count"], 8)
+        self.assertEqual(data["count"], len(OFFICIAL_SPECS))
         ids = [s["id"] for s in data["specifications"]]
         self.assertIn("README", ids)
         self.assertIn("FLOW_SPEC", ids)
         self.assertIn("SPECKIT_HOOKS_AND_NORMS", ids)
+        self.assertIn("ANTI_PATTERNS", ids)
 
     def test_doc_show_single_spec(self):
         stdout = io.StringIO()
@@ -63,7 +64,7 @@ class TestDocCli(unittest.TestCase):
         self.assertEqual(code, 0)
         output = stdout.getvalue()
         self.assertIn("FLOW_SPEC", output)
-        self.assertIn("ForgeFlow-SpecKit 하이브리드 워크플로우", output)
+        self.assertIn("workflow", output)
 
     def test_doc_show_case_insensitive_and_extension(self):
         stdout = io.StringIO()
@@ -83,7 +84,7 @@ class TestDocCli(unittest.TestCase):
         data = json.loads(stdout.getvalue())
         self.assertEqual(data["status"], "success")
         self.assertEqual(data["id"], "SPECKIT_HOOKS_AND_NORMS")
-        self.assertIn("GitHub Spec Kit 주입 규범", data["content"])
+        self.assertIn("Spec Kit", data["content"])
 
     def test_doc_show_subcommand_syntax(self):
         stdout = io.StringIO()

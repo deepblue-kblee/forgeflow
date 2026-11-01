@@ -7,6 +7,24 @@ ForgeFlow 프레임워크의 모든 주요 변경 사항은 이 문서에 기록
 
 ---
 
+## [0.1.25] - 2026-11-02
+
+### Lean development workflow and explicit finalization
+
+### Changed
+- 기본 흐름을 범위·완료 조건·필수 검증을 기록하는 단일 작업 상태로 전환. 큰 계획은 Spec Kit에 위임하고 Gate 1/2/3 및 package seal은 명시적인 strict 호환 경로로 유지.
+- standalone Git과 host 소유 checkout의 실행 권한 분리. local merge에 PR을 요구하지 않으며 ready·integrated·cleaned 상태와 부분 실패 재개 지원.
+- setup/update에서 사용자 설정·문서·헌법·hook 보존. 날짜 기준 폐기와 기본 강제 주입 제거.
+- runtime/spec/template 내용 기반 프로젝트 snapshot 및 실행 진입점 제공. 전역 교체에 따른 조용한 작업 기준 변경 차단.
+- 공식 사양서와 모든 현행 진입 지침·생성 스킬 최신화. docs 원본에서 배포 복사본을 기계적으로 동기화.
+- 전역 배포 패키지에 version과 content identity를 함께 부여해 같은 버전의 다른 build 구분.
+
+### Compatibility
+- 기존 completed 릴리즈 증거는 수정하지 않으며 strict lifecycle/audit로 계속 읽을 수 있음.
+- 진행 중 작업의 명시적 기준 변경은 영향·사유를 기록. 이 변경은 자동 merge·배포·전역 설치 권한을 부여하지 않음.
+
+---
+
 ## [0.1.24] - 2026-11-01
 
 ### ⚓ Gate 2 기준선 검토와 SHA-Free 라이프사이클 밀봉 경로 일치화 (Align Baseline Review with SHA-Free Seals, Issue #8)

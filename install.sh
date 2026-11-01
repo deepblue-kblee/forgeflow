@@ -81,7 +81,7 @@ Installs ForgeFlow for the current OS user account into ~/.local/share/forgeflow
 Options:
   --prefix <path>        Installation root directory (default: ~/.local/share/forgeflow)
   --bin-dir <path>       CLI executable symlink directory (default: ~/.local/bin)
-  --force                Overwrite existing package if version already exists
+  --force                Refresh installation of the same content-addressed build
   --keep <N>             Number of latest packages to keep (default: 5)
   --rollback <version>   Switch active version to a previously installed version
   --dry-run              Simulate installation actions without modifying filesystem
@@ -140,14 +140,112 @@ cmd_run() {
   "$@"
 }
 
+generate_package_skills() (
+  local generator="$1"
+  local external_skills="${2:-0}"
+  local skills_target="${FORGEFLOW_SKILLS_DIR:-${HOME}/.agents/skills}"
+  local skills_stage=""
+  local skills_transaction=""
+  local published_skills=""
+  local created_skill_dirs=""
+  local publication_complete=false
+  local skill_name=""
+
+  cleanup_skill_publication() {
+    local name=""
+    if [ "$publication_complete" = false ] && [ -n "$skills_transaction" ]; then
+      for name in $published_skills; do
+        if [ -f "$skills_transaction/old/$name" ]; then
+          mv -f "$skills_transaction/old/$name" "$skills_target/$name/SKILL.md" || {
+            log_error "Could not restore $skills_target/$name/SKILL.md; recover it from $skills_transaction/old/$name."
+            return 1
+          }
+        else
+          rm -f "$skills_target/$name/SKILL.md" || return 1
+        fi
+      done
+      for name in $created_skill_dirs; do
+        rmdir "$skills_target/$name" 2>/dev/null || true
+      done
+    fi
+    [ -z "$skills_stage" ] || rm -rf "$skills_stage"
+    [ -z "$skills_transaction" ] || rm -rf "$skills_transaction"
+  }
+  trap cleanup_skill_publication EXIT
+  trap 'exit 1' HUP INT TERM
+  if [ "$DRY_RUN" = true ]; then
+    log_dryrun "Generate skills from $generator into $skills_target before activation"
+    return 0
+  fi
+  if [ ! -f "$generator" ] || [ -L "$generator" ]; then
+    log_error "Selected package has no restorable skill generator. Keep the current build active; reinstall the desired complete distribution explicitly."
+    return 1
+  fi
+  skills_stage="$(mktemp -d)" || return 1
+  if ! FORGEFLOW_SKILLS_DIR="$skills_stage" FORGEFLOW_INSTALL_SPECKIT_SKILLS="$external_skills" bash "$generator"; then
+    rm -rf "$skills_stage"
+    log_error "Selected package skill generation failed; current build was not changed."
+    return 1
+  fi
+  for skill_name in setup-forgeflow update-forgeflow forgeflow forgeflow-graphify; do
+    if [ ! -f "$skills_stage/$skill_name/SKILL.md" ] || [ -L "$skills_stage/$skill_name/SKILL.md" ]; then
+      rm -rf "$skills_stage"
+      log_error "Selected package did not generate all required skills; current build was not changed."
+      return 1
+    fi
+  done
+  # Check every destination before changing even the first installed skill.
+  # Symlinks are rejected so publication and recovery stay inside this tree.
+  if [ -L "$skills_target" ] || { [ -e "$skills_target" ] && [ ! -d "$skills_target" ]; }; then
+    log_error "Skills destination must be a directory without a symlink: $skills_target"
+    return 1
+  fi
+  for skill_name in setup-forgeflow update-forgeflow forgeflow forgeflow-graphify; do
+    if [ -L "$skills_target/$skill_name" ] || { [ -e "$skills_target/$skill_name" ] && [ ! -d "$skills_target/$skill_name" ]; } ||
+       [ -L "$skills_target/$skill_name/SKILL.md" ] || { [ -e "$skills_target/$skill_name/SKILL.md" ] && [ ! -f "$skills_target/$skill_name/SKILL.md" ]; }; then
+      log_error "Invalid skill destination: $skills_target/$skill_name; current build and skills were not changed."
+      return 1
+    fi
+  done
+  mkdir -p "$skills_target" || return 1
+  skills_transaction="$(mktemp -d "$skills_target/.forgeflow-skills.XXXXXX")" || return 1
+  mkdir "$skills_transaction/old" "$skills_transaction/new" || return 1
+  for skill_name in setup-forgeflow update-forgeflow forgeflow forgeflow-graphify; do
+    cp "$skills_stage/$skill_name/SKILL.md" "$skills_transaction/new/$skill_name" || return 1
+    if [ -f "$skills_target/$skill_name/SKILL.md" ]; then
+      cp -p "$skills_target/$skill_name/SKILL.md" "$skills_transaction/old/$skill_name" || return 1
+    fi
+  done
+  for skill_name in setup-forgeflow update-forgeflow forgeflow forgeflow-graphify; do
+    if [ ! -d "$skills_target/$skill_name" ]; then
+      created_skill_dirs="$created_skill_dirs $skill_name"
+      mkdir "$skills_target/$skill_name" || return 1
+    fi
+    published_skills="$skill_name $published_skills"
+    if ! mv -f "$skills_transaction/new/$skill_name" "$skills_target/$skill_name/SKILL.md"; then
+      log_error "Could not publish generated skills; restoring the previous skills and keeping the current build."
+      return 1
+    fi
+  done
+  publication_complete=true
+)
+
 # Handle Rollback if requested
 if [ -n "$ROLLBACK_VERSION" ]; then
+  if [[ ! "$ROLLBACK_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-f0-9]+)?$ ]]; then
+    log_error "Rollback must name an installed version or version-content identity."
+    exit 1
+  fi
   log_info "Initiating rollback to version $ROLLBACK_VERSION..."
   TARGET_PKG_DIR="$PREFIX/packages/$ROLLBACK_VERSION"
   if [ ! -d "$TARGET_PKG_DIR" ]; then
     log_error "Target package version directory does not exist: $TARGET_PKG_DIR"
     exit 1
   fi
+
+  # Restore the generator belonging to this build, never the current checkout's
+  # newer instructions. Legacy packages without it cannot be safely activated.
+  generate_package_skills "$TARGET_PKG_DIR/scripts/install-skills.sh" 0 || exit 1
 
   cmd_run ln -sfn "packages/$ROLLBACK_VERSION" "$PREFIX/current"
   cmd_run ln -sfn "../current/bin/forgeflow" "$PREFIX/bin/forgeflow"
@@ -195,8 +293,29 @@ fi
 PYTHON_VERSION=$("$PYTHON_CANDIDATE" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')")
 log_info "Using Python interpreter: $PYTHON_CANDIDATE ($PYTHON_VERSION)"
 
+# Content identity includes runtime, specifications, templates and skill generation.
+# Different builds of the same version never overwrite one another.
+BUILD_ID=$("$PYTHON_CANDIDATE" - "$REPO_ROOT" <<'PY'
+import hashlib
+import pathlib
+import sys
+root = pathlib.Path(sys.argv[1])
+paths = [p for p in (root / 'src/forgeflow').rglob('*')
+         if p.is_file() and '__pycache__' not in p.parts and p.suffix != '.pyc']
+paths += [root / 'install.sh', root / 'scripts/install-skills.sh']
+result = hashlib.sha256()
+for path in sorted(paths):
+    name = path.relative_to(root).as_posix().encode()
+    data = path.read_bytes()
+    result.update(len(name).to_bytes(8, 'big') + name)
+    result.update(len(data).to_bytes(8, 'big') + data)
+print(result.hexdigest())
+PY
+)
+PACKAGE_KEY="${VERSION}-${BUILD_ID:0:16}"
+
 # Package target directories
-PKG_DIR="$PREFIX/packages/$VERSION"
+PKG_DIR="$PREFIX/packages/$PACKAGE_KEY"
 PKG_LIB_DIR="$PKG_DIR/lib/forgeflow"
 PKG_BIN_DIR="$PKG_DIR/bin"
 
@@ -223,13 +342,14 @@ cmd_run chmod 755 "$PREFIX"
 cmd_run chmod 755 "$PREFIX/packages"
 cmd_run chmod 755 "$PREFIX/bin"
 
-if [ -d "$PKG_DIR" ] && [ "$FORCE" = true ]; then
-  log_info "Removing existing version directory due to --force..."
-  cmd_run rm -rf "$PKG_DIR"
-fi
-
 cmd_run mkdir -p "$PKG_LIB_DIR"
 cmd_run mkdir -p "$PKG_BIN_DIR"
+cmd_run mkdir -p "$PKG_DIR/scripts"
+if [ ! -f "$REPO_ROOT/scripts/install-skills.sh" ]; then
+  log_error "Distribution is incomplete: scripts/install-skills.sh is missing."
+  exit 1
+fi
+cmd_run cp "$REPO_ROOT/scripts/install-skills.sh" "$PKG_DIR/scripts/install-skills.sh"
 
 # 2. Copy source modules and resources
 log_info "Copying forgeflow library files..."
@@ -256,11 +376,17 @@ if [ -d "$SRC_DIR/spec" ]; then
   cmd_run cp -R "$SRC_DIR/spec" "$PKG_LIB_DIR/"
 fi
 
-# Deploy isolated CHANGELOG.md outside spec/ to prefix root
+if [ -d "$SRC_DIR/adr" ]; then
+  cmd_run cp -R "$SRC_DIR/adr" "$PKG_LIB_DIR/"
+fi
+
+# Keep history in the package snapshot and the compatibility prefix location.
 if [ -f "$REPO_ROOT/src/forgeflow/CHANGELOG.md" ]; then
+  cmd_run cp "$REPO_ROOT/src/forgeflow/CHANGELOG.md" "$PKG_LIB_DIR/CHANGELOG.md"
   cmd_run cp "$REPO_ROOT/src/forgeflow/CHANGELOG.md" "$PREFIX/CHANGELOG.md"
   cmd_run chmod 644 "$PREFIX/CHANGELOG.md"
 elif [ -f "$REPO_ROOT/docs/CHANGELOG.md" ]; then
+  cmd_run cp "$REPO_ROOT/docs/CHANGELOG.md" "$PKG_LIB_DIR/CHANGELOG.md"
   cmd_run cp "$REPO_ROOT/docs/CHANGELOG.md" "$PREFIX/CHANGELOG.md"
   cmd_run chmod 644 "$PREFIX/CHANGELOG.md"
 fi
@@ -293,6 +419,7 @@ else
 {
   "name": "forgeflow",
   "version": "$VERSION",
+  "content_identity": "$BUILD_ID",
   "installed_at": "$TIMESTAMP",
   "git_commit": "$GIT_COMMIT",
   "installed_by": "$USER",
@@ -347,9 +474,12 @@ EOF
   ln -sfn "forgeflow" "$PKG_BIN_DIR/harness"
 fi
 
-# 5. Atomic symlink activation
-log_info "Switching active version symlink (current -> packages/$VERSION)..."
-cmd_run ln -sfn "packages/$VERSION" "$PREFIX/current"
+# 5. Generate instructions from this exact package before changing current.
+generate_package_skills "$PKG_DIR/scripts/install-skills.sh" "${FORGEFLOW_INSTALL_SPECKIT_SKILLS:-0}" || exit 1
+
+# Activate the selected CLI/spec/skill distribution.
+log_info "Switching active build symlink (current -> packages/$PACKAGE_KEY)..."
+cmd_run ln -sfn "packages/$PACKAGE_KEY" "$PREFIX/current"
 cmd_run ln -sfn "../current/bin/forgeflow" "$PREFIX/bin/forgeflow"
 cmd_run ln -sfn "../current/bin/harness" "$PREFIX/bin/harness"
 
@@ -367,7 +497,7 @@ if [ "$KEEP_COUNT" -gt 0 ] && [ "$DRY_RUN" = false ]; then
   if [ "$TOTAL_COUNT" -gt "$KEEP_COUNT" ]; then
     REMOVE_COUNT=$((TOTAL_COUNT - KEEP_COUNT))
     echo "$INSTALLED_PKGS" | head -n "$REMOVE_COUNT" | while read -r old_pkg; do
-      if [ -d "$old_pkg" ] && [ "$(basename "$old_pkg")" != "$VERSION" ]; then
+      if [ -d "$old_pkg" ] && [ "$(basename "$old_pkg")" != "$PACKAGE_KEY" ]; then
         log_info "Pruning old package version: $(basename "$old_pkg")"
         rm -rf "$old_pkg"
       fi
@@ -379,17 +509,23 @@ fi
 log_info "Verifying installation..."
 if [ "$DRY_RUN" = false ]; then
   if [ -x "$BIN_DIR/forgeflow" ]; then
-    INSTALLED_VER=$("$BIN_DIR/forgeflow" version 2>/dev/null || echo "failed")
+    if ! INSTALLED_VER=$("$BIN_DIR/forgeflow" version 2>/dev/null); then
+      log_error "Installed entrypoint failed its version probe."
+      exit 1
+    fi
+    if [[ "$INSTALLED_VER" != *"v$VERSION"* ]]; then
+      log_error "Installed entrypoint version does not match the selected build."
+      exit 1
+    fi
+    if ! "$BIN_DIR/forgeflow" workflow --help >/dev/null; then
+      log_error "Installed workflow entrypoint failed its delivery probe."
+      exit 1
+    fi
     log_info "Verified: $INSTALLED_VER"
   else
-    log_warn "$BIN_DIR/forgeflow was not found or is not executable. Please verify your PATH."
+    log_error "$BIN_DIR/forgeflow was not found or is not executable."
+    exit 1
   fi
-fi
-
-# 9. Install user-level agent skills (~/.agents/skills)
-if [ -f "$REPO_ROOT/scripts/install-skills.sh" ] && [ "$DRY_RUN" = false ]; then
-  log_info "Installing user agent skills (~/.agents/skills)..."
-  bash "$REPO_ROOT/scripts/install-skills.sh" || log_warn "Failed to install agent skills automatically."
 fi
 
 # 10. Check if BIN_DIR is in PATH
@@ -401,5 +537,5 @@ fi
 
 log_info "ForgeFlow $VERSION successfully installed for user $(whoami)."
 log_info "Location: $PREFIX (CLI binaries in $BIN_DIR)"
-log_info "Active SSOT: $PREFIX/current (Do not browse $PREFIX/packages/ directly; reference current only)"
+log_info "Active build: $PREFIX/current ($BUILD_ID). Existing project snapshots retain their baseline."
 log_info "Agent skills (setup-forgeflow, update-forgeflow) configured in ~/.agents/skills/."

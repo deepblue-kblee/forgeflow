@@ -45,8 +45,11 @@ class TestDistributionRefactor(unittest.TestCase):
         anchor = TemplateScaffolder.BOOT_ANCHOR_TEMPLATE
         self.assertIn(".forgeflow/spec/README.md", anchor)
         self.assertIn(".forgeflow/spec/VERSION", anchor)
-        self.assertIn("Amnesia", anchor)
-        self.assertIn("~/.local/share/forgeflow/packages/", anchor)
+        self.assertIn("runtime identity", anchor)
+        self.assertIn("baseline.command", anchor)
+        self.assertIn("baseline.path/spec", anchor)
+        self.assertNotIn("Amnesia", anchor)
+        self.assertNotIn("current", anchor)
         # Ensure ~니다 style is not used
         self.assertNotIn("합니다", anchor)
         self.assertNotIn("바랍니다", anchor)

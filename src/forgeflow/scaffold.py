@@ -27,12 +27,13 @@ class TemplateScaffolder:
     BOOT_ANCHOR_END = "<!-- forgeflow:boot-anchor:end -->"
     BOOT_ANCHOR_TEMPLATE = (
         "<!-- forgeflow:boot-anchor:start -->\n"
-        "## 🌊 ForgeFlow Session Boot Sequence (Harness Governance)\n\n"
-        "작업 착수 전 필수 확인 및 준수:\n"
-        "1. **헌법 확인**: `.specify/memory/constitution.md` 원칙 준수\n"
-        "2. **사양서 색인 참조**: `.forgeflow/spec/README.md` 확인 후 해당 작업 단계 사양서만 선별 참조\n"
-        "3. **최신 버전 동기화 & 기억 리셋**: `.forgeflow/spec/VERSION` 확인. 버전 변경 감지 또는 세션 진입 시 과거 버전 지식 즉시 폐기(Amnesia) 및 `README.md` 재독 필수\n"
-        "4. **버전 격리**: `~/.local/share/forgeflow/packages/` 내 과거 버전 일체 참조 금지 (`current` 최신본만 사용)\n"
+        "## ForgeFlow Session Boot Sequence\n\n"
+        "작업 상태와 `docs/session-state/next-actions.md`가 있으면 먼저 확인.\n"
+        "프로젝트 설정: `.forgeflow/config.json`; 새 작업의 기본 사양서 색인: `.forgeflow/spec/README.md`와 `.forgeflow/spec/VERSION`.\n"
+        "Active task 재개는 state의 `baseline.command`로 실행하고 `doc show` 또는 `baseline.path/spec`로 해당 기준 확인.\n"
+        "여러 task의 runtime identity가 다르면 project 기본 spec 링크나 identity 없는 launcher로 대체하지 않음.\n"
+        "범위·완료 조건·필수 검증을 정한 뒤 구현. 통합·정리는 기록된 권한과 Git/host 소유 도구로 수행.\n"
+        "기존 사용자 헌법·보호 규칙 준수. 추가 승인·strict lifecycle은 프로젝트가 요구한 범위에서 적용.\n"
         "<!-- forgeflow:boot-anchor:end -->"
     )
 
@@ -646,6 +647,36 @@ class TemplateScaffolder:
         continuation_policy: str = "interactive",
         migrate_continuation_policy: bool = False,
     ) -> Dict[str, Any]:
+        """Initialize the lean project entrypoint without replacing user files.
+
+        Explicit central-guide migration options retain the historical binding
+        transaction API. They are never selected merely by an old version/date.
+        """
+        if refresh_governance or migrate_governance_binding or migrate_continuation_policy:
+            return TemplateScaffolder._init_governance_binding_compatibility(
+                project_root, project_name, force, refresh_governance,
+                migrate_governance_binding, continuation_policy,
+                migrate_continuation_policy,
+            )
+        if continuation_policy not in {"interactive", "autonomous"}:
+            raise ValueError("Invalid continuation policy")
+        result = TemplateScaffolder._scaffold_lean(
+            project_root, speckit=False, continuation_policy=continuation_policy,
+        )
+        result["project_name"] = project_name or Path(project_root).name
+        result["project_root"] = str(Path(project_root).resolve())
+        return result
+
+    @staticmethod
+    def _init_governance_binding_compatibility(
+        project_root: Path,
+        project_name: Optional[str] = None,
+        force: bool = False,
+        refresh_governance: bool = False,
+        migrate_governance_binding: bool = False,
+        continuation_policy: str = "interactive",
+        migrate_continuation_policy: bool = False,
+    ) -> Dict[str, Any]:
         """Initialize docs/releases, standard directories, and .forgeflow.json configuration."""
         root_candidate = project_root.absolute()
         TemplateScaffolder._assert_no_symlink_creation_parent(root_candidate)
@@ -704,25 +735,12 @@ class TemplateScaffolder:
                 "slug": slug,
                 "root": ".",
             },
+            "workflow": {"mode": "lean", "checks": [], "owner": "standalone"},
             "governance": {
-                "default_tier": 2,
                 "continuation_policy": continuation_policy,
                 "tasks_dir": tasks_dir_name,
-                "strict_mode": True,
-                "required_documents": [
-                    "PRD.md",
-                    "DESIGN.md",
-                    "QA_SIGNOFF.md",
-                    "COMPLETION_REPORT.md",
-                ],
-            },
-            "runtime": {
-                "test_runner": "unittest",
-                "test_command": "python3 -m unittest discover -s tests",
-                "auto_heal": {
-                    "enabled": True,
-                    "max_retries": 5,
-                },
+                "max_loop_budget": 5,
+                "auto_create_branch": False,
             },
             "paths": {
                 "releases": tasks_dir_name,
@@ -740,6 +758,13 @@ class TemplateScaffolder:
             legacy_config_file = root / ".forgeflow.json"
             config_existed = config_file.exists() or legacy_config_file.exists()
             config_should_write = not config_file.exists() or force
+            if config_existed and (force or not config_file.exists()):
+                source_cfg = config_file if config_file.exists() else legacy_config_file
+                TemplateScaffolder._assert_safe_file(source_cfg, root)
+                existing = json.loads(source_cfg.read_text(encoding="utf-8"))
+                if not isinstance(existing, dict):
+                    raise ValueError("Invalid existing ForgeFlow configuration")
+                config_data = TemplateScaffolder.deep_merge_config(existing, config_data)
             if config_existed and migrate_continuation_policy and not force:
                 source_cfg = config_file if config_file.exists() else legacy_config_file
                 TemplateScaffolder._assert_safe_file(source_cfg, root)
@@ -875,300 +900,156 @@ class TemplateScaffolder:
 
     @classmethod
     def scaffold_speckit_hybrid(cls, root: Path, force: bool = False, skip_config: bool = False) -> Dict[str, Any]:
-        """Scaffold lightweight GitHub Spec Kit and ForgeFlow hybrid governance environment."""
-        root = root.resolve()
+        """Add optional Spec Kit assets while preserving all existing user files."""
+        return cls._scaffold_lean(root, speckit=True, skip_config=skip_config)
+
+    @classmethod
+    def _active_work(cls, root: Path, config: Dict[str, Any]) -> List[str]:
+        """Find unfinished task state before changing any project baseline."""
+        from .runtime import safe_project_path
+        active: List[str] = []
+        state_dir = safe_project_path(root, ".forgeflow/workflows")
+        if state_dir.exists():
+            for state_file in sorted(state_dir.glob("*.json")):
+                cls._assert_safe_file(state_file, root)
+                state = json.loads(state_file.read_text(encoding="utf-8"))
+                if not isinstance(state, dict):
+                    raise ValueError(f"Invalid workflow state: {state_file.name}")
+                if state.get("finalization_complete") is not True and state.get("status") not in {"cleaned", "completed", "cancelled"}:
+                    active.append(state_file.stem)
+        legacy_state_dir = safe_project_path(root, ".forgeflow/lifecycle")
+        if legacy_state_dir.exists():
+            for state_file in sorted(legacy_state_dir.glob("*.json")):
+                cls._assert_safe_file(state_file, root)
+                state = json.loads(state_file.read_text(encoding="utf-8"))
+                if not isinstance(state, dict):
+                    raise ValueError(f"Invalid lifecycle state: {state_file.name}")
+                status = state.get("status", state.get("progress", {}).get("status"))
+                if status != "COMPLETE":
+                    active.append(state_file.stem)
+        governance = config.get("governance", {})
+        if not isinstance(governance, dict):
+            raise ValueError("governance configuration must be an object")
+        tasks_name = governance.get("tasks_dir", "tasks")
+        if not isinstance(tasks_name, str):
+            raise ValueError("governance.tasks_dir must be a relative directory")
+        if "tasks_dir" not in governance and (root / "tasks").exists() and not (root / "tasks").is_dir():
+            tasks_name = "ff-tasks"
+        in_progress = safe_project_path(root, str(Path(tasks_name) / "in-progress"))
+        if in_progress.exists():
+            for package in in_progress.iterdir():
+                if package.is_symlink():
+                    raise ValueError(f"Unsafe in-progress task path: {package.name}")
+                if package.is_dir() and not package.name.startswith("."):
+                    active.append(package.name)
+        return sorted(set(active))
+
+    @classmethod
+    def _scaffold_lean(cls, root: Path, *, speckit: bool, skip_config: bool = False,
+                       continuation_policy: str = "interactive") -> Dict[str, Any]:
+        from .runtime import assert_runtime, package_identity, pin_runtime, safe_project_path
+        root = Path(root).absolute()
+        cls._assert_no_symlink_creation_parent(root)
+        if root.exists() and (root.is_symlink() or not root.is_dir()):
+            raise ValueError(f"Unsafe project root: {root}")
+        root.mkdir(parents=True, exist_ok=True)
+        root = root.resolve(strict=True)
+        config_file = safe_project_path(root, ".forgeflow/config.json")
+        legacy_file = safe_project_path(root, ".forgeflow.json")
+        source_file = config_file if config_file.exists() else legacy_file
+        config: Dict[str, Any] = {}
+        if source_file.exists():
+            cls._assert_safe_file(source_file, root)
+            config = json.loads(source_file.read_text(encoding="utf-8"))
+            if not isinstance(config, dict):
+                raise ValueError("ForgeFlow configuration must be an object")
+        active = cls._active_work(root, config)
+        baseline_file = safe_project_path(root, ".forgeflow/runtime.json")
+        baseline = None
+        if baseline_file.exists():
+            baseline = json.loads(baseline_file.read_text(encoding="utf-8"))
+            if not isinstance(baseline, dict):
+                raise ValueError("Invalid project runtime baseline")
+        if active:
+            if baseline is None:
+                raise ValueError("Active work has no pinned baseline; preserve its installed runtime and explicitly migrate after reviewing impact: " + ", ".join(active))
+            if baseline.get("identity") != package_identity():
+                raise ValueError("Active work keeps its recorded rules; use the pinned command or workflow adopt with an impact reason: " + ", ".join(active))
+            assert_runtime(root, baseline)
+        governance = config.get("governance", {})
+        if not isinstance(governance, dict):
+            raise ValueError("governance configuration must be an object")
+        tasks_name = governance.get("tasks_dir", "tasks")
+        if not isinstance(tasks_name, str):
+            raise ValueError("governance.tasks_dir must be a relative directory")
+        if "tasks_dir" not in governance and (root / "tasks").exists() and not (root / "tasks").is_dir():
+            tasks_name = "ff-tasks"
+        defaults = {
+            "forgeflow_version": __version__,
+            "workflow": {"mode": "lean", "checks": [], "owner": "standalone"},
+            "governance": {"tasks_dir": tasks_name, "max_loop_budget": 5,
+                           "auto_create_branch": False, "continuation_policy": continuation_policy},
+        }
+        desired_config = cls.deep_merge_config(config, defaults)
         created_dirs: List[str] = []
         created_files: List[str] = []
         updated_files: List[str] = []
-
-        config_file = root / ".forgeflow" / "config.json"
-        legacy_config_file = root / ".forgeflow.json"
-        custom_tasks_name = "tasks"
-        existing_cfg_file = config_file if config_file.is_file() else legacy_config_file
-        if existing_cfg_file.is_file():
-            try:
-                raw_cfg = json.loads(existing_cfg_file.read_text(encoding="utf-8"))
-                if isinstance(raw_cfg, dict):
-                    custom_tasks_name = raw_cfg.get("governance", {}).get("tasks_dir", "tasks")
-            except Exception:
-                pass
-
-        # 1. Tasks directories
-        tasks_dir = root / custom_tasks_name
-        in_progress_dir = tasks_dir / "in-progress"
-        completed_dir = tasks_dir / "completed"
-        for d in (tasks_dir, in_progress_dir, completed_dir):
-            if not d.exists():
-                d.mkdir(parents=True, exist_ok=True)
-                created_dirs.append(str(d.relative_to(root)))
-
-        guard_file = tasks_dir / "README.md"
-        if not guard_file.exists() or force:
-            guard_file.write_text(cls.TASKS_GUARD_CONTENT, encoding="utf-8")
-            (updated_files if guard_file.exists() and force else created_files).append(f"{custom_tasks_name}/README.md")
-
-        # Ensure .forgeflow directory
-        forgeflow_dir = root / ".forgeflow"
-        if not forgeflow_dir.exists():
-            forgeflow_dir.mkdir(parents=True, exist_ok=True)
-            created_dirs.append(".forgeflow")
-
-        # Ensure .forgeflow/spec symlink points to official spec directory
-        spec_symlink = forgeflow_dir / "spec"
-        target_spec_path = Path.home() / ".local" / "share" / "forgeflow" / "current" / "lib" / "forgeflow" / "spec"
-        if not target_spec_path.exists():
-            dev_spec = root / "src" / "forgeflow" / "spec"
-            if dev_spec.is_dir():
-                target_spec_path = dev_spec
-            else:
-                legacy_spec = Path.home() / ".local" / "forgeflow" / "current" / "lib" / "forgeflow" / "templates" / "spec"
-                if legacy_spec.exists():
-                    target_spec_path = legacy_spec
-
-        if spec_symlink.is_symlink() or spec_symlink.exists():
-            try:
-                current_target = Path(os.readlink(spec_symlink))
-                if current_target != target_spec_path:
-                    spec_symlink.unlink(missing_ok=True)
-                    os.symlink(target_spec_path, spec_symlink)
-                    updated_files.append(".forgeflow/spec")
-            except Exception:
-                pass
-        else:
-            try:
-                os.symlink(target_spec_path, spec_symlink)
-                created_files.append(".forgeflow/spec")
-            except Exception:
-                pass
-
-        # 2. .forgeflow/config.json (with Date-Based Amnesia enforcement and user config preservation)
+        skipped_files: List[str] = []
+        desired: Dict[Path, tuple[str, bool]] = {}
         if not skip_config:
-            default_config = {
-                "forgeflow_version": "0.1.0",
-                "governance": {
-                    "tasks_dir": custom_tasks_name,
-                    "strict_mode": True,
-                    "max_loop_budget": 5,
-                    "auto_create_branch": False,
-                },
-                "paths": {
-                    "in_progress": f"{custom_tasks_name}/in-progress",
-                    "completed": f"{custom_tasks_name}/completed",
-                },
-            }
-            config_data = copy.deepcopy(default_config)
-            needs_write = False
-            source_file = config_file if config_file.exists() else legacy_config_file
-            if not source_file.exists():
-                needs_write = True
-                created_files.append(".forgeflow/config.json")
-            else:
-                try:
-                    existing = json.loads(source_file.read_text(encoding="utf-8"))
-                    # Date-Based Amnesia: If not matching standard v0.1.0 or contains legacy fields, overwrite
-                    if (
-                        "required_documents" in existing.get("governance", {})
-                        or "default_tier" in existing.get("governance", {})
-                    ):
-                        needs_write = True
-                        (updated_files if config_file.exists() else created_files).append(".forgeflow/config.json")
-                    elif force:
-                        # Deep merge defaults into existing, strictly preserving all user modifications
-                        merged = cls.deep_merge_config(existing, default_config)
-                        current_ver = existing.get("forgeflow_version", "0.1.0")
-                        merged["forgeflow_version"] = current_ver
-                        config_data = merged
-                        if existing != merged or not config_file.exists():
-                            needs_write = True
-                            (updated_files if config_file.exists() else created_files).append(".forgeflow/config.json")
-                    elif not config_file.exists():
-                        merged = cls.deep_merge_config(existing, default_config)
-                        config_data = merged
-                        needs_write = True
-                        created_files.append(".forgeflow/config.json")
-                except Exception:
-                    needs_write = True
-                    (updated_files if config_file.exists() else created_files).append(".forgeflow/config.json")
-
-            if needs_write:
-                config_file.parent.mkdir(parents=True, exist_ok=True)
-                config_file.write_text(json.dumps(config_data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-
-        # 3. .specify/memory/constitution.md
-        specify_mem_dir = root / ".specify" / "memory"
-        specify_mem_dir.mkdir(parents=True, exist_ok=True)
-        created_dirs.append(".specify/memory")
-
-        constitution_file = specify_mem_dir / "constitution.md"
-        constitution_content = (
-            "# Project Constitution: Hybrid Governance Rules\n\n"
-            "## 제1조 (무승인 구현 금지 - No Code Before Gate 1)\n"
-            "어떠한 에이전트도 `tasks/in-progress/<id>/GATE1_REVIEW.md`의 공식 승인(APPROVED) 증적이 존재하지 않는 상태에서 "
-            "`src/**` 경로에 신규 소스 코드를 생성하거나 기존 코드를 수정할 수 없다. `/speckit.implement`가 호출되더라도 "
-            "이 원칙이 최우선하며, 위반 시 즉시 실행을 중단하고 사용자에게 보고해야 한다.\n\n"
-            "## 제2조 (가짜 멈춤 금지 - No False Stopping)\n"
-            "구현 중 발생하는 단순 단위 테스트 실패, 린트 오류, 사소한 컴파일 에러는 사용자에게 턴을 넘기거나 작업을 종료할 수 있는 사유가 아니다. "
-            "에이전트는 결함 원인을 스스로 분석하고 코드를 수정하는 내부 자가 치유 루프(Loop 2)를 자율적으로 완주해야 한다.\n\n"
-            "## 제3조 (원자적 루프 정의 - Atomic Remediation Unit)\n"
-            "자가 치유의 1회 루프는 반드시 `결함 원인 식별 → 코드/테스트 1개 수정 → 테스트 재실행`의 "
-            "전 과정을 포괄해야 한다. 코드를 수정하지 않고 테스트 명령어만 반복 실행하는 행위는 루프로 인정하지 않으며, "
-            "모든 테스트가 통과된 최종 시점에만 원자적 구현 커밋 1개를 생성한다.\n\n"
-            "## 제4조 (루프 예산 및 진짜 멈춤 - Loop Budget & True Stop)\n"
-            "동일한 에러 핑거프린트로 5회 연속 코드 수정 및 테스트 통과에 실패한 경우에만 작업을 즉시 중지하고 사용자에게 에스컬레이션(진짜 멈춤)한다.\n\n"
-            "## 제5조 (스펙 무단 하향 금지 - No Spec Downgrade)\n"
-            "구현의 어려움을 이유로 사용자 승인 없이 `spec.md`의 요구사항이나 Acceptance Criteria를 축소·삭제·완화할 수 없다. "
-            "스펙 수정이 필요한 경우 반드시 공식 스펙 회귀(Loop 3) 절차를 거쳐 Gate 1 재승인을 획득해야 한다.\n\n"
-            "## 제6조 (기획 시 안티패턴 및 ADR 필수 준수 - Anti-Patterns & Architecture Decisions)\n"
-            "에이전트는 과거에 합의된 설계 결정을 망각하고 동일한 실수를 반복해서는 안 된다. "
-            "새 기능 기획 및 명세서 작성 착수 시(`speckit.specify` 단계) 반드시 `docs/spec/ANTI_PATTERNS.md`를 필독하여 "
-            "금지된 안티패턴(Git SHA 결합, 스펙 해시 바인딩 등)을 확인하고, 주요 구조적 변경 시 `docs/adr/`의 아키텍처 결정 레코드를 검토해야 한다.\n\n"
-            "## 프레임워크 공식 사양서 참조 경로 (Framework Specifications)\n"
-            "에이전트는 세부 규범과 아키텍처 판단이 필요할 때 다음 공식 사양서(단일 진실 공급원)를 참조해야 한다:\n"
-            "- 참조 인터페이스: `forgeflow doc list` 또는 `forgeflow doc show <spec-name>` CLI\n"
-            "- 공식 사양서 색인: `.forgeflow/spec/README.md`\n"
-            "- 사양서 심볼릭 링크: `.forgeflow/spec/` (전역: `~/.local/share/forgeflow/current/lib/forgeflow/spec/`)\n"
-            "- 안티패턴 및 ADR: docs/spec/ANTI_PATTERNS.md, docs/adr/\n"
-        )
-        if not constitution_file.exists() or force:
-            constitution_file.write_text(constitution_content, encoding="utf-8")
-            (updated_files if constitution_file.exists() and force else created_files).append(".specify/memory/constitution.md")
-
-        # 4. .specify/extensions.yml
-        specify_dir = root / ".specify"
-        extensions_file = specify_dir / "extensions.yml"
-        extensions_content = (
-            'version: "1.0"\n'
-            "hooks:\n"
-            "  before_implement:\n"
-            "    - extension: forgeflow-gatekeeper\n"
-            "      command: forgeflow check --stage 2 --quiet\n"
-            "      optional: false\n"
-            '      prompt: "ForgeFlow Gate 1 승인 증적(GATE1_REVIEW.md)의 유효성을 검증한다. 미승인 시 즉시 중단한다."\n'
-        )
-        if not extensions_file.exists() or force:
-            extensions_file.write_text(extensions_content, encoding="utf-8")
-            (updated_files if extensions_file.exists() and force else created_files).append(".specify/extensions.yml")
-
-        # 5. .specify/templates/commands/implement.md
-        cmd_dir = specify_dir / "templates" / "commands"
-        cmd_dir.mkdir(parents=True, exist_ok=True)
-        created_dirs.append(".specify/templates/commands")
-
-        implement_cmd_file = cmd_dir / "implement.md"
-        implement_cmd_content = (
-            "---\n"
-            "description: Execute task implementation with Gate 1 enforcement and autonomous healing loop\n"
-            "---\n\n"
-            "## Pre-Execution Checks\n"
-            "1. Gate 1 Approval: Verify `tasks/in-progress/<release-id>/GATE1_REVIEW.md` exists with status `APPROVED`.\n"
-            "2. Workspace Isolation: Verify work is being conducted on branch `feat/<release-id>`.\n\n"
-            "## Implementation Directives\n"
-            "- Follow `tasks.md` sequentially in TDD fashion.\n"
-            "- Inner Loop (Loop 2): Autonomously analyze, fix, and re-test without stopping on failures (budget: 5 attempts).\n"
-            "- Checkpoint Commits: Create a clean git commit each time a discrete task (`- [ ] Task N.N`) and its tests 100% pass.\n"
-            "- Rollback: If code becomes corrupted during remediation, revert to the last clean task checkpoint.\n"
-        )
-        if not implement_cmd_file.exists() or force:
-            implement_cmd_file.write_text(implement_cmd_content, encoding="utf-8")
-            (updated_files if implement_cmd_file.exists() and force else created_files).append(".specify/templates/commands/implement.md")
-
-        # 6. Spec Kit bash scripts (6 scripts with 0o755 executable permissions)
-        scripts_dir = specify_dir / "scripts" / "bash"
-        scripts_dir.mkdir(parents=True, exist_ok=True)
-        created_dirs.append(".specify/scripts/bash")
-
-        speckit_scripts = [
-            "check-prerequisites.sh",
-            "common.sh",
-            "create-new-feature.sh",
-            "resolve-template.sh",
-            "setup-plan.sh",
-            "setup-tasks.sh",
-        ]
-        for script_name in speckit_scripts:
-            script_path = scripts_dir / script_name
-            content = cls.get_template_content(f"speckit/scripts/bash/{script_name}")
-            existed = script_path.exists()
-            if not existed or force:
-                script_path.write_text(content, encoding="utf-8")
-                os.chmod(script_path, 0o755)
-                (updated_files if existed else created_files).append(f".specify/scripts/bash/{script_name}")
-
-        # 7. Spec Kit templates (4 templates)
-        templates_dir = specify_dir / "templates"
-        templates_dir.mkdir(parents=True, exist_ok=True)
-
-        speckit_templates = [
-            "spec-template.md",
-            "plan-template.md",
-            "tasks-template.md",
-            "checklist-template.md",
-        ]
-        for tmpl_name in speckit_templates:
-            tmpl_path = templates_dir / tmpl_name
-            content = cls.get_template_content(f"speckit/templates/{tmpl_name}")
-            existed = tmpl_path.exists()
-            if not existed or force:
-                tmpl_path.write_text(content, encoding="utf-8")
-                (updated_files if existed else created_files).append(f".specify/templates/{tmpl_name}")
-
-        # 8. Knowledge architecture (ANTI_PATTERNS.md & ADRs)
-        spec_dir = root / "docs" / "spec"
-        spec_dir.mkdir(parents=True, exist_ok=True)
-        created_dirs.append("docs/spec")
-
-        anti_patterns_file = spec_dir / "ANTI_PATTERNS.md"
-        anti_patterns_content = cls.get_template_content("spec/ANTI_PATTERNS.md")
-        existed = anti_patterns_file.exists()
-        if not existed or force:
-            anti_patterns_file.write_text(anti_patterns_content, encoding="utf-8")
-            (updated_files if existed else created_files).append("docs/spec/ANTI_PATTERNS.md")
-
-        adr_dir = root / "docs" / "adr"
-        adr_dir.mkdir(parents=True, exist_ok=True)
-        created_dirs.append("docs/adr")
-
-        adr_templates = [
-            "template.md",
-            "001-eliminate-git-sha-and-commit-range-bindings.md",
-            "002-remove-spec-body-hash-binding.md",
-        ]
-        for adr_name in adr_templates:
-            adr_path = adr_dir / adr_name
-            content = cls.get_template_content(f"adr/{adr_name}")
-            existed = adr_path.exists()
-            if not existed or force:
-                adr_path.write_text(content, encoding="utf-8")
-                (updated_files if existed else created_files).append(f"docs/adr/{adr_name}")
-
-        # 9. .gitignore lock & local symlink entries
-        gitignore_file = root / ".gitignore"
-        required_entries = [".forgeflow/lifecycle/.*.lock", ".forgeflow/spec"]
-        if gitignore_file.exists():
-            existing_gi = gitignore_file.read_text(encoding="utf-8")
-            missing_entries = [entry for entry in required_entries if entry not in existing_gi]
-            if missing_entries:
-                additions = "\n".join(missing_entries) + "\n"
-                gitignore_file.write_text(existing_gi.rstrip() + "\n" + additions, encoding="utf-8")
-                updated_files.append(".gitignore")
-        else:
-            gitignore_file.write_text("\n".join(required_entries) + "\n", encoding="utf-8")
-            created_files.append(".gitignore")
-
-        # 10. Non-destructive Session Boot Anchor in root guides (AGENTS.md / CLAUDE.md)
-        anchor_results = cls.bind_boot_anchor(root)
-        for fname, action in anchor_results.items():
+            desired[config_file] = (json.dumps(desired_config, indent=2, ensure_ascii=False) + "\n", False)
+        tasks_dir = safe_project_path(root, tasks_name)
+        desired[tasks_dir / "README.md"] = (cls.TASKS_GUARD_CONTENT, False)
+        if speckit:
+            for name in ("check-prerequisites.sh", "common.sh", "create-new-feature.sh", "resolve-template.sh", "setup-plan.sh", "setup-tasks.sh"):
+                path = safe_project_path(root, f".specify/scripts/bash/{name}")
+                desired[path] = (cls.get_template_content(f"speckit/scripts/bash/{name}"), True)
+            for name in ("spec-template.md", "plan-template.md", "tasks-template.md", "checklist-template.md"):
+                path = safe_project_path(root, f".specify/templates/{name}")
+                desired[path] = (cls.get_template_content(f"speckit/templates/{name}"), False)
+        for path in desired:
+            safe_project_path(root, path.relative_to(root).as_posix())
+            if path.exists():
+                cls._assert_safe_file(path, root)
+        for name in (tasks_name, f"{tasks_name}/in-progress", f"{tasks_name}/completed"):
+            directory = safe_project_path(root, name)
+            cls._assert_safe_directory(directory, root) if directory.exists() else None
+        gitignore = safe_project_path(root, ".gitignore")
+        if gitignore.exists():
+            cls._assert_safe_file(gitignore, root)
+        # Validate the snapshot before writing user-visible setup files.
+        selected = pin_runtime(root) if baseline is None or not active else baseline
+        for name in (tasks_name, f"{tasks_name}/in-progress", f"{tasks_name}/completed"):
+            directory = safe_project_path(root, name)
+            if not directory.exists():
+                directory.mkdir(parents=True, exist_ok=True)
+                created_dirs.append(name)
+        for path, (content, executable) in desired.items():
+            relative = path.relative_to(root).as_posix()
+            if path.exists():
+                skipped_files.append(relative)
+                continue
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+            if executable:
+                path.chmod(0o755)
+            created_files.append(relative)
+        required_entries = [".forgeflow/runtime/", ".forgeflow/runtime.json", ".forgeflow/run.py", ".forgeflow/spec", ".forgeflow/workflows/.*.lock", ".forgeflow/lifecycle/.*.lock"]
+        existing = gitignore.read_text(encoding="utf-8") if gitignore.exists() else ""
+        missing = [entry for entry in required_entries if entry not in existing.splitlines()]
+        if missing:
+            existed = gitignore.exists()
+            gitignore.write_text(existing.rstrip() + "\n" + "\n".join(missing) + "\n", encoding="utf-8")
+            (updated_files if existed else created_files).append(".gitignore")
+        anchor_result = cls.bind_boot_anchor(root)
+        for name, action in anchor_result.items():
             if action == "created":
-                created_files.append(fname)
+                created_files.append(name)
             elif action == "updated":
-                updated_files.append(fname)
-
-        return {
-            "status": "success",
-            "created_dirs": sorted(list(set(created_dirs))),
-            "created_files": created_files,
-            "updated_files": updated_files,
-        }
+                updated_files.append(name)
+        return {"status": "success", "target_dir": str(root), "created_dirs": created_dirs,
+                "created_files": created_files, "updated_files": updated_files,
+                "skipped_files": skipped_files, "baseline": selected}
 
     @classmethod
     def bind_boot_anchor(
@@ -1197,6 +1078,9 @@ class TemplateScaffolder:
 
         for filename in targets_to_process:
             target_file = root / filename
+            if target_file.is_symlink():
+                results[filename] = "skipped (symbolic link; not modified)"
+                continue
             if not target_file.exists():
                 target_file.write_text(anchor_block + "\n", encoding="utf-8")
                 results[filename] = "created"
@@ -1241,7 +1125,7 @@ class TemplateScaffolder:
 
         for filename in candidates:
             target_file = root / filename
-            if not target_file.is_file():
+            if target_file.is_symlink() or not target_file.is_file():
                 continue
 
             content = target_file.read_text(encoding="utf-8")
@@ -1265,16 +1149,19 @@ class TemplateScaffolder:
 
     @classmethod
     def update_repo_governance(cls, root: Path) -> Dict[str, Any]:
-        """Update local repository governance specifications and Spec Kit assets to the current version.
+        """Adopt a baseline only when no active work depends on existing rules.
 
-        Preserves all task packages in tasks/in-progress and tasks/completed while refreshing
-        .specify/ scripts (with 0o755 permission), templates, and .forgeflow/config.json version.
-        If a legacy .forgeflow.json exists at root, it is migrated to .forgeflow/config.json and removed.
+        User configuration and files take precedence. The legacy config is kept
+        as recovery evidence after a modern-path copy is created.
         """
         from ._version import __version__
-        root = root.resolve()
-        modern_config = root / ".forgeflow" / "config.json"
-        legacy_config = root / ".forgeflow.json"
+        from .runtime import safe_project_path
+        root = Path(root).absolute()
+        if root.is_symlink():
+            raise ValueError("Project root must not be a symbolic link")
+        root = root.resolve(strict=True)
+        modern_config = safe_project_path(root, ".forgeflow/config.json")
+        legacy_config = safe_project_path(root, ".forgeflow.json")
         if not modern_config.exists() and not legacy_config.exists():
             raise ValueError(f"Target directory '{root}' is not a valid ForgeFlow repository (.forgeflow/config.json missing).")
 
@@ -1286,14 +1173,23 @@ class TemplateScaffolder:
         except Exception as e:
             raise ValueError(f"Failed to parse {source_config.name}: {e}")
 
+        if not isinstance(config_data, dict) or not isinstance(config_data.get("governance", {}), dict):
+            raise ValueError("ForgeFlow configuration and governance must be objects")
+        active = cls._active_work(root, config_data)
+        if active:
+            raise ValueError(
+                "Active work keeps its recorded runtime and rules; use its pinned command. "
+                "For lean tasks explicitly run workflow adopt with a reviewed impact reason; "
+                "finish or explicitly migrate legacy packages before update: " + ", ".join(active)
+            )
         previous_version = config_data.get("forgeflow_version", "unknown")
 
         tasks_dir_name = config_data.get("governance", {}).get("tasks_dir", "tasks")
         default_config = {
             "forgeflow_version": __version__,
+            "workflow": {"mode": "lean", "checks": [], "owner": "standalone"},
             "governance": {
                 "tasks_dir": tasks_dir_name,
-                "strict_mode": True,
                 "max_loop_budget": 5,
             },
             "paths": {
@@ -1306,21 +1202,14 @@ class TemplateScaffolder:
         merged_config = cls.deep_merge_config(config_data, default_config)
         merged_config["forgeflow_version"] = __version__
 
-        # Re-run hybrid scaffolding with force=True, skipping config write to prevent double-write / custom key loss
-        scaffold_res = cls.scaffold_speckit_hybrid(root, force=True, skip_config=True)
+        # Add missing optional assets only when the project already uses Spec Kit.
+        scaffold_res = cls._scaffold_lean(root, speckit=(root / ".specify").is_dir(), skip_config=True)
 
         # Check if config actually modified compared to original on-disk content or needs migration
         is_config_changed = (merged_config != config_data) or is_legacy_migration
         if is_config_changed or not modern_config.exists():
             modern_config.parent.mkdir(parents=True, exist_ok=True)
             modern_config.write_text(json.dumps(merged_config, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-
-        # Clean up legacy config if present
-        if legacy_config.exists():
-            try:
-                legacy_config.unlink(missing_ok=True)
-            except OSError:
-                pass
 
         updated_files = [f for f in scaffold_res.get("updated_files", []) if f not in {".forgeflow/config.json", ".forgeflow.json"}]
         if is_config_changed:
@@ -1335,6 +1224,8 @@ class TemplateScaffolder:
             "target_dir": str(root),
             "updated_files": sorted(list(set(updated_files))),
             "changelog_summary": changelog_summary,
+            "baseline": scaffold_res.get("baseline"),
+            "preserved_legacy_config": legacy_config.exists(),
         }
 
     @classmethod
@@ -1492,6 +1383,15 @@ def resolve_auto_create_branch(repo_root: Path) -> bool:
         raise ValueError(f"Failed to parse {config_file.name}: {exc}") from exc
 
     if not isinstance(data, dict):
+        return False
+
+    workflow = data.get("workflow", {})
+    if not isinstance(workflow, dict):
+        raise ValueError("workflow configuration must be an object")
+    owner = workflow.get("owner", "standalone")
+    if owner not in {"standalone", "host"}:
+        raise ValueError("workflow.owner must be standalone or host")
+    if owner == "host":
         return False
 
     gov = data.get("governance")

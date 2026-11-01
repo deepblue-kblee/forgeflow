@@ -1,9 +1,11 @@
 # 🏁 완료 보고서 (Completion Report) - Release {{RELEASE_ID}}
 
+> 명시적 strict compatibility 템플릿입니다. 기본 workflow에는 필요하지 않습니다. 패키지의 git-sha/sha-free 정책과 실제 evidence를 기록합니다. Package 완료는 Git merge/cleanup을 뜻하지 않으며 operation 권한은 별도입니다.
+
 - **릴리즈 식별자**: `{{RELEASE_ID}}`
 - **위험도 등급**: **Tier {{TIER}} ({{TIER_NAME}})**
 - **완료 일자**: {{DATE}}
-- **상태**: **Completed**
+- **상태**: **PENDING — 실제 lifecycle 결과로 확정**
 
 > 이 문서는 Gate 3에서 release package로 검토됩니다. `COMPLETE` 여부와 final candidate/seal은 문서 수정이 아니라 lifecycle state와 strict audit으로 확정합니다.
 

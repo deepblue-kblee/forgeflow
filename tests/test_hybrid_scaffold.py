@@ -1,9 +1,12 @@
+"""Default setup is lean, repeatable, and preserves project-owned content."""
+
 import json
 import tempfile
 import unittest
 from pathlib import Path
 
-from forgeflow.scaffold import TemplateScaffolder
+from forgeflow._version import __version__
+from forgeflow.scaffold import TemplateScaffolder, resolve_auto_create_branch
 from forgeflow.cli import main
 
 
@@ -15,115 +18,82 @@ class TestHybridScaffold(unittest.TestCase):
     def tearDown(self):
         self.temp_dir.cleanup()
 
-    def test_scaffold_speckit_hybrid_creates_required_files(self):
-        res = TemplateScaffolder.scaffold_speckit_hybrid(self.root)
-        self.assertEqual(res["status"], "success")
+    def test_scaffold_creates_lean_config_and_pinned_executable_specs(self):
+        result = TemplateScaffolder.scaffold_speckit_hybrid(self.root)
+        config = json.loads((self.root / ".forgeflow/config.json").read_text())
+        self.assertEqual(config["forgeflow_version"], __version__)
+        self.assertEqual(config["workflow"], {"mode": "lean", "checks": [], "owner": "standalone"})
+        self.assertFalse(config["governance"]["auto_create_branch"])
+        self.assertTrue((self.root / ".forgeflow/run.py").is_file())
+        self.assertIn(result["baseline"]["identity"], str((self.root / ".forgeflow/spec").resolve()))
+        self.assertTrue((self.root / ".forgeflow/spec/FLOW_SPEC.md").is_file())
+        for name in (".specify/memory/constitution.md", ".specify/extensions.yml",
+                     ".specify/templates/commands/implement.md", "docs/adr", "docs/spec"):
+            self.assertFalse((self.root / name).exists(), name)
+        self.assertTrue((self.root / "tasks/in-progress").is_dir())
+        self.assertTrue((self.root / "tasks/completed").is_dir())
+        self.assertIn(".forgeflow/runtime/", (self.root / ".gitignore").read_text())
 
-        # Verify .forgeflow/config.json
-        config_file = self.root / ".forgeflow" / "config.json"
-        self.assertTrue(config_file.exists())
-        self.assertFalse((self.root / ".forgeflow.json").exists())
-        config = json.loads(config_file.read_text(encoding="utf-8"))
-        self.assertEqual(config["forgeflow_version"], "0.1.0")
-        self.assertEqual(config["governance"]["tasks_dir"], "tasks")
-        self.assertEqual(config["governance"]["max_loop_budget"], 5)
-
-        # Verify .specify structure
-        constitution = self.root / ".specify" / "memory" / "constitution.md"
-        self.assertTrue(constitution.exists())
-        const_text = constitution.read_text(encoding="utf-8")
-        self.assertIn("제1조 (무승인 구현 금지", const_text)
-        self.assertIn("제2조 (가짜 멈춤 금지", const_text)
-        self.assertIn("제6조 (기획 시 안티패턴 및 ADR 필수 준수", const_text)
-        self.assertIn("docs/spec/ANTI_PATTERNS.md", const_text)
-
-        # Verify knowledge architecture (ANTI_PATTERNS.md & ADRs)
-        self.assertTrue((self.root / "docs" / "spec" / "ANTI_PATTERNS.md").exists())
-        self.assertTrue((self.root / "docs" / "adr" / "template.md").exists())
-        self.assertTrue((self.root / "docs" / "adr" / "001-eliminate-git-sha-and-commit-range-bindings.md").exists())
-        self.assertTrue((self.root / "docs" / "adr" / "002-remove-spec-body-hash-binding.md").exists())
-
-        extensions = self.root / ".specify" / "extensions.yml"
-        self.assertTrue(extensions.exists())
-        ext_text = extensions.read_text(encoding="utf-8")
-        self.assertIn("forgeflow check --stage 2", ext_text)
-
-        implement_cmd = self.root / ".specify" / "templates" / "commands" / "implement.md"
-        self.assertTrue(implement_cmd.exists())
-
-        # Verify tasks directories
-        self.assertTrue((self.root / "tasks" / "in-progress").is_dir())
-        self.assertTrue((self.root / "tasks" / "completed").is_dir())
-        self.assertTrue((self.root / "tasks" / "README.md").exists())
-
-        # Verify .gitignore
-        gi = self.root / ".gitignore"
-        self.assertTrue(gi.exists())
-        self.assertIn(".forgeflow/lifecycle/.*.lock", gi.read_text(encoding="utf-8"))
-
-    def test_scaffold_creates_speckit_bash_scripts_with_executable_mode(self):
+    def test_optional_speckit_assets_are_executable_and_usable(self):
         TemplateScaffolder.scaffold_speckit_hybrid(self.root)
-        expected_scripts = [
-            "check-prerequisites.sh",
-            "common.sh",
-            "create-new-feature.sh",
-            "resolve-template.sh",
-            "setup-plan.sh",
-            "setup-tasks.sh",
-        ]
-        scripts_dir = self.root / ".specify" / "scripts" / "bash"
-        self.assertTrue(scripts_dir.is_dir())
-        for s in expected_scripts:
-            script_path = scripts_dir / s
-            self.assertTrue(script_path.exists(), f"Missing script: {s}")
-            # Verify executable mode
-            mode = script_path.stat().st_mode
-            self.assertTrue(mode & 0o111 != 0, f"Script {s} is not executable: {oct(mode)}")
+        for name in ("check-prerequisites.sh", "common.sh", "create-new-feature.sh",
+                     "resolve-template.sh", "setup-plan.sh", "setup-tasks.sh"):
+            script = self.root / ".specify/scripts/bash" / name
+            self.assertTrue(script.is_file())
+            self.assertTrue(script.stat().st_mode & 0o111)
+        for name in ("spec-template.md", "plan-template.md", "tasks-template.md", "checklist-template.md"):
+            self.assertGreater((self.root / ".specify/templates" / name).stat().st_size, 0)
 
-    def test_scaffold_creates_speckit_templates(self):
-        TemplateScaffolder.scaffold_speckit_hybrid(self.root)
-        expected_templates = [
-            "spec-template.md",
-            "plan-template.md",
-            "tasks-template.md",
-            "checklist-template.md",
-        ]
-        templates_dir = self.root / ".specify" / "templates"
-        self.assertTrue(templates_dir.is_dir())
-        for t in expected_templates:
-            tmpl_path = templates_dir / t
-            self.assertTrue(tmpl_path.exists(), f"Missing template: {t}")
-            self.assertGreater(tmpl_path.stat().st_size, 0)
-
-    def test_scaffold_enforces_date_based_amnesia_on_legacy_config(self):
-        config_file = self.root / ".forgeflow" / "config.json"
-        config_file.parent.mkdir(parents=True, exist_ok=True)
-        legacy_config = {
-            "forgeflow_version": "0.22.1",
-            "created_at": "2026-10-15T12:00:00Z",
-            "project": {"name": "legacy-project"},
-            "governance": {"default_tier": 2, "required_documents": ["PRD.md", "DESIGN.md"]}
+    def test_force_repeated_setup_preserves_user_config_constitution_hooks_templates(self):
+        contents = {
+            ".forgeflow/config.json": json.dumps({"forgeflow_version": "0.22.1", "created_at": "2026-10-15",
+                "governance": {"required_documents": ["PRD.md"], "default_tier": 2},
+                "workflow": {"owner": "host", "checks": [["custom-test"]]}, "custom": 42}),
+            ".specify/memory/constitution.md": "# My constitution\n",
+            ".specify/extensions.yml": "hooks: custom\n",
+            ".specify/templates/spec-template.md": "# My spec template\n",
+            ".specify/scripts/bash/common.sh": "#!/bin/sh\n# My shared helper\n",
         }
-        config_file.write_text(json.dumps(legacy_config), encoding="utf-8")
+        for name, content in contents.items():
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content)
+        for _ in range(2):
+            TemplateScaffolder.scaffold_speckit_hybrid(self.root, force=True)
+        for name, content in contents.items():
+            self.assertEqual((self.root / name).read_text(), content, name)
 
-        res = TemplateScaffolder.scaffold_speckit_hybrid(self.root)
-        self.assertEqual(res["status"], "success")
+    def test_default_init_does_not_inject_strict_bundle_or_speckit(self):
+        result = TemplateScaffolder.init_project_governance(self.root, "sample")
+        self.assertEqual(result["project_name"], "sample")
+        self.assertFalse((self.root / ".specify").exists())
+        self.assertFalse((self.root / "docs/forgeflow").exists())
+        self.assertFalse((self.root / "src").exists())
+        self.assertIn(".forgeflow/spec/README.md", (self.root / "AGENTS.md").read_text())
 
-        # Must overwrite with v0.1.0 standard and prune legacy fields
-        new_config = json.loads(config_file.read_text(encoding="utf-8"))
-        self.assertEqual(new_config["forgeflow_version"], "0.1.0")
-        self.assertEqual(new_config["governance"]["tasks_dir"], "tasks")
-        self.assertNotIn("PRD.md", json.dumps(new_config))
+    def test_host_owner_disables_auto_branch_even_when_legacy_setting_is_true(self):
+        config = self.root / ".forgeflow/config.json"
+        config.parent.mkdir()
+        config.write_text(json.dumps({"workflow": {"owner": "host"},
+                                      "governance": {"auto_create_branch": True}}))
+        self.assertFalse(resolve_auto_create_branch(self.root))
 
     def test_cli_init_speckit(self):
-        import sys
         target = self.root / "sample-project"
-        with self.assertRaises(SystemExit) as cm:
+        with self.assertRaises(SystemExit) as raised:
             main(["init", "--speckit", "--path", str(target)])
-        self.assertEqual(cm.exception.code, 0)
-        self.assertTrue((target / ".forgeflow" / "config.json").exists())
-        self.assertFalse((target / ".forgeflow.json").exists())
-        self.assertTrue((target / ".specify" / "extensions.yml").exists())
+        self.assertEqual(raised.exception.code, 0)
+        self.assertTrue((target / ".forgeflow/config.json").is_file())
+        self.assertTrue((target / ".specify/scripts/bash/setup-plan.sh").is_file())
+        self.assertFalse((target / ".specify/extensions.yml").exists())
+
+    def test_setup_rejects_escaping_task_path_before_creating_runtime(self):
+        config = self.root / ".forgeflow/config.json"
+        config.parent.mkdir()
+        config.write_text(json.dumps({"governance": {"tasks_dir": "../outside"}}))
+        with self.assertRaisesRegex(ValueError, "relative and contained"):
+            TemplateScaffolder.scaffold_speckit_hybrid(self.root)
+        self.assertFalse((self.root / ".forgeflow/runtime").exists())
 
 
 if __name__ == "__main__":

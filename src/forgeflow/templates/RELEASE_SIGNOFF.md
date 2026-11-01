@@ -1,5 +1,7 @@
 # Release Sign-off - {{RELEASE_ID}}
 
+> 명시적 strict compatibility 템플릿입니다. 기본 workflow에는 필요하지 않습니다. 패키지의 git-sha/sha-free 정책과 실제 evidence를 기록합니다. Package 완료는 Git merge/cleanup을 뜻하지 않으며 operation 권한은 별도입니다.
+
 > Gate 3의 사용자 Go/No-Go 기록입니다. 구현 품질 재심사가 아니라, Gate 2가 승인한 이후의 최종 release package를 승인합니다.
 
 - **릴리즈 식별자**: `{{RELEASE_ID}}`

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "forgeflow"
 dynamic = ["version"]
-description = "Autonomous Agent Governance Framework & Harness Gate CLI"
+description = "Spec Kit development workflow, project verification and authorized finalization"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -23,5 +23,4 @@ where = ["src"]
 version = {attr = "forgeflow._version.__version__"}
 
 [tool.setuptools.package-data]
-"forgeflow.templates" = ["*.md", "spec/*.md", "speckit/scripts/bash/*", "speckit/templates/*"]
-"forgeflow.catalog_oracles" = ["*.json"]
+"forgeflow" = ["CHANGELOG.md", "spec/*.md", "spec/VERSION", "adr/*.md", "templates/*.md", "templates/adr/*.md", "templates/speckit/scripts/bash/*", "templates/speckit/templates/*"]

@@ -16,12 +16,6 @@ from ._version import __version__
 from .scanner import HierarchicalRootScanner
 
 
-def _parse_version_tuple(v_str: Any) -> tuple:
-    import re
-    nums = re.findall(r"\d+", str(v_str))
-    return tuple(map(int, nums)) if nums else (0,)
-
-
 @dataclass
 class DiagnosticAnomaly:
     anomaly_type: str  # REPEATED_FAILURE, REDUNDANT_CHECK, HIGH_LATENCY, WORKTREE_LOCK
@@ -229,7 +223,7 @@ class DiagnosticAnalyzer:
                         )
                     )
 
-        # 5. Legacy Configuration & Amnesia Policy Check (Baseline Date: 2026-10-20)
+        # 5. Diagnose actual schema and settings, never a file's age or version.
         modern_cfg = self.repo_root / ".forgeflow" / "config.json"
         legacy_cfg = self.repo_root / ".forgeflow.json"
         config_file = modern_cfg if modern_cfg.is_file() else legacy_cfg
@@ -237,33 +231,34 @@ class DiagnosticAnalyzer:
         if config_file.is_file():
             try:
                 cfg = json.loads(config_file.read_text(encoding="utf-8"))
-                version_str = cfg.get("forgeflow_version", "")
-                v_tuple = _parse_version_tuple(version_str) if version_str else (0,)
-                gov = cfg.get("governance", {}) if isinstance(cfg.get("governance"), dict) else {}
-                has_speckit = (self.repo_root / ".specify" / "memory" / "constitution.md").is_file()
-
-                # Amnesia epoch: 2026-10-20 00:00:00 KST
-                amnesia_epoch = 1792422000
-                mtime = config_file.stat().st_mtime
-
-                # Detect 2026-10-20 pre-reset legacy configurations
-                is_legacy = (
-                    v_tuple < (0, 1, 0)
-                    or "required_documents" in gov
-                    or "default_tier" in gov
-                    or mtime < (amnesia_epoch - 86400)
-                    or ((0, 21, 0) <= v_tuple <= (0, 23, 99) and not has_speckit)
-                )
-                if is_legacy:
+                if not isinstance(cfg, dict) or not isinstance(cfg.get("governance", {}), dict):
+                    raise ValueError("configuration and governance must be objects")
+                gov = cfg.get("governance", {})
+                if "required_documents" in gov or "default_tier" in gov:
                     anomalies.append(
                         DiagnosticAnomaly(
-                            anomaly_type="LEGACY_CONFIG_DETECTED",
-                            severity="WARNING",
-                            message="2026-10-20 이전의 구버전 거버넌스 설정이 감지되었습니다 (하위 호환 미지원).",
-                            remedy="'forgeflow init --speckit'을 실행하여 v0.1.0+ 최신 표준 설정으로 교체하세요.",
+                            anomaly_type="STRICT_COMPATIBILITY_CONFIG",
+                            severity="INFO",
+                            message="기존 strict 문서/위험도 설정을 보존하고 있습니다.",
+                            remedy="진행 중 작업의 규칙을 유지하고, 새 작업에는 workflow.mode와 프로젝트 필수 checks를 명시하세요.",
                             context={"current_version": cfg.get("forgeflow_version")},
                         )
                     )
+
+                workflow = cfg.get("workflow", {})
+                if not isinstance(workflow, dict):
+                    raise ValueError("workflow must be an object")
+                if workflow.get("mode", "lean") not in {"lean", "strict"}:
+                    raise ValueError("workflow.mode must be lean or strict")
+                if workflow.get("owner", "standalone") not in {"standalone", "host"}:
+                    raise ValueError("workflow.owner must be standalone or host")
+                checks = workflow.get("checks", [])
+                if not isinstance(checks, list) or any(
+                    not isinstance(command, list) or not command
+                    or any(not isinstance(arg, str) or not arg for arg in command)
+                    for command in checks
+                ):
+                    raise ValueError("workflow.checks must be a list of command argument lists")
 
                 # Validate test_timeout_seconds if specified in governance
                 if "test_timeout_seconds" in gov:
@@ -298,8 +293,12 @@ class DiagnosticAnalyzer:
                                 context={"auto_create_branch": raw_acb},
                             )
                         )
-            except Exception:
-                pass
+            except (OSError, UnicodeError, ValueError, TypeError) as exc:
+                anomalies.append(DiagnosticAnomaly(
+                    anomaly_type="INVALID_CONFIG", severity="CRITICAL",
+                    message=f"ForgeFlow 설정을 읽거나 검증할 수 없습니다: {exc}",
+                    remedy=f"{cfg_name}의 JSON 구조와 workflow/governance 설정을 확인하세요. 기존 파일은 자동 교체하지 않습니다.",
+                ))
 
         return anomalies
 
