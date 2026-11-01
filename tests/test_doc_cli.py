@@ -49,8 +49,9 @@ class TestDocCli(unittest.TestCase):
         self.assertEqual(code, 0)
         data = json.loads(stdout.getvalue())
         self.assertEqual(data["status"], "success")
-        self.assertEqual(data["count"], 7)
+        self.assertEqual(data["count"], 8)
         ids = [s["id"] for s in data["specifications"]]
+        self.assertIn("README", ids)
         self.assertIn("FLOW_SPEC", ids)
         self.assertIn("SPECKIT_HOOKS_AND_NORMS", ids)
 

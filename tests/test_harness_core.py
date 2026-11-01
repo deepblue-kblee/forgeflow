@@ -307,10 +307,13 @@ class TestSelfGovernanceValidator(unittest.TestCase):
     def setUp(self):
         self.temp_dir = Path(tempfile.mkdtemp())
         self.addCleanup(lambda: __import__("shutil").rmtree(self.temp_dir, ignore_errors=True))
-        for name in ("FLOW_SPEC.md", "GATES_AND_LOOPS.md", "CHANGELOG.md"):
-            for parent in (self.temp_dir / "docs/spec", self.temp_dir / "src/forgeflow/templates/spec"):
+        for name in ("FLOW_SPEC.md", "GATES_AND_LOOPS.md"):
+            for parent in (self.temp_dir / "docs/spec", self.temp_dir / "src/forgeflow/spec"):
                 parent.mkdir(parents=True, exist_ok=True)
                 (parent / name).write_text("base\n", encoding="utf-8")
+        for parent in (self.temp_dir / "docs", self.temp_dir / "src/forgeflow"):
+            parent.mkdir(parents=True, exist_ok=True)
+            (parent / "CHANGELOG.md").write_text("base\n", encoding="utf-8")
         subprocess.run(["git", "init", "-q"], cwd=self.temp_dir, check=True)
         subprocess.run(["git", "checkout", "-qb", "feat/r1"], cwd=self.temp_dir, check=True)
         subprocess.run(["git", "add", "."], cwd=self.temp_dir, check=True)
@@ -325,13 +328,13 @@ class TestSelfGovernanceValidator(unittest.TestCase):
         table = "\n".join((
             "| `src/forgeflow/x.py` | code | `docs/spec/FLOW_SPEC.md` | rule |",
             "| `docs/spec/FLOW_SPEC.md` | spec | `docs/spec/FLOW_SPEC.md` | rule |",
-            "| `src/forgeflow/templates/spec/FLOW_SPEC.md` | package spec | `docs/spec/FLOW_SPEC.md` | parity |",
+            "| `src/forgeflow/spec/FLOW_SPEC.md` | package spec | `docs/spec/FLOW_SPEC.md` | parity |",
         )) + extra_rows if coverage else ""
         (release / "DESIGN.md").write_text(metadata + "## Self-Governance Spec Coverage\n| Changed path | Change classification | Canonical spec path | Coverage rationale |\n|---|---|---|---|\n" + table, encoding="utf-8")
         path = self.temp_dir / "src/forgeflow/x.py"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("x = 1\n", encoding="utf-8")
-        for parent in (self.temp_dir / "docs/spec", self.temp_dir / "src/forgeflow/templates/spec"):
+        for parent in (self.temp_dir / "docs/spec", self.temp_dir / "src/forgeflow/spec"):
             (parent / "FLOW_SPEC.md").write_text("changed\n", encoding="utf-8")
         subprocess.run(["git", "add", "."], cwd=self.temp_dir, check=True)
         subprocess.run(["git", "-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "-qm", "change"], cwd=self.temp_dir, check=True)
@@ -451,7 +454,7 @@ class TestSelfGovernanceValidator(unittest.TestCase):
         table = "\n".join((
             "| `src/forgeflow/_version.py` | code | `docs/spec/FLOW_SPEC.md` | version |",
             "| `docs/spec/FLOW_SPEC.md` | spec | `docs/spec/FLOW_SPEC.md` | rule |",
-            "| `src/forgeflow/templates/spec/FLOW_SPEC.md` | package spec | `docs/spec/FLOW_SPEC.md` | parity |",
+            "| `src/forgeflow/spec/FLOW_SPEC.md` | package spec | `docs/spec/FLOW_SPEC.md` | parity |",
         ))
         (release / "DESIGN.md").write_text(
             metadata + "## Self-Governance Spec Coverage\n"
@@ -459,7 +462,7 @@ class TestSelfGovernanceValidator(unittest.TestCase):
             "|---|---|---|---|\n" + table,
             encoding="utf-8",
         )
-        for parent in (self.temp_dir / "docs/spec", self.temp_dir / "src/forgeflow/templates/spec"):
+        for parent in (self.temp_dir / "docs/spec", self.temp_dir / "src/forgeflow/spec"):
             (parent / "FLOW_SPEC.md").write_text("changed\n", encoding="utf-8")
         subprocess.run(["git", "add", "."], cwd=self.temp_dir, check=True)
         subprocess.run(["git", "-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "-qm", "version change"], cwd=self.temp_dir, check=True)
@@ -585,7 +588,7 @@ class TestSelfGovernanceValidator(unittest.TestCase):
             [f"| `{path}` | code | `docs/spec/FLOW_SPEC.md` | name-status |" for path in changed_paths]
             + [
                 "| `docs/spec/FLOW_SPEC.md` | spec | `docs/spec/FLOW_SPEC.md` | rule |",
-                "| `src/forgeflow/templates/spec/FLOW_SPEC.md` | package spec | `docs/spec/FLOW_SPEC.md` | parity |",
+                "| `src/forgeflow/spec/FLOW_SPEC.md` | package spec | `docs/spec/FLOW_SPEC.md` | parity |",
             ]
         )
         (release / "DESIGN.md").write_text(
@@ -600,7 +603,7 @@ class TestSelfGovernanceValidator(unittest.TestCase):
             subprocess.run(["git", "mv", old_path, new_path], cwd=self.temp_dir, check=True)
         else:
             subprocess.run(["git", "rm", "-q", old_path], cwd=self.temp_dir, check=True)
-        for parent in (self.temp_dir / "docs/spec", self.temp_dir / "src/forgeflow/templates/spec"):
+        for parent in (self.temp_dir / "docs/spec", self.temp_dir / "src/forgeflow/spec"):
             (parent / "FLOW_SPEC.md").write_text("changed\n", encoding="utf-8")
         subprocess.run(["git", "add", "."], cwd=self.temp_dir, check=True)
         subprocess.run(["git", "-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "-qm", "name status"], cwd=self.temp_dir, check=True)

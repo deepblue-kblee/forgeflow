@@ -311,9 +311,11 @@ class SelfGovernanceValidator:
                     f"duplicates={duplicates}, unknown_rows={unknown_rows}, missing={missing}, "
                     f"invalid={invalid}, unchanged_specs={unchanged}"
                 )
-            for name in ("FLOW_SPEC.md", "GATES_AND_LOOPS.md", "CHANGELOG.md"):
-                if (root / "docs/spec" / name).read_bytes() != (root / "src/forgeflow/templates/spec" / name).read_bytes():
+            for name in ("FLOW_SPEC.md", "GATES_AND_LOOPS.md"):
+                if (root / "docs/spec" / name).read_bytes() != (root / "src/forgeflow/spec" / name).read_bytes():
                     raise ValueError(f"portable spec template differs: {name}")
+            if (root / "docs/CHANGELOG.md").read_bytes() != (root / "src/forgeflow/CHANGELOG.md").read_bytes():
+                raise ValueError("portable changelog differs")
             return True, [f"self-governance coverage passed against {base}"]
         except (OSError, ValueError) as exc:
             return False, [str(exc)]

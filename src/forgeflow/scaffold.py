@@ -28,11 +28,11 @@ class TemplateScaffolder:
     BOOT_ANCHOR_TEMPLATE = (
         "<!-- forgeflow:boot-anchor:start -->\n"
         "## 🌊 ForgeFlow Session Boot Sequence (Harness Governance)\n\n"
-        "모든 작업 시작 전, AI 에이전트는 다음 규칙과 사양을 반드시 확인하고 준수해야 합니다:\n"
-        "1. **헌법 및 3대 메커니즘**: `.specify/memory/constitution.md` 및 `docs/spec/SPECKIT_HOOKS_AND_NORMS.md` 확인\n"
-        "2. **공식 사양서 참조**: `forgeflow doc list` 또는 `~/.local/forgeflow/current/lib/forgeflow/templates/spec/`의 7대 공식 사양서(`FLOW_SPEC.md` 등) 참조\n"
-        "3. **게이트 통제**: `tasks/in-progress/<id>/GATE1_REVIEW.md` 승인 전 소스 코드 작성/수정 절대 금지 (No Code Before Gate 1 Pass)\n"
-        "4. **원자적 루프 및 멈춤**: 단순 테스트 실패 시 자가 치유(Loop 2) 자율 완주, 5회 연속 실패 시 진짜 멈춤(True Stop)\n"
+        "작업 착수 전 필수 확인 및 준수:\n"
+        "1. **헌법 확인**: `.specify/memory/constitution.md` 원칙 준수\n"
+        "2. **사양서 색인 참조**: `.forgeflow/spec/README.md` 확인 후 해당 작업 단계 사양서만 선별 참조\n"
+        "3. **최신 버전 동기화 & 기억 리셋**: `.forgeflow/spec/VERSION` 확인. 버전 변경 감지 또는 세션 진입 시 과거 버전 지식 즉시 폐기(Amnesia) 및 `README.md` 재독 필수\n"
+        "4. **버전 격리**: `~/.local/share/forgeflow/packages/` 내 과거 버전 일체 참조 금지 (`current` 최신본만 사용)\n"
         "<!-- forgeflow:boot-anchor:end -->"
     )
 
@@ -443,6 +443,27 @@ class TemplateScaffolder:
             custom_path = Path(custom_template_dir) / template_name
             if custom_path.exists():
                 return custom_path.read_text(encoding="utf-8")
+
+        if template_name.startswith("spec/"):
+            sub_spec = template_name[5:]
+            try:
+                files_ref = pkg_resources.files("forgeflow.spec")
+                spec_file = files_ref.joinpath(sub_spec)
+                if spec_file.is_file():
+                    return spec_file.read_text(encoding="utf-8")
+            except Exception:
+                pass
+            local_spec_fallback = Path(__file__).resolve().parent / "spec" / sub_spec
+            if local_spec_fallback.is_file():
+                return local_spec_fallback.read_text(encoding="utf-8")
+
+        if template_name in ("CHANGELOG.md", "spec/CHANGELOG.md"):
+            for cand in [
+                Path(__file__).resolve().parent / "CHANGELOG.md",
+                Path(__file__).resolve().parent.parent.parent / "docs" / "CHANGELOG.md",
+            ]:
+                if cand.is_file():
+                    return cand.read_text(encoding="utf-8")
 
         try:
             # Modern Python 3.9+ files() API
@@ -892,6 +913,34 @@ class TemplateScaffolder:
             forgeflow_dir.mkdir(parents=True, exist_ok=True)
             created_dirs.append(".forgeflow")
 
+        # Ensure .forgeflow/spec symlink points to official spec directory
+        spec_symlink = forgeflow_dir / "spec"
+        target_spec_path = Path.home() / ".local" / "share" / "forgeflow" / "current" / "lib" / "forgeflow" / "spec"
+        if not target_spec_path.exists():
+            dev_spec = root / "src" / "forgeflow" / "spec"
+            if dev_spec.is_dir():
+                target_spec_path = dev_spec
+            else:
+                legacy_spec = Path.home() / ".local" / "forgeflow" / "current" / "lib" / "forgeflow" / "templates" / "spec"
+                if legacy_spec.exists():
+                    target_spec_path = legacy_spec
+
+        if spec_symlink.is_symlink() or spec_symlink.exists():
+            try:
+                current_target = Path(os.readlink(spec_symlink))
+                if current_target != target_spec_path:
+                    spec_symlink.unlink(missing_ok=True)
+                    os.symlink(target_spec_path, spec_symlink)
+                    updated_files.append(".forgeflow/spec")
+            except Exception:
+                pass
+        else:
+            try:
+                os.symlink(target_spec_path, spec_symlink)
+                created_files.append(".forgeflow/spec")
+            except Exception:
+                pass
+
         # 2. .forgeflow/config.json (with Date-Based Amnesia enforcement and user config preservation)
         if not skip_config:
             default_config = {
@@ -976,9 +1025,8 @@ class TemplateScaffolder:
             "## 프레임워크 공식 사양서 참조 경로 (Framework Specifications)\n"
             "에이전트는 세부 규범과 아키텍처 판단이 필요할 때 다음 공식 사양서(단일 진실 공급원)를 참조해야 한다:\n"
             "- 참조 인터페이스: `forgeflow doc list` 또는 `forgeflow doc show <spec-name>` CLI\n"
-            "- 전역 템플릿 경로: `~/.local/forgeflow/current/lib/forgeflow/templates/spec/`\n"
-            "- 7대 공식 사양서: FLOW_SPEC.md, GATES_AND_LOOPS.md, SPECKIT_HOOKS_AND_NORMS.md, "
-            "DISTRIBUTION_SPEC.md, PHILOSOPHY_AND_COMPASS.md, REFACTORING_GUIDE.md, CHANGELOG.md\n"
+            "- 공식 사양서 색인: `.forgeflow/spec/README.md`\n"
+            "- 사양서 심볼릭 링크: `.forgeflow/spec/` (전역: `~/.local/share/forgeflow/current/lib/forgeflow/spec/`)\n"
             "- 안티패턴 및 ADR: docs/spec/ANTI_PATTERNS.md, docs/adr/\n"
         )
         if not constitution_file.exists() or force:
@@ -1093,16 +1141,18 @@ class TemplateScaffolder:
                 adr_path.write_text(content, encoding="utf-8")
                 (updated_files if existed else created_files).append(f"docs/adr/{adr_name}")
 
-        # 9. .gitignore lock entries
+        # 9. .gitignore lock & local symlink entries
         gitignore_file = root / ".gitignore"
-        lock_entry = ".forgeflow/lifecycle/.*.lock\n"
+        required_entries = [".forgeflow/lifecycle/.*.lock", ".forgeflow/spec"]
         if gitignore_file.exists():
             existing_gi = gitignore_file.read_text(encoding="utf-8")
-            if ".forgeflow/lifecycle/" not in existing_gi:
-                gitignore_file.write_text(existing_gi.rstrip() + "\n" + lock_entry, encoding="utf-8")
+            missing_entries = [entry for entry in required_entries if entry not in existing_gi]
+            if missing_entries:
+                additions = "\n".join(missing_entries) + "\n"
+                gitignore_file.write_text(existing_gi.rstrip() + "\n" + additions, encoding="utf-8")
                 updated_files.append(".gitignore")
         else:
-            gitignore_file.write_text(lock_entry, encoding="utf-8")
+            gitignore_file.write_text("\n".join(required_entries) + "\n", encoding="utf-8")
             created_files.append(".gitignore")
 
         # 10. Non-destructive Session Boot Anchor in root guides (AGENTS.md / CLAUDE.md)
@@ -1292,21 +1342,26 @@ class TemplateScaffolder:
         """Locate CHANGELOG.md from installed package or source tree."""
         candidates = []
         if root:
+            candidates.append(root / "docs" / "CHANGELOG.md")
+            candidates.append(root / "src" / "forgeflow" / "CHANGELOG.md")
             candidates.append(root / "docs" / "spec" / "CHANGELOG.md")
-            candidates.append(root / "src" / "forgeflow" / "templates" / "spec" / "CHANGELOG.md")
 
         # 1. Directly packaged with current python module
+        candidates.append(Path(__file__).parent / "CHANGELOG.md")
         candidates.append(Path(__file__).parent / "templates" / "spec" / "CHANGELOG.md")
 
         # 2. Local workspace repository
         try:
             repo_root = HierarchicalRootScanner.find_root()
+            candidates.append(repo_root / "docs" / "CHANGELOG.md")
+            candidates.append(repo_root / "src" / "forgeflow" / "CHANGELOG.md")
             candidates.append(repo_root / "docs" / "spec" / "CHANGELOG.md")
-            candidates.append(repo_root / "src" / "forgeflow" / "templates" / "spec" / "CHANGELOG.md")
         except Exception:
             pass
 
         # 3. Global installed packages
+        candidates.append(Path.home() / ".local" / "share" / "forgeflow" / "CHANGELOG.md")
+        candidates.append(Path.home() / ".local" / "forgeflow" / "CHANGELOG.md")
         candidates.append(Path.home() / ".local" / "forgeflow" / "current" / "lib" / "forgeflow" / "templates" / "spec" / "CHANGELOG.md")
 
         for c in candidates:

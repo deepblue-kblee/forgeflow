@@ -21,6 +21,6 @@
 ## 프레임워크 공식 사양서 참조 경로 (Framework Specifications)
 에이전트는 세부 규범과 아키텍처 판단이 필요할 때 다음 공식 사양서(단일 진실 공급원)를 참조해야 한다:
 - 참조 인터페이스: `forgeflow doc list` 또는 `forgeflow doc show <spec-name>` CLI
-- 전역 템플릿 경로: `~/.local/forgeflow/current/lib/forgeflow/templates/spec/`
-- 7대 공식 사양서: FLOW_SPEC.md, GATES_AND_LOOPS.md, SPECKIT_HOOKS_AND_NORMS.md, DISTRIBUTION_SPEC.md, PHILOSOPHY_AND_COMPASS.md, REFACTORING_GUIDE.md, CHANGELOG.md
+- 공식 사양서 색인: `.forgeflow/spec/README.md`
+- 사양서 심볼릭 링크: `.forgeflow/spec/` (전역: `~/.local/share/forgeflow/current/lib/forgeflow/spec/`)
 - 안티패턴 및 ADR: docs/spec/ANTI_PATTERNS.md, docs/adr/

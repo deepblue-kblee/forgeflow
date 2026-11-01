@@ -810,10 +810,12 @@ def handle_upgrade(args):
         except Exception:
             pass
 
-    # Verify actual installed version from ~/.local/forgeflow/current/lib/forgeflow/_version.py if available
+    # Verify actual installed version from ~/.local/share/forgeflow/current/lib/forgeflow/_version.py if available
     installed_version = remote_version
     try:
-        active_version_file = Path.home() / ".local" / "forgeflow" / "current" / "lib" / "forgeflow" / "_version.py"
+        active_version_file = Path.home() / ".local" / "share" / "forgeflow" / "current" / "lib" / "forgeflow" / "_version.py"
+        if not active_version_file.exists():
+            active_version_file = Path.home() / ".local" / "forgeflow" / "current" / "lib" / "forgeflow" / "_version.py"
         if active_version_file.exists():
             v_match = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', active_version_file.read_text(encoding="utf-8"))
             if v_match:
@@ -887,6 +889,12 @@ def handle_update(args):
 
 OFFICIAL_SPECS = [
     {
+        "id": "README",
+        "filename": "README.md",
+        "title": "Specification Index & Situational Router",
+        "description": "공식 사양서 색인 및 작업 단계별 상황 라우팅 가이드",
+    },
+    {
         "id": "FLOW_SPEC",
         "filename": "FLOW_SPEC.md",
         "title": "5-Stage Closed-Loop Lifecycle & Branch Strategy",
@@ -926,7 +934,7 @@ OFFICIAL_SPECS = [
         "id": "CHANGELOG",
         "filename": "CHANGELOG.md",
         "title": "Release History & Evolution",
-        "description": "프레임워크 릴리즈 이력 및 변경 사항 일람",
+        "description": "프레임워크 릴리즈 이력 및 변경 사항 일람 (spec 외부 격리 보관)",
     },
 ]
 
@@ -935,31 +943,41 @@ def resolve_spec_directory(custom_path: Optional[str] = None) -> Optional[Path]:
     """Find the directory containing official specifications."""
     if custom_path:
         cp = Path(custom_path).resolve()
-        for candidate in [cp, cp / "docs" / "spec", cp / "spec", cp / "templates" / "spec"]:
+        for candidate in [cp, cp / ".forgeflow" / "spec", cp / "docs" / "spec", cp / "spec", cp / "templates" / "spec"]:
             if candidate.is_dir() and (candidate / "FLOW_SPEC.md").is_file():
                 return candidate
 
-    # 1. Local workspace docs/spec/
+    # 1. Project local .forgeflow/spec or workspace docs/spec/
     try:
         root = HierarchicalRootScanner.find_root()
+        proj_spec = root / ".forgeflow" / "spec"
+        if proj_spec.is_dir() and (proj_spec / "FLOW_SPEC.md").is_file():
+            return proj_spec
         local_spec = root / "docs" / "spec"
         if local_spec.is_dir() and (local_spec / "FLOW_SPEC.md").is_file():
             return local_spec
     except Exception:
         pass
 
-    # 2. Package templates/spec/
+    # 2. Package spec/
     try:
-        pkg_spec = Path(__file__).resolve().parent / "templates" / "spec"
+        pkg_spec = Path(__file__).resolve().parent / "spec"
         if pkg_spec.is_dir() and (pkg_spec / "FLOW_SPEC.md").is_file():
             return pkg_spec
+        legacy_pkg_spec = Path(__file__).resolve().parent / "templates" / "spec"
+        if legacy_pkg_spec.is_dir() and (legacy_pkg_spec / "FLOW_SPEC.md").is_file():
+            return legacy_pkg_spec
     except Exception:
         pass
 
-    # 3. Global user installation ~/.local/forgeflow/current/lib/forgeflow/templates/spec
-    global_spec = Path.home() / ".local" / "forgeflow" / "current" / "lib" / "forgeflow" / "templates" / "spec"
-    if global_spec.is_dir() and (global_spec / "FLOW_SPEC.md").is_file():
-        return global_spec
+    # 3. Global user installation ~/.local/share/forgeflow/current/lib/forgeflow/spec
+    global_share_spec = Path.home() / ".local" / "share" / "forgeflow" / "current" / "lib" / "forgeflow" / "spec"
+    if global_share_spec.is_dir() and (global_share_spec / "FLOW_SPEC.md").is_file():
+        return global_share_spec
+
+    global_legacy_spec = Path.home() / ".local" / "forgeflow" / "current" / "lib" / "forgeflow" / "templates" / "spec"
+    if global_legacy_spec.is_dir() and (global_legacy_spec / "FLOW_SPEC.md").is_file():
+        return global_legacy_spec
 
     return None
 
@@ -1055,6 +1073,22 @@ def handle_doc(args):
         return 1
 
     file_path = spec_dir / matched["filename"]
+    if not file_path.is_file() and matched["id"] == "CHANGELOG":
+        candidates = [
+            spec_dir.parent / "CHANGELOG.md",
+            Path.home() / ".local" / "share" / "forgeflow" / "CHANGELOG.md",
+            Path.home() / ".local" / "forgeflow" / "CHANGELOG.md",
+        ]
+        try:
+            root = HierarchicalRootScanner.find_root()
+            candidates.extend([root / "docs" / "CHANGELOG.md", root / "src" / "forgeflow" / "CHANGELOG.md", root / "CHANGELOG.md"])
+        except Exception:
+            pass
+        for cand in candidates:
+            if cand.is_file():
+                file_path = cand
+                break
+
     if not file_path.is_file():
         msg = f"Specification file not found at: {file_path}"
         if as_json:

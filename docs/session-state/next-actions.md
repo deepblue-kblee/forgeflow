@@ -2,6 +2,15 @@
 
 ## 완료된 과업 (Completed Tasks)
 
+8. **ForgeFlow 배포본 XDG 표준화 및 사양서 디렉토리 격리/최적화 (v0.1.21)**:
+   - **배포 설치 루트 XDG 표준화**: `~/.local/forgeflow` ➔ `~/.local/share/forgeflow`로 이전. CLI 심볼릭 링크(`~/.local/bin/forgeflow`) 및 `current` 포인터 정상 연동.
+   - **사양서 디렉토리 독립 & CHANGELOG 격리**: `templates/spec/`에서 `src/forgeflow/spec/`으로 분리. `CHANGELOG.md`를 `spec/` 밖(`~/.local/share/forgeflow/CHANGELOG.md`)으로 격리하여 AI 에이전트의 불필요한 과거 버전 이력 탐색 차단.
+   - **사양서 색인 및 상황별 라우터(`spec/README.md`) 신설**: 기획·명세, 사전 심사, 기술 설계, 격리 구현, QA 승인, 릴리즈 밀봉 단계별로 필수 확인 사양서만 선별 참조하도록 안내하는 라우터 구축.
+   - **버전 스탬프(`spec/VERSION`) 및 Amnesia 지침 도입**: `spec/VERSION` 한 줄 확인을 통해 버전 변경 감지 시 과거 기억을 즉시 폐기(Amnesia)하고 `README.md`를 재독하도록 강제.
+   - **타깃 프로젝트 `.forgeflow/spec` 심볼릭 링크 생성**: `forgeflow update` 및 `setup` 시 프로젝트 내 `.forgeflow/spec` 링크 자동 생성 (`~/.local/share/forgeflow/current/lib/forgeflow/spec`).
+   - **`AGENTS.md` 부트스트랩 앵커 최신화**: 중복 룰을 덜어내고 간결한 명사형 단문으로 최신화.
+   - **독푸딩 및 테스트 무결성**: 로컬 배포본 설치, 리포지토리 `forgeflow update` 독푸딩, 331개 단위 테스트 100% 통과 및 `forgeflow check --all --strict` 20개 릴리즈 전수 🟢 ALL PASSED 완료. Hermes 작업(`task-forgeflow-distribution-refactor.md`) 등록 완료.
+
 1. **마크다운 문서 전수 점검 및 최신화 완료 (v0.1.0)**:
    - `AGENTS.md`: 옛 산출물(`PRD.md`, `DESIGN.md`, `RTM`) 영구 삭제 및 최신 Spec Kit 하이브리드 아키텍처(`spec.md`, `plan.md`, `tasks.md`, `GATE1_REVIEW.md`, `QA_SIGNOFF.md`, `RELEASE_SIGNOFF.md`) 반영.
    - `AGENTS.md` & `SKILL.md`: 2026-10-20(v0.1.0 릴리즈일) 이전 과거 버전/흔적 강제 폐기 규범(Date-Based Amnesia Policy) 주입.

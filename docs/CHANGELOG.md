@@ -7,6 +7,28 @@ ForgeFlow 프레임워크의 모든 주요 변경 사항은 이 문서에 기록
 
 ---
 
+## [0.1.21] - 2026-11-01
+
+### 🚀 배포본 XDG 표준화 및 사양서 디렉토리 격리/최적화 (Distribution XDG Standardization & Spec Isolation)
+
+### Changed
+- **배포본 설치 경로 XDG 표준화**:
+  - 사용자 계정 전역 설치 경로를 기존 `~/.local/forgeflow`에서 XDG 표준 데이터 디렉토리인 `~/.local/share/forgeflow`로 이전.
+  - `install.sh`, `cli.py`, `scaffold.py`, `DISTRIBUTION_SPEC.md`, `FLOW_SPEC.md` 및 에이전트 스킬 전반의 배포 경로 일괄 정비.
+- **사양서 디렉토리 독립 및 이력 격리 (Amnesia Enforcement)**:
+  - 기존 `templates/spec/`에 혼재되어 있던 프레임워크 공식 사양서를 `src/forgeflow/spec/`으로 완전히 격리.
+  - 대용량 `CHANGELOG.md`를 `spec/` 외부인 `~/.local/share/forgeflow/CHANGELOG.md`로 분리하여 AI 에이전트의 불필요한 과거 이력 참조 원천 차단.
+- **사양서 색인 및 상황별 라우터(`spec/README.md`) 신설**:
+  - 모든 문서를 한꺼번에 무차별 탐색하지 않고, 기획·설계·구현·QA·릴리즈 등 현재 작업 단계에 부합하는 사양서만 선별 참조하도록 안내하는 라우터 도입.
+- **버전 스탬프(`spec/VERSION`) 및 기억 폐기(Amnesia) 메커니즘**:
+  - `spec/VERSION` 파일을 단일 행으로 제공하여 세션 시작 시 초경량으로 버전을 확인.
+  - 버전 변경 감지 또는 세션 진입 시 과거 버전 지식을 즉시 폐기하고 최신 `README.md`를 재독하도록 강제.
+- **타깃 프로젝트 `.forgeflow/spec` 심볼릭 링크 및 부트스트랩 최신화**:
+  - `forgeflow update` 및 `setup` 시 프로젝트 내 `.forgeflow/spec` 심볼릭 링크를 자동 연결.
+  - `AGENTS.md` 주입 부팅 앵커에서 중복된 세부 룰을 제거하고, 간결한 명사형 단문으로 최신화.
+
+---
+
 ## [0.1.20] - 2026-10-31
 
 ### 📁 설정 파일 경로 이전 (.forgeflow/config.json) 및 forgeflow update 자동 마이그레이션 (Relocate Configuration to .forgeflow/config.json with Update Migration)

@@ -141,7 +141,7 @@ ForgeFlow 전역 런타임 최신화와 현재 리포지토리의 거버넌스 �
 1. 원격 최신 릴리즈 점검:
    - `forgeflow upgrade --check --json` 명령을 실행하여 현재 로컬 전역 설치 버전과 원격 공식 버전을 비교합니다.
 2. 조건부 전역 업그레이드:
-   - 원격에 새 버전이 존재할 경우(`"upgrade_available": true`), 즉시 `forgeflow upgrade`를 호출하여 OS 사용자 계정 전역 런타임(`~/.local/forgeflow`), CLI 바이너리(`~/.local/bin/forgeflow`), 및 `~/.agents/skills/`를 최신 버전으로 자동 판올림합니다.
+   - 원격에 새 버전이 존재할 경우(`"upgrade_available": true`), 즉시 `forgeflow upgrade`를 호출하여 OS 사용자 계정 전역 런타임(`~/.local/share/forgeflow`), CLI 바이너리(`~/.local/bin/forgeflow`), 및 `~/.agents/skills/`를 최신 버전으로 자동 판올림합니다.
    - 이미 전역이 최신 버전인 경우(`"upgrade_available": false`), 불필요한 재설치를 건너뛰고 즉시 2단계로 직행합니다.
 
 ### 2단계: 현재 작업 리포지토리 사양 동기화 (Local Repo Governance Migration)

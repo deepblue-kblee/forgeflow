@@ -138,7 +138,7 @@ ForgeFlow 환경의 장기적 유지보수와 복수 프로젝트 간 일관성�
 
 1. **전역 런타임 판올림 (`forgeflow upgrade`)**:
    - `forgeflow upgrade --check`: 무설치 버전 비교 검사 (원격 최신 릴리즈와 로컬 비교).
-   - `forgeflow upgrade`: 원격 최신 버전을 다운로드하여 OS 전역 런타임(`~/.local/forgeflow`), CLI 바이너리, 및 `~/.agents/skills/`를 최신으로 승격.
+   - `forgeflow upgrade`: 원격 최신 버전을 다운로드하여 OS 전역 런타임(`~/.local/share/forgeflow`), CLI 바이너리, 및 `~/.agents/skills/`를 최신으로 승격.
 2. **로컬 리포지토리 거버넌스 사양 동기화 (`forgeflow update`)**:
    - 현재 작업 프로젝트의 `.forgeflow/config.json`(구버전 `.forgeflow.json` 시 자동 마이그레이션), `.specify/scripts/bash/`(0o755 권한 보장), 템플릿, 헌법을 현재 설치된 ForgeFlow 규격으로 갱신.
    - `tasks/in-progress/` 및 `tasks/completed/`의 사용자 작업 데이터는 100% 온전히 보존.

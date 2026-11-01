@@ -41,3 +41,4 @@ htmlcov/
 *.lock
 .*.lock
 .forgeflow/lifecycle/.*.lock
+.forgeflow/spec

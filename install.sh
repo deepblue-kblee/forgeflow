@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ForgeFlow User-Level Distribution Installer
-# Sets up ~/.local/forgeflow with versioned packages, atomic current symlink, and entrypoints in ~/.local/bin.
+# Sets up ~/.local/share/forgeflow with versioned packages, atomic current symlink, and entrypoints in ~/.local/bin.
 
 set -euo pipefail
 
@@ -46,7 +46,7 @@ if [ -z "$REPO_ROOT" ]; then
 fi
 
 # Defaults: OS user account-level installation (matches agent skills lifecycle)
-DEFAULT_PREFIX="${HOME}/.local/forgeflow"
+DEFAULT_PREFIX="${HOME}/.local/share/forgeflow"
 DEFAULT_BIN_DIR="${HOME}/.local/bin"
 PREFIX="${FORGEFLOW_INSTALL_DIR:-$DEFAULT_PREFIX}"
 BIN_DIR="${FORGEFLOW_BIN_DIR:-$DEFAULT_BIN_DIR}"
@@ -76,10 +76,10 @@ usage() {
 Usage: $0 [OPTIONS]
 
 ForgeFlow User-Level Distribution Installer
-Installs ForgeFlow for the current OS user account into ~/.local/forgeflow and ~/.local/bin.
+Installs ForgeFlow for the current OS user account into ~/.local/share/forgeflow and ~/.local/bin.
 
 Options:
-  --prefix <path>        Installation root directory (default: ~/.local/forgeflow)
+  --prefix <path>        Installation root directory (default: ~/.local/share/forgeflow)
   --bin-dir <path>       CLI executable symlink directory (default: ~/.local/bin)
   --force                Overwrite existing package if version already exists
   --keep <N>             Number of latest packages to keep (default: 5)
@@ -88,7 +88,7 @@ Options:
   -h, --help             Show this help message
 
 Examples:
-  $0                     Install for current user into ~/.local/forgeflow and ~/.local/bin
+  $0                     Install for current user into ~/.local/share/forgeflow and ~/.local/bin
   $0 --dry-run           Preview installation actions
   $0 --rollback 0.22.1   Rollback current version to 0.22.1
 USAGE
@@ -251,6 +251,20 @@ if [ -d "$SRC_DIR/templates" ]; then
   fi
 fi
 
+if [ -d "$SRC_DIR/spec" ]; then
+  log_info "Copying official specification files and router..."
+  cmd_run cp -R "$SRC_DIR/spec" "$PKG_LIB_DIR/"
+fi
+
+# Deploy isolated CHANGELOG.md outside spec/ to prefix root
+if [ -f "$REPO_ROOT/src/forgeflow/CHANGELOG.md" ]; then
+  cmd_run cp "$REPO_ROOT/src/forgeflow/CHANGELOG.md" "$PREFIX/CHANGELOG.md"
+  cmd_run chmod 644 "$PREFIX/CHANGELOG.md"
+elif [ -f "$REPO_ROOT/docs/CHANGELOG.md" ]; then
+  cmd_run cp "$REPO_ROOT/docs/CHANGELOG.md" "$PREFIX/CHANGELOG.md"
+  cmd_run chmod 644 "$PREFIX/CHANGELOG.md"
+fi
+
 if [ -d "$SRC_DIR/catalog_oracles" ]; then
   cmd_run cp -R "$SRC_DIR/catalog_oracles" "$PKG_LIB_DIR/"
 fi
@@ -387,4 +401,5 @@ fi
 
 log_info "ForgeFlow $VERSION successfully installed for user $(whoami)."
 log_info "Location: $PREFIX (CLI binaries in $BIN_DIR)"
+log_info "Active SSOT: $PREFIX/current (Do not browse $PREFIX/packages/ directly; reference current only)"
 log_info "Agent skills (setup-forgeflow, update-forgeflow) configured in ~/.agents/skills/."

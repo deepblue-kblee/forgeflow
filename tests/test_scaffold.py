@@ -163,11 +163,15 @@ class TestScaffolder(unittest.TestCase):
 
     def test_packaged_specifications_match_source_specifications(self):
         repository_root = Path(__file__).resolve().parent.parent
-        for name in ("CHANGELOG.md", "FLOW_SPEC.md", "GATES_AND_LOOPS.md"):
+        for name in ("FLOW_SPEC.md", "GATES_AND_LOOPS.md"):
             self.assertEqual(
                 TemplateScaffolder.get_template_content(f"spec/{name}"),
                 (repository_root / "docs" / "spec" / name).read_text(encoding="utf-8"),
             )
+        self.assertEqual(
+            TemplateScaffolder.get_template_content("CHANGELOG.md"),
+            (repository_root / "docs" / "CHANGELOG.md").read_text(encoding="utf-8"),
+        )
 
     def test_packaged_release_templates_match_source_templates(self):
         package_templates_root = Path(__file__).resolve().parent.parent / "src" / "forgeflow" / "templates"
