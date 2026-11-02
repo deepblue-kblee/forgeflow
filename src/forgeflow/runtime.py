@@ -145,6 +145,41 @@ main()
 '''
 
 
+def preflight_baseline(root: Path | str) -> None:
+    """Validate baseline targets without writing anything.
+
+    Migration planning uses this so an unsafe launcher or spec link becomes a
+    structured blocker before any project file is changed.
+    """
+    root = Path(root).absolute()
+    safe_project_path(root, ".forgeflow")
+    launcher = root / ".forgeflow" / "run.py"
+    if launcher.exists():
+        if launcher.is_symlink() or not launcher.is_file():
+            raise RuntimeBaselineError(".forgeflow/run.py must be a real file")
+        existing = launcher.read_text(encoding="utf-8")
+        if existing != _LAUNCHER and not existing.startswith('"""Run this project\'s checked ForgeFlow snapshot."""'):
+            raise RuntimeBaselineError(".forgeflow/run.py is a user file; preserve it before selecting a baseline")
+    spec_link = root / ".forgeflow" / "spec"
+    package = Path(__file__).parent
+    if spec_link.exists() and not spec_link.is_symlink():
+        raise RuntimeBaselineError(".forgeflow/spec is a user directory; preserve it and select a separate baseline")
+    if spec_link.is_symlink():
+        target = Path(os.readlink(spec_link))
+        absolute_target = spec_link.parent / target
+        known_global = Path.home() / ".local/share/forgeflow/current/lib/forgeflow/spec"
+        known_legacy = Path.home() / ".local/forgeflow/current/lib/forgeflow/templates/spec"
+        managed_snapshot = (
+            not target.is_absolute()
+            and len(target.parts) == 4
+            and target.parts[0] == "runtime"
+            and re.fullmatch(r"[0-9a-f]{64}", target.parts[1]) is not None
+            and target.parts[2:] == ("forgeflow", "spec")
+        )
+        if not managed_snapshot and absolute_target not in {known_global, known_legacy, package / "spec"}:
+            raise RuntimeBaselineError(".forgeflow/spec has an unrecognized user symbolic link")
+
+
 def pin_runtime(root: Path | str) -> dict[str, Any]:
     """Select a snapshot of the executing package after caller migration checks.
 

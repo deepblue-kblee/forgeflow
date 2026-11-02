@@ -16,6 +16,8 @@ Agreement의 기존 source/owner를 사용합니다. Host-created worktree는 ho
 
 Strict package는 [호환 전제](GATES_AND_LOOPS.md)에 따라 forgeflow check <id> --stage 2를 의도적으로 유지할 수 있습니다. Strict hook은 그 경로에만 적용됩니다. Tool update가 사용자 hook 교체나 active strict 재해석을 허용하지 않습니다.
 
+v0.1.24가 생성한 universal `forgeflow-gatekeeper` hook, strict constitution, Gate 1 implement override는 exact legacy bytes이고 `workflow.mode=strict`가 아닐 때만 lean 계약으로 교체합니다. 사용자 수정본과 명시적 strict 선택은 보존하고 conflict 또는 preserve로 보고합니다. hook 파일을 안전하게 부분 편집할 수 없으면 전체 교체하지 않고 필요한 수동 조치를 반환합니다.
+
 ## 실행·완료
 
 tasks.md는 구현 진행을 기록합니다. 관찰된 결과에 따라 완료하고 reviewer-owned requirements checklist marker 의미를 보존합니다. Checkbox 변경만으로 동일 구현 검증을 무효화하지 않습니다.

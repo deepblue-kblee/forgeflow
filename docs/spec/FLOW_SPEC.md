@@ -84,3 +84,5 @@ Push/통합 결과는 선언된 검증 입력을 포함한 accepted source commi
 통합 성공을 정리보다 먼저 기록합니다. 정리가 실패하면 integrated를 보존하고 정리만 재시도합니다. 다시 merge하거나 영향 없는 검증을 열지 않습니다. 외부 operation 기록을 불변 strict 패키지 안에 덧쓰지 않습니다.
 
 새 작업은 기본 workflow를 사용합니다. 기존 strict lifecycle·evidence는 명시적 호환 경로로 유지합니다. 진행 중 작업은 명시적 adoption 전까지 baseline을 유지하고 완료 archive는 보존합니다. 파일명 변경이나 가짜 승인으로 마이그레이션을 위장하지 않습니다.
+
+Legacy project 이전은 `forgeflow update --dry-run --json`의 inventory/plan으로 시작합니다. Active work, unresolved user conflict, plan drift는 write 전에 차단하며 blocker는 task/baseline/pinned command 또는 specific conflict path와 next action을 포함합니다. `update --accept <path>`는 plan이 보고한 특정 conflict만 해소하고, `update --recover <id>`는 실패한 migration record에서 managed path만 복구합니다. 적용되지 않은 conflict를 success로 보고하지 않습니다.

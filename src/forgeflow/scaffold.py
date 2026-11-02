@@ -945,6 +945,61 @@ class TemplateScaffolder:
         return sorted(set(active))
 
     @classmethod
+    def lean_asset_specs(
+        cls,
+        root: Path,
+        config: Dict[str, Any],
+        *,
+        speckit: bool,
+        skip_config: bool = False,
+        continuation_policy: str = "interactive",
+    ) -> Dict[str, Any]:
+        """Build desired lean assets without writing anything.
+
+        This is the single desired-state builder shared by ``init`` and
+        ``update``. Callers own active-work checks, baseline pinning, and
+        filesystem transactions.
+        """
+        from .runtime import safe_project_path
+
+        governance = config.get("governance", {})
+        if not isinstance(governance, dict):
+            raise ValueError("governance configuration must be an object")
+        tasks_name = governance.get("tasks_dir", "tasks")
+        if not isinstance(tasks_name, str):
+            raise ValueError("governance.tasks_dir must be a relative directory")
+        if "tasks_dir" not in governance and (root / "tasks").exists() and not (root / "tasks").is_dir():
+            tasks_name = "ff-tasks"
+        defaults = {
+            "forgeflow_version": __version__,
+            "workflow": {"mode": "lean", "checks": [], "owner": "standalone"},
+            "governance": {"tasks_dir": tasks_name, "max_loop_budget": 5,
+                           "auto_create_branch": False, "continuation_policy": continuation_policy},
+        }
+        desired_config = cls.deep_merge_config(config, defaults)
+        config_file = safe_project_path(root, ".forgeflow/config.json")
+        desired: Dict[Path, tuple[str, bool]] = {}
+        if not skip_config:
+            desired[config_file] = (
+                json.dumps(desired_config, indent=2, ensure_ascii=False) + "\n",
+                False,
+            )
+        tasks_dir = safe_project_path(root, tasks_name)
+        desired[tasks_dir / "README.md"] = (cls.TASKS_GUARD_CONTENT, False)
+        if speckit:
+            for name in ("check-prerequisites.sh", "common.sh", "create-new-feature.sh", "resolve-template.sh", "setup-plan.sh", "setup-tasks.sh"):
+                path = safe_project_path(root, f".specify/scripts/bash/{name}")
+                desired[path] = (cls.get_template_content(f"speckit/scripts/bash/{name}"), True)
+            for name in ("spec-template.md", "plan-template.md", "tasks-template.md", "checklist-template.md"):
+                path = safe_project_path(root, f".specify/templates/{name}")
+                desired[path] = (cls.get_template_content(f"speckit/templates/{name}"), False)
+        return {
+            "desired": desired,
+            "desired_config": desired_config,
+            "tasks_name": tasks_name,
+        }
+
+    @classmethod
     def _scaffold_lean(cls, root: Path, *, speckit: bool, skip_config: bool = False,
                        continuation_policy: str = "interactive") -> Dict[str, Any]:
         from .runtime import assert_runtime, package_identity, pin_runtime, safe_project_path
@@ -976,37 +1031,19 @@ class TemplateScaffolder:
             if baseline.get("identity") != package_identity():
                 raise ValueError("Active work keeps its recorded rules; use the pinned command or workflow adopt with an impact reason: " + ", ".join(active))
             assert_runtime(root, baseline)
-        governance = config.get("governance", {})
-        if not isinstance(governance, dict):
-            raise ValueError("governance configuration must be an object")
-        tasks_name = governance.get("tasks_dir", "tasks")
-        if not isinstance(tasks_name, str):
-            raise ValueError("governance.tasks_dir must be a relative directory")
-        if "tasks_dir" not in governance and (root / "tasks").exists() and not (root / "tasks").is_dir():
-            tasks_name = "ff-tasks"
-        defaults = {
-            "forgeflow_version": __version__,
-            "workflow": {"mode": "lean", "checks": [], "owner": "standalone"},
-            "governance": {"tasks_dir": tasks_name, "max_loop_budget": 5,
-                           "auto_create_branch": False, "continuation_policy": continuation_policy},
-        }
-        desired_config = cls.deep_merge_config(config, defaults)
+        spec = cls.lean_asset_specs(
+            root,
+            config,
+            speckit=speckit,
+            skip_config=skip_config,
+            continuation_policy=continuation_policy,
+        )
+        tasks_name = spec["tasks_name"]
         created_dirs: List[str] = []
         created_files: List[str] = []
         updated_files: List[str] = []
         skipped_files: List[str] = []
-        desired: Dict[Path, tuple[str, bool]] = {}
-        if not skip_config:
-            desired[config_file] = (json.dumps(desired_config, indent=2, ensure_ascii=False) + "\n", False)
-        tasks_dir = safe_project_path(root, tasks_name)
-        desired[tasks_dir / "README.md"] = (cls.TASKS_GUARD_CONTENT, False)
-        if speckit:
-            for name in ("check-prerequisites.sh", "common.sh", "create-new-feature.sh", "resolve-template.sh", "setup-plan.sh", "setup-tasks.sh"):
-                path = safe_project_path(root, f".specify/scripts/bash/{name}")
-                desired[path] = (cls.get_template_content(f"speckit/scripts/bash/{name}"), True)
-            for name in ("spec-template.md", "plan-template.md", "tasks-template.md", "checklist-template.md"):
-                path = safe_project_path(root, f".specify/templates/{name}")
-                desired[path] = (cls.get_template_content(f"speckit/templates/{name}"), False)
+        desired: Dict[Path, tuple[str, bool]] = spec["desired"]
         for path in desired:
             safe_project_path(root, path.relative_to(root).as_posix())
             if path.exists():
@@ -1148,85 +1185,25 @@ class TemplateScaffolder:
         return results
 
     @classmethod
-    def update_repo_governance(cls, root: Path) -> Dict[str, Any]:
-        """Adopt a baseline only when no active work depends on existing rules.
+    def update_repo_governance(
+        cls,
+        root: Path,
+        *,
+        dry_run: bool = False,
+        accept_paths: Sequence[str] = (),
+    ) -> Dict[str, Any]:
+        """Plan and apply a project migration through the shared migration layer."""
+        from .migration import update_project
 
-        User configuration and files take precedence. The legacy config is kept
-        as recovery evidence after a modern-path copy is created.
-        """
-        from ._version import __version__
-        from .runtime import safe_project_path
-        root = Path(root).absolute()
-        if root.is_symlink():
-            raise ValueError("Project root must not be a symbolic link")
-        root = root.resolve(strict=True)
-        modern_config = safe_project_path(root, ".forgeflow/config.json")
-        legacy_config = safe_project_path(root, ".forgeflow.json")
-        if not modern_config.exists() and not legacy_config.exists():
-            raise ValueError(f"Target directory '{root}' is not a valid ForgeFlow repository (.forgeflow/config.json missing).")
-
-        is_legacy_migration = not modern_config.exists() and legacy_config.exists()
-        source_config = legacy_config if is_legacy_migration else modern_config
-
-        try:
-            config_data = json.loads(source_config.read_text(encoding="utf-8"))
-        except Exception as e:
-            raise ValueError(f"Failed to parse {source_config.name}: {e}")
-
-        if not isinstance(config_data, dict) or not isinstance(config_data.get("governance", {}), dict):
-            raise ValueError("ForgeFlow configuration and governance must be objects")
-        active = cls._active_work(root, config_data)
-        if active:
-            raise ValueError(
-                "Active work keeps its recorded runtime and rules; use its pinned command. "
-                "For lean tasks explicitly run workflow adopt with a reviewed impact reason; "
-                "finish or explicitly migrate legacy packages before update: " + ", ".join(active)
-            )
-        previous_version = config_data.get("forgeflow_version", "unknown")
-
-        tasks_dir_name = config_data.get("governance", {}).get("tasks_dir", "tasks")
-        default_config = {
-            "forgeflow_version": __version__,
-            "workflow": {"mode": "lean", "checks": [], "owner": "standalone"},
-            "governance": {
-                "tasks_dir": tasks_dir_name,
-                "max_loop_budget": 5,
-            },
-            "paths": {
-                "in_progress": f"{tasks_dir_name}/in-progress",
-                "completed": f"{tasks_dir_name}/completed",
-            },
-        }
-
-        # Deep merge default schema into existing config, strictly preserving any user-customized keys/values
-        merged_config = cls.deep_merge_config(config_data, default_config)
-        merged_config["forgeflow_version"] = __version__
-
-        # Add missing optional assets only when the project already uses Spec Kit.
-        scaffold_res = cls._scaffold_lean(root, speckit=(root / ".specify").is_dir(), skip_config=True)
-
-        # Check if config actually modified compared to original on-disk content or needs migration
-        is_config_changed = (merged_config != config_data) or is_legacy_migration
-        if is_config_changed or not modern_config.exists():
-            modern_config.parent.mkdir(parents=True, exist_ok=True)
-            modern_config.write_text(json.dumps(merged_config, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-
-        updated_files = [f for f in scaffold_res.get("updated_files", []) if f not in {".forgeflow/config.json", ".forgeflow.json"}]
-        if is_config_changed:
-            updated_files.insert(0, ".forgeflow/config.json")
-
-        changelog_summary = cls.extract_changelog_range(previous_version, __version__, changelog_file=cls.find_changelog_file(root))
-
-        return {
-            "status": "success",
-            "previous_version": previous_version,
-            "current_version": __version__,
-            "target_dir": str(root),
-            "updated_files": sorted(list(set(updated_files))),
-            "changelog_summary": changelog_summary,
-            "baseline": scaffold_res.get("baseline"),
-            "preserved_legacy_config": legacy_config.exists(),
-        }
+        result = update_project(Path(root), dry_run=dry_run, accept_paths=accept_paths)
+        runtime = result.get("project_runtime") or {}
+        result["baseline"] = (
+            {"identity": runtime.get("next_identity"), "version": runtime.get("version")}
+            if runtime.get("next_identity") else None
+        )
+        result.setdefault("target_dir", str(Path(root).absolute()))
+        result.setdefault("updated_files", [])
+        return result
 
     @classmethod
     def find_changelog_file(cls, root: Optional[Path] = None) -> Optional[Path]:

@@ -12,6 +12,8 @@
 | 기본 QA/candidate/prose seal | 실제 content/동작 검증·Git 실행 ID 허용·strict 명시 호환 | [ADR-005](../adr/005-lean-workflow-and-execution-ownership.md) |
 | Current 조용한 변경·날짜 기준 삭제 | 실행 baseline 고정·명시적 adoption·사용자 파일 보존 | [배포](DISTRIBUTION_SPEC.md) |
 | 가짜 성공·acceptance 하향 | 실제 동작 수정·영향 검사 재실행 | [검증](GATES_AND_LOOPS.md) |
+| installer exit 0·version 문자열만으로 upgrade 성공 | 실제 package/entrypoint/spec/skills 검증 | [배포](DISTRIBUTION_SPEC.md) |
+| version/mtime/파일명으로 framework 소유권 추정 | exact content hash·managed manifest로 판정 | [배포](DISTRIBUTION_SPEC.md) |
 | 무진전 반복 조사 | 증거·진행 기록·stop rule | [검증](GATES_AND_LOOPS.md) |
 | Core의 third-party runtime dependency | Python 3.10+ 표준 라이브러리 | [판단 원칙](PHILOSOPHY_AND_COMPASS.md) |
 

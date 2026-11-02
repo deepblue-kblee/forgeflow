@@ -52,11 +52,13 @@ description: 진행 중 작업의 기준을 유지하고 사용자 설정을 보
 # update-forgeflow
 
 1. 요청한 범위가 전역 upgrade인지 프로젝트 update인지 확인하고 이미 받은 권한을 재사용합니다. 현재 project/active task baseline을 먼저 읽습니다.
-2. forgeflow upgrade --check --json으로 가용 버전을 읽을 수 있습니다. 전역 변경이 승인된 범위일 때만 forgeflow upgrade를 실행합니다. 새 버전이 있다는 사실만으로 자동 설치하지 않습니다.
-3. forgeflow update --json으로 현재 프로젝트 통합을 갱신합니다. 사용자 config/constitution/hooks/templates와 historical evidence를 보존합니다. --force로 사용자 보존 규칙을 우회하지 않습니다.
-4. 활성 workflow나 strict package 때문에 update가 거부되면 해당 작업의 pinned runtime을 계속 사용합니다. state/evidence를 삭제해서 차단을 없애지 않습니다.
-5. 새 기준을 채택하는 작업은 영향 검토 후 forgeflow workflow adopt <id> --reason "이유" --impact "영향 검토"를 실행합니다. 기존 권한을 확장하지 않고 영향받는 검증만 갱신합니다. strict package policy migration은 별도 적용 범위를 검토합니다.
-6. 실제 변경 파일, 이전/새 content identity, 적용된 검증과 남은 작업을 보고합니다. 버전 문자열만으로 같은 배포라고 단정하지 않습니다.
+2. forgeflow upgrade --check --json으로 가용 version, source revision, source identity, identity_comparison을 읽습니다. 전역 변경이 승인된 범위일 때만 forgeflow upgrade --revision <ref>를 실행합니다. 새 버전이 있다는 사실만으로 자동 설치하지 않습니다.
+3. forgeflow update --dry-run --json으로 created/updated/removed/preserved/conflicts/blockers를 먼저 확인합니다. 그다음 forgeflow update --json으로 적용합니다. 사용자 config/constitution/hooks/templates와 historical evidence를 보존하며 --force를 보존 우회 수단으로 사용하지 않습니다.
+4. status needs-action이면 파일을 쓰지 않은 상태입니다. blocker의 task/baseline/pinned command 또는 conflict path를 확인하고, 지정된 conflict만 forgeflow update --accept <path>로 해소합니다. 하나의 --force로 전체 보호를 해제하지 않습니다.
+5. upgrade 성공은 installer exit 0이 아니라 실제 package metadata, source revision/identity, entrypoint version, spec, 생성 skills 검증으로 판단합니다. 검증 실패는 성공으로 보고하지 않습니다.
+6. 활성 workflow나 strict package 때문에 update가 차단되면 해당 작업의 pinned runtime을 계속 사용합니다. state/evidence를 삭제해서 차단을 없애지 않습니다.
+7. 새 기준을 채택하는 작업은 영향 검토 후 forgeflow workflow adopt <id> --reason "이유" --impact "영향 검토"를 실행합니다. 기존 권한을 확장하지 않고 영향받는 검증만 갱신합니다. strict package policy migration은 별도 적용 범위를 검토합니다.
+8. 실제 변경 파일, 이전/새 distribution 및 project runtime identity, 적용된 검증과 남은 작업을 보고합니다. 버전 문자열만으로 같은 배포라고 단정하지 않습니다.
 
 공식 계약: .forgeflow/spec/DISTRIBUTION_SPEC.md. 생성 skills와 runtime/spec/templates는 같은 배포 단위로 전달됩니다.
 EOF

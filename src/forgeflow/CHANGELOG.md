@@ -7,6 +7,24 @@ ForgeFlow 프레임워크의 모든 주요 변경 사항은 이 문서에 기록
 
 ---
 
+## [0.1.26] - 2026-11-02
+
+### Legacy upgrade/update migration and verified distribution delivery (Issue #12)
+
+### Added
+- `forgeflow update --dry-run --json` inventory/plan과 `applied`/`no-op`/`needs-action`/`failed-rolled-back`/`partial`/`error` status·exit 계약. Active work, unresolved conflict, plan drift는 write 전에 차단.
+- v0.1.24 실제 생성물 hash registry와 framework-owned/managed manifest 기반 ownership 판정. strict constitution·universal hook·implement override를 lean 계약으로 이전하고 사용자 수정본은 보존·conflict 보고.
+- `update --accept <path>` 특정 conflict 해소, `update --recover <id>` managed path 복구, mutation backup과 operation record.
+- `forgeflow upgrade --revision <ref>`와 동일 revision의 version/installer 취득, 실제 package metadata·entrypoint·spec·skills·source identity 검증.
+- installer staging/atomic publish, activation 실패 시 이전 current/bin/skills/CHANGELOG 복구, retention을 probe 이후로 이동.
+
+### Fixed
+- installer exit 0만으로 성공을 보고하거나 설치되지 않은 remote version을 실제 version으로 반환하던 문제.
+- update가 실제 생성 파일을 보고하지 않고 legacy strict 지침·hook을 남기던 문제.
+- Python 3.10에서 `Optional`/`Any` 미import annotation으로 `get_type_hints`가 실패하던 문제.
+
+---
+
 ## [0.1.25] - 2026-11-02
 
 ### Lean development workflow and explicit finalization

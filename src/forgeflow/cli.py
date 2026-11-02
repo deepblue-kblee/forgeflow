@@ -3,8 +3,11 @@
 ForgeFlow & Harness Unified CLI Entrypoints
 """
 
+from __future__ import annotations
+
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -370,7 +373,12 @@ def parse_forgeflow_args(args=None):
     upgrade_parser.add_argument(
         "--repo-url",
         default="https://raw.githubusercontent.com/deepblue-kblee/forgeflow/main",
-        help="Remote repository base URL",
+        help="Remote repository base URL (version and installer are fetched from the same revision)",
+    )
+    upgrade_parser.add_argument(
+        "--revision",
+        default=None,
+        help="Immutable revision/ref to fetch and install (default: ref in --repo-url, normally main)",
     )
 
     # Command: update
@@ -385,6 +393,24 @@ def parse_forgeflow_args(args=None):
     )
     update_parser.add_argument("--json", action="store_true", help="Output machine-readable JSON")
     update_parser.add_argument("--quiet", action="store_true", help="Suppress non-error output")
+    update_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Inventory and plan changes without writing files",
+    )
+    update_parser.add_argument(
+        "--accept",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help="Replace one known user-modified conflict path with the framework version (repeatable)",
+    )
+    update_parser.add_argument(
+        "--recover",
+        default=None,
+        metavar="ID",
+        help="Restore managed paths from a recorded failed/partial migration",
+    )
 
     # Command: doc (alias: spec)
     doc_parser = subparsers.add_parser(
@@ -715,24 +741,42 @@ def parse_version_tuple(v_str):
     return tuple(map(int, nums)) if nums else (0,)
 
 
+def _with_revision(repo_url: str, revision: str | None) -> tuple[str, str]:
+    base = repo_url.rstrip("/")
+    if base.startswith("https://raw.githubusercontent.com/"):
+        root, current_ref = base.rsplit("/", 1)
+        ref = revision or current_ref
+        return f"{root}/{ref}", ref
+    return base, revision or "main"
+
+
 def handle_upgrade(args):
-    """Handle the forgeflow upgrade command to check or upgrade global installation."""
+    """Check or install a verified distribution from one resolved revision."""
+    import hashlib
     import re
-    import subprocess
     import tempfile
-    import time
-    import urllib.error
     import urllib.request
+
+    from .distribution import (
+        derive_clone_url,
+        read_package_metadata,
+        resolve_installation_target,
+        resolve_revision,
+        verify_installed_distribution,
+    )
 
     repo_url = getattr(args, "repo_url", "https://raw.githubusercontent.com/deepblue-kblee/forgeflow/main").rstrip("/")
     check_only = getattr(args, "check", False)
     force = getattr(args, "force", False)
     as_json = getattr(args, "json", False)
-
-    timestamp = int(time.time())
-    delim = "&" if "?" in repo_url else "?"
-    version_url = f"{repo_url}/src/forgeflow/_version.py{delim}t={timestamp}"
-    install_url = f"{repo_url}/install.sh{delim}t={timestamp}"
+    base_url, ref = _with_revision(repo_url, getattr(args, "revision", None))
+    if not re.match(r"^(https?|file)://", base_url) or any(char in base_url for char in ("\n", "\r")):
+        message = f"Invalid repository URL: {base_url}"
+        if as_json:
+            print(json.dumps({"status": "error", "message": message, "current_version": __version__}))
+        else:
+            print(f"❌ ForgeFlow Upgrade Error: {message}", file=sys.stderr)
+        return 1
 
     http_headers = {
         "User-Agent": "ForgeFlow-CLI",
@@ -740,21 +784,22 @@ def handle_upgrade(args):
         "Pragma": "no-cache",
     }
 
-    remote_version = None
+    def fetch(url: str, timeout: int = 10) -> bytes:
+        request = urllib.request.Request(url, headers=http_headers)
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return response.read()
+
     try:
-        req = urllib.request.Request(version_url, headers=http_headers)
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            content = resp.read().decode("utf-8")
-            match = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', content)
-            if match:
-                remote_version = match.group(1).strip()
+        version_bytes = fetch(f"{base_url}/src/forgeflow/_version.py", timeout=5)
+        version_text = version_bytes.decode("utf-8")
+        match = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', version_text)
+        remote_version = match.group(1).strip() if match else None
     except Exception as e:
         if as_json:
             print(json.dumps({"status": "error", "message": f"Failed to fetch remote version: {e}", "current_version": __version__}))
         else:
-            print(f"❌ ForgeFlow Upgrade Error: Failed to check remote version from {version_url}: {e}", file=sys.stderr)
+            print(f"❌ ForgeFlow Upgrade Error: Failed to check remote version from {base_url}: {e}", file=sys.stderr)
         return 1
-
     if not remote_version:
         if as_json:
             print(json.dumps({"status": "error", "message": "Failed to parse remote version", "current_version": __version__}))
@@ -762,22 +807,70 @@ def handle_upgrade(args):
             print("❌ ForgeFlow Upgrade Error: Remote version could not be parsed.", file=sys.stderr)
         return 1
 
-    current_tuple = parse_version_tuple(__version__)
-    remote_tuple = parse_version_tuple(remote_version)
-    is_upgrade_available = remote_tuple > current_tuple
-    is_remote_older = remote_tuple < current_tuple
+    try:
+        installer_bytes = fetch(f"{base_url}/install.sh")
+    except Exception as e:
+        if as_json:
+            print(json.dumps({"status": "error", "message": f"Failed to download installer: {e}"}))
+        else:
+            print(f"❌ ForgeFlow Upgrade Error: Failed to download installer from {base_url}: {e}", file=sys.stderr)
+        return 1
+    if not installer_bytes.startswith(b"#!") or b"forgeflow" not in installer_bytes.lower():
+        message = "Downloaded installer is not a recognizable ForgeFlow installer."
+        if as_json:
+            print(json.dumps({"status": "error", "message": message}))
+        else:
+            print(f"❌ ForgeFlow Upgrade Error: {message}", file=sys.stderr)
+        return 1
 
+    source_identity = hashlib.sha256(version_bytes + b"\0" + installer_bytes).hexdigest()
+    clone_url = derive_clone_url(base_url)
+    resolved_revision = resolve_revision(clone_url, ref)
+    revision_resolved = bool(re.fullmatch(r"[0-9a-f]{40}", resolved_revision))
+    target = resolve_installation_target()
+    current_metadata = read_package_metadata(target["prefix"])
+    installed = bool(current_metadata.get("version"))
+    current_installed_version = current_metadata.get("version") if installed else None
+    installed_revision = current_metadata.get("source_revision") or current_metadata.get("git_commit")
+    current_source_identity = current_metadata.get("source_identity")
+    if not installed:
+        identity_comparison = "not-installed"
+    elif current_source_identity:
+        identity_comparison = "same" if current_source_identity == source_identity else "different"
+    else:
+        identity_comparison = "unknown"
+
+    current_tuple = parse_version_tuple(current_installed_version or "0")
+    remote_tuple = parse_version_tuple(remote_version)
+    same_version_different_build = (
+        installed
+        and remote_tuple == current_tuple
+        and (
+            identity_comparison == "different"
+            or (
+                installed_revision
+                and resolved_revision
+                and installed_revision != resolved_revision
+            )
+        )
+    )
+    if same_version_different_build and identity_comparison != "different":
+        identity_comparison = "different"
+    is_upgrade_available = (not installed) or remote_tuple > current_tuple or same_version_different_build
+    is_remote_older = installed and remote_tuple < current_tuple
     warning_msg = None
     if is_remote_older:
         warning_msg = (
-            f"Remote version (v{remote_version}) is older than local version (v{__version__}). "
+            f"Remote version (v{remote_version}) is older than installed version (v{current_installed_version}). "
             "GitHub CDN cache may still be updating."
         )
 
     if not as_json:
         print("🔍 Checking ForgeFlow version...")
-        print(f"• Current version: v{__version__}")
-        print(f"• Latest version:  v{remote_version}")
+        print(f"• Installed version: {'v' + current_installed_version if installed else 'not installed'}")
+        print(f"• Latest version:    v{remote_version}")
+        print(f"• Source revision:   {resolved_revision}")
+        print(f"• Source identity:   {source_identity[:16]} ({identity_comparison})")
         if warning_msg:
             print(f"⚠️  Warning: {warning_msg}")
         print()
@@ -785,36 +878,57 @@ def handle_upgrade(args):
     if check_only:
         payload = {
             "status": "success",
-            "current_version": __version__,
+            "installed": installed,
+            "current_version": current_installed_version,
             "remote_version": remote_version,
             "upgrade_available": is_upgrade_available,
+            "source_identity": source_identity,
+            "source_revision": resolved_revision,
+            "revision_resolved": revision_resolved,
+            "identity_comparison": identity_comparison,
+            "target": target,
         }
+        if same_version_different_build:
+            payload["reason"] = "same-version-different-build"
         if warning_msg:
             payload["warning"] = warning_msg
         if as_json:
             print(json.dumps(payload))
         else:
             if is_upgrade_available:
-                print(f"🚀 New version available: v{__version__} ➔ v{remote_version}")
-                print("   Run 'forgeflow upgrade' to upgrade.")
+                print(f"🚀 Update available: {'not installed' if not installed else 'v' + current_installed_version} ➔ v{remote_version}")
+                print("   Run 'forgeflow upgrade' to install.")
             else:
-                print(f"✅ ForgeFlow is up to date (v{__version__}).")
+                print(f"✅ ForgeFlow is up to date (v{current_installed_version}).")
         return 0
 
-    if not is_upgrade_available and not force:
+    if not installed and not force:
+        message = (
+            f"No installed distribution was found at {target['prefix']}. "
+            "Run install.sh explicitly or use 'forgeflow upgrade --force' after reviewing the target."
+        )
+        if as_json:
+            print(json.dumps({"status": "error", "message": message, "upgraded": False, "installed": False, "target": target}))
+        else:
+            print(f"❌ ForgeFlow Upgrade Error: {message}", file=sys.stderr)
+        return 1
+
+    if installed and not is_upgrade_available and not force:
         if as_json:
             payload = {
                 "status": "success",
-                "message": f"ForgeFlow is already up to date (v{__version__}).",
-                "current_version": __version__,
+                "message": f"ForgeFlow is already up to date (v{current_installed_version}).",
+                "current_version": current_installed_version,
                 "remote_version": remote_version,
                 "upgraded": False,
+                "source_identity": source_identity,
+                "identity_comparison": identity_comparison,
             }
             if warning_msg:
                 payload["warning"] = warning_msg
             print(json.dumps(payload))
         else:
-            print(f"✅ ForgeFlow is already up to date (v{__version__}). (Use --force to reinstall)")
+            print(f"✅ ForgeFlow is already up to date (v{current_installed_version}). (Use --force to reinstall)")
         return 0
 
     if not force and not as_json:
@@ -824,80 +938,128 @@ def handle_upgrade(args):
         except (EOFError, KeyboardInterrupt):
             print("\nUpgrade cancelled.")
             return 0
-
         if answer not in ("y", "yes"):
             print("Upgrade cancelled.")
             return 0
 
-    if not as_json:
-        action_ing = "Upgrading ForgeFlow" if is_upgrade_available else "Reinstalling ForgeFlow"
-        print(f"📦 {action_ing}: v{__version__} ➔ v{remote_version}...")
-
-    try:
-        req = urllib.request.Request(install_url, headers=http_headers)
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            installer_code = resp.read().decode("utf-8")
-    except Exception as e:
+    if not clone_url:
+        message = (
+            "Cannot prove the installation source for this repository URL. "
+            "Set FORGEFLOW_REPO to the matching Git repository or use a raw.githubusercontent.com URL."
+        )
         if as_json:
-            print(json.dumps({"status": "error", "message": f"Failed to download installer: {e}"}))
+            print(json.dumps({"status": "error", "message": message, "upgraded": False}))
         else:
-            print(f"❌ ForgeFlow Upgrade Error: Failed to download installer from {install_url}: {e}", file=sys.stderr)
+            print(f"❌ ForgeFlow Upgrade Error: {message}", file=sys.stderr)
+        return 1
+    if not revision_resolved and not base_url.startswith("file://"):
+        message = (
+            f"Could not resolve an immutable commit for revision {resolved_revision!r}. "
+            "Installation is refused to avoid mixing different builds; retry with a commit SHA."
+        )
+        if as_json:
+            print(json.dumps({
+                "status": "error", "message": message, "upgraded": False,
+                "source_revision": resolved_revision,
+            }))
+        else:
+            print(f"❌ ForgeFlow Upgrade Error: {message}", file=sys.stderr)
         return 1
 
-    with tempfile.NamedTemporaryFile("w", suffix=".sh", delete=False) as tf:
-        tf.write(installer_code)
-        temp_installer = tf.name
+    if not as_json:
+        action_ing = "Upgrading ForgeFlow" if is_upgrade_available else "Reinstalling ForgeFlow"
+        print(f"📦 {action_ing}: v{current_installed_version} ➔ v{remote_version}...")
 
-    try:
-        cmd = ["bash", temp_installer, "--force"]
-        res = subprocess.run(cmd, capture_output=as_json, text=True)
-        if res.returncode != 0:
-            if as_json:
-                print(json.dumps({"status": "error", "message": "Installer exited with failure", "returncode": res.returncode, "stderr": res.stderr}))
-            else:
-                print(f"❌ ForgeFlow Upgrade Error: Installer exited with code {res.returncode}", file=sys.stderr)
-            return res.returncode
-    finally:
+    with tempfile.TemporaryDirectory(prefix="forgeflow-upgrade-") as temp_dir:
+        temp_installer = Path(temp_dir) / "install.sh"
+        temp_installer.write_bytes(installer_bytes)
+        env = dict(os.environ)
+        env.update({
+            "FORGEFLOW_INSTALL_DIR": target["prefix"],
+            "FORGEFLOW_BIN_DIR": target["bin_dir"],
+            "FORGEFLOW_SKILLS_DIR": target["skills_dir"],
+            "FORGEFLOW_REPO": clone_url,
+            "FORGEFLOW_REVISION": resolved_revision,
+            "FORGEFLOW_EXPECTED_VERSION": remote_version,
+            "FORGEFLOW_SOURCE_IDENTITY": source_identity,
+        })
         try:
-            Path(temp_installer).unlink(missing_ok=True)
-        except Exception:
-            pass
+            result = subprocess.run(
+                ["bash", str(temp_installer), "--force"],
+                capture_output=as_json,
+                text=True,
+                env=env,
+            )
+        except Exception as e:
+            if as_json:
+                print(json.dumps({"status": "error", "message": f"Installer could not run: {e}", "upgraded": False}))
+            else:
+                print(f"❌ ForgeFlow Upgrade Error: Installer could not run: {e}", file=sys.stderr)
+            return 1
+        if result.returncode != 0:
+            if as_json:
+                print(json.dumps({
+                    "status": "error",
+                    "message": "Installer exited with failure",
+                    "returncode": result.returncode,
+                    "stderr": result.stderr,
+                    "upgraded": False,
+                }))
+            else:
+                print(f"❌ ForgeFlow Upgrade Error: Installer exited with code {result.returncode}", file=sys.stderr)
+            return result.returncode
 
-    # Verify actual installed version from ~/.local/share/forgeflow/current/lib/forgeflow/_version.py if available
+    verification = verify_installed_distribution(
+        target,
+        expected_version=remote_version,
+        expected_source_identity=source_identity,
+        expected_revision=resolved_revision,
+    )
+    if not verification["ok"]:
+        if as_json:
+            print(json.dumps({
+                "status": "error",
+                "message": "Installer exited successfully but the installed distribution could not be verified.",
+                "upgraded": False,
+                "errors": verification["errors"],
+                "observed": verification["observed"],
+                "target": target,
+            }))
+        else:
+            print("❌ ForgeFlow Upgrade Error: Installed distribution could not be verified.", file=sys.stderr)
+            for error in verification["errors"]:
+                print(f"   • {error}", file=sys.stderr)
+        return 1
+
     installed_version = remote_version
-    try:
-        active_version_file = Path.home() / ".local" / "share" / "forgeflow" / "current" / "lib" / "forgeflow" / "_version.py"
-        if not active_version_file.exists():
-            active_version_file = Path.home() / ".local" / "forgeflow" / "current" / "lib" / "forgeflow" / "_version.py"
-        if active_version_file.exists():
-            v_match = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', active_version_file.read_text(encoding="utf-8"))
-            if v_match:
-                active_ver = v_match.group(1).strip()
-                if parse_version_tuple(active_ver) >= parse_version_tuple(remote_version):
-                    installed_version = active_ver
-    except Exception:
-        pass
-
     highlights = None
     try:
-        from .scaffold import TemplateScaffolder
-        highlights = TemplateScaffolder.extract_changelog_section(installed_version)
+        changelog = Path(target["prefix"]) / "current" / "lib" / "forgeflow" / "CHANGELOG.md"
+        if changelog.is_file():
+            from .scaffold import TemplateScaffolder
+            highlights = TemplateScaffolder.extract_changelog_section(installed_version, changelog_file=changelog)
     except Exception:
         pass
-
     if as_json:
         payload = {
             "status": "success",
             "message": f"Successfully upgraded ForgeFlow to v{installed_version}.",
-            "previous_version": __version__,
+            "previous_version": current_installed_version,
             "current_version": installed_version,
             "upgraded": True,
+            "source_identity": source_identity,
+            "source_revision": resolved_revision,
+            "identity_comparison": identity_comparison,
+            "target": target,
+            "observed": verification["observed"],
         }
         if highlights:
             payload["release_highlights"] = highlights
         print(json.dumps(payload))
     else:
         print(f"🎉 Successfully upgraded ForgeFlow to v{installed_version}!")
+        print(f"   Installed at: {target['prefix']}")
+        print(f"   Entrypoint:   {target['bin_dir']}/forgeflow")
         if highlights:
             print("\n------------------------------------------------------------")
             print(f"📋 Release Highlights for v{installed_version}:")
@@ -908,13 +1070,45 @@ def handle_upgrade(args):
 
 
 def handle_update(args):
-    """Handle the forgeflow update command to refresh local repository governance specifications."""
+    """Handle the forgeflow update command with plan/apply migration semantics."""
     target_dir = Path(args.path).resolve() if getattr(args, "path", None) else HierarchicalRootScanner.find_root()
     as_json = getattr(args, "json", False)
     quiet = getattr(args, "quiet", False)
+    dry_run = getattr(args, "dry_run", False)
+    accept_paths = getattr(args, "accept", []) or []
+    recover = getattr(args, "recover", None)
+    from .migration import EXIT_CODES, recover_migration
+
+    if recover:
+        if dry_run:
+            message = "--dry-run and --recover cannot be combined: recovery writes project files."
+            if as_json:
+                print(json.dumps({"status": "error", "message": message}))
+            else:
+                print(f"❌ ForgeFlow Update Error: {message}", file=sys.stderr)
+            return 1
+        try:
+            res = recover_migration(target_dir, recover)
+        except Exception as e:
+            if as_json:
+                print(json.dumps({"status": "error", "message": str(e), "target_dir": str(target_dir)}))
+            else:
+                print(f"❌ ForgeFlow Update Error: {e}", file=sys.stderr)
+            return 1
+        if as_json:
+            print(json.dumps(res, indent=2, ensure_ascii=False))
+        elif not quiet:
+            print(f"Recovered migration {res['migration']}: {len(res['restored_paths'])} path(s) restored.")
+            for error in res.get("restore_errors", []):
+                print(f"  ⚠️ {error}", file=sys.stderr)
+        return EXIT_CODES.get(res["status"], 1)
 
     try:
-        res = TemplateScaffolder.update_repo_governance(target_dir)
+        res = TemplateScaffolder.update_repo_governance(
+            target_dir,
+            dry_run=dry_run,
+            accept_paths=accept_paths,
+        )
     except Exception as e:
         if as_json:
             print(json.dumps({"status": "error", "message": str(e), "target_dir": str(target_dir)}))
@@ -925,19 +1119,55 @@ def handle_update(args):
     if as_json:
         print(json.dumps(res, indent=2, ensure_ascii=False))
     elif not quiet:
-        print(f"🎉 Successfully updated ForgeFlow repository governance specifications!")
+        print(f"ForgeFlow update: {res['status']}")
         print(f"   Project Root: {res['target_dir']}")
-        print(f"   Version:      v{res['previous_version']} ➔ v{res['current_version']}")
-        print(f"   Updated Files ({len(res['updated_files'])}):")
-        for f in res["updated_files"]:
-            print(f"     • {f}")
-        if res.get("changelog_summary"):
+        print(f"   Version:      v{res.get('previous_version')} ➔ v{res.get('current_version')}")
+        distribution = res.get("distribution") or {}
+        runtime = res.get("project_runtime") or {}
+        if distribution.get("identity"):
+            print(f"   Distribution: v{distribution.get('version')} ({distribution['identity'][:16]})")
+        if runtime.get("identity"):
+            print(f"   Runtime:      {runtime['identity'][:16]} ➔ {(runtime.get('next_identity') or runtime['identity'])[:16]}")
+        if dry_run:
+            print("   Mode:         dry-run (no files written)")
+        for label, key in (
+            ("Created", "created_files"),
+            ("Created dirs", "created_dirs"),
+            ("Updated", "updated_files"),
+            ("Removed", "removed_files"),
+            ("Preserved", "preserved_files"),
+        ):
+            values = res.get(key) or []
+            if values:
+                print(f"   {label} ({len(values)}):")
+                for value in values:
+                    print(f"     • {value}")
+        warnings = res.get("warnings") or []
+        if warnings:
+            print(f"   Warnings ({len(warnings)}):")
+            for warning in warnings:
+                print(f"     • {warning}")
+        conflicts = res.get("conflicts") or []
+        if conflicts:
+            print(f"   Conflicts ({len(conflicts)}):")
+            for item in conflicts:
+                print(f"     • {item['path']}: {item['reason']}")
+        blockers = res.get("blockers") or []
+        if blockers:
+            print(f"   Blockers ({len(blockers)}):")
+            for item in blockers:
+                print(f"     • [{item['kind']}] {item.get('path') or item.get('task') or ''}: {item['reason']}")
+        if res.get("next_actions"):
+            print("   Next actions:")
+            for action in res["next_actions"]:
+                print(f"     → {action}")
+        if res.get("changelog_summary") and res["status"] == "applied":
             print("\n------------------------------------------------------------")
             print("📋 What's Changed in this update:")
             print(res["changelog_summary"])
             print("------------------------------------------------------------")
             print("💡 전체 세부 사양서 열람: 'forgeflow doc show changelog'")
-    return 0
+    return EXIT_CODES.get(res["status"], 1)
 
 
 OFFICIAL_SPECS = [

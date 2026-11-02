@@ -201,15 +201,21 @@ class TestUpdateCLI(unittest.TestCase):
 
         # Run forgeflow update
         res = TemplateScaffolder.update_repo_governance(self.root)
-        self.assertEqual(res["status"], "success")
+        self.assertIn(res["status"], {"applied", "no-op"})
         self.assertEqual(res["current_version"], __version__)
 
-        # .forgeflow/config.json must not be in updated_files because it did not change
-        self.assertNotIn(".forgeflow/config.json", res["updated_files"])
+        # Missing schema keys may be added once; user values stay authoritative.
+        second = TemplateScaffolder.update_repo_governance(self.root)
+        self.assertEqual(second["status"], "no-op")
+        self.assertEqual(second["created_files"], [])
+        self.assertEqual(second["updated_files"], [])
 
-        # Content must remain intact
+        # User values remain authoritative; only missing schema keys are added.
         after = json.loads(config_path.read_text(encoding="utf-8"))
-        self.assertEqual(after, custom_config)
+        self.assertEqual(after["my_key"], "my_value")
+        self.assertEqual(after["governance"]["strict_mode"], False)
+        self.assertEqual(after["governance"]["max_loop_budget"], 7)
+        self.assertEqual(after["workflow"]["mode"], "lean")
 
     def test_scaffold_force_preserves_custom_keys(self):
         config_path = self.root / ".forgeflow" / "config.json"
@@ -294,14 +300,15 @@ class TestUpdateCLI(unittest.TestCase):
 
         # 2. Run update
         res = TemplateScaffolder.update_repo_governance(self.root)
-        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["status"], "applied")
         self.assertEqual(res["previous_version"], "0.1.18")
         self.assertEqual(res["current_version"], __version__)
 
         # 3. Modern configuration is created; original is retained for recovery.
         self.assertTrue(modern_path.exists())
         self.assertTrue(legacy_path.exists())
-        self.assertIn(".forgeflow/config.json", res["updated_files"])
+        self.assertIn(".forgeflow/config.json", res["created_files"])
+        self.assertIn(".forgeflow.json", res["preserved_files"])
 
         # 4. Verify preserved contents in migrated modern config
         migrated_data = json.loads(modern_path.read_text(encoding="utf-8"))

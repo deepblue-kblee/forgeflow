@@ -29,7 +29,7 @@ ForgeFlow의 이번 default 전환은 governance·operation authority를 바꾸�
 
 검증 freshness는 관련 content와 명령·환경을 따릅니다. Git ref·commit ID는 push/merge 같은 실행 사실을 기록할 수 있습니다. 기본 workflow는 QA-SHA/Candidate-SHA seal이나 prose-spec hash를 요구하지 않습니다.
 
-관련 없는 dirty 파일은 그대로 둡니다. 관련 미commit 변경이 특정 operation을 막으면 소유권을 해소합니다. 모든 작업에 global clean status를 강제하거나 사용자의 변경을 몰래 commit/stash/reset하지 않습니다.
+관련 없는 dirty 파일은 그대로 둡니다. 관련 미commit 변경이 특정 operation을 막으면 소유권을 해소합니다. 모든 작업에 global clean status를 강제하거나 사용자의 변경을 몰래 commit/stash/reset하지 않습니다. Legacy migration은 active work, staged target 변경, 진행 중 Git operation을 write 전에 blocker로 보고하며, 적용 중 실패하면 이번 operation의 managed 변경만 복구하고 사용자 파일과 index는 보존합니다.
 
 Push/통합 전에는 선언된 verification input의 working content가 accepted source commit tree에 포함되는지 확인합니다. Scope 밖의 미commit dependency를 사용해 PASS했지만 source commit에 그 내용이 없으면 verify-committed-inputs로 해당 operation을 차단하고 파일을 보존합니다. 기본 all-tracked 검사는 보수적으로 이 차이를 포함합니다. 실제로 무관한 파일은 verification_paths로 검증 입력을 정확히 선언해 제외할 수 있지만, 필요한 dependency를 검증에서 빼거나 몰래 commit해 통과시키지 않습니다. 필요하면 owning tool이 준비한 committed 결과를 독립 검증합니다.
 

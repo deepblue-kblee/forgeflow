@@ -179,17 +179,22 @@ class TestRuntimeBaseline(unittest.TestCase):
         state.parent.mkdir()
         for status in ("planned", "verification-failed", "ready", "integrated"):
             state.write_text(json.dumps({"status": status}))
-            with self.assertRaisesRegex(ValueError, "workflow adopt"):
-                TemplateScaffolder.update_repo_governance(self.root)
+            result = TemplateScaffolder.update_repo_governance(self.root)
+            self.assertEqual(result["status"], "needs-action")
+            self.assertTrue(any(item["kind"] == "active-work" for item in result["blockers"]))
             self.assertEqual(config_path.read_bytes(), original)
             self.assertEqual(baseline_path.read_bytes(), baseline)
         state.write_text(json.dumps({"status": "ready", "finalization_complete": True}))
-        self.assertEqual(TemplateScaffolder.update_repo_governance(self.root)["status"], "success")
+        self.assertIn(
+            TemplateScaffolder.update_repo_governance(self.root)["status"],
+            {"applied", "no-op"},
+        )
         package = self.root / "tasks/in-progress/v0.1.24-unfinished"
         package.mkdir()
         (package / "spec.md").write_text("# unfinished\n")
-        with self.assertRaisesRegex(ValueError, "v0.1.24-unfinished"):
-            TemplateScaffolder.update_repo_governance(self.root)
+        result = TemplateScaffolder.update_repo_governance(self.root)
+        self.assertEqual(result["status"], "needs-action")
+        self.assertTrue(any(item.get("task") == "v0.1.24-unfinished" for item in result["blockers"]))
         self.assertEqual((package / "spec.md").read_text(), "# unfinished\n")
 
 
