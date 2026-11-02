@@ -57,11 +57,17 @@ ready는 검증 완료, integrated는 통합 확인, cleaned는 허용된 정리
 ## 업데이트와 작업 기준 고정
 
 ~~~bash
-forgeflow upgrade --check
-forgeflow update
+forgeflow upgrade --check --json
+forgeflow upgrade --revision <ref>
+forgeflow update --dry-run --json
+forgeflow update --json
+forgeflow update --accept .specify/memory/constitution.md
+forgeflow update --recover <migration-id>
 ~~~
 
-전역 upgrade와 프로젝트 update는 별도 범위예요. 진행 중 작업은 runtime/spec/templates의 content identity와 실행 가능한 .forgeflow/runtime/<digest>/ snapshot을 유지해요. 전역 current가 바뀌거나 같은 버전의 bytes가 달라져도 새 규칙을 조용히 적용하지 않아요. Task state의 baseline.command(통상 python3 .forgeflow/run.py --runtime-identity <digest>)로 해당 기준을 계속 실행해요. 여러 task의 기준이 다르면 이 명령의 doc show 또는 baseline.path/spec를 사용하고 프로젝트 기본 spec 링크로 대체하지 않아요.
+전역 upgrade와 프로젝트 update는 별도 범위예요. upgrade는 같은 revision의 version/installer를 사용하고 실제 package metadata, entrypoint version, spec, 생성 skills를 검증한 뒤에만 성공을 보고해요. update는 dry-run plan을 먼저 보여주며 active work, 사용자 수정 conflict, plan drift가 있으면 파일을 쓰지 않아요. `--accept`는 plan이 보고한 특정 conflict만 framework bytes로 해소하고, `--recover`는 실패한 migration의 managed path만 복구해요.
+
+진행 중 작업은 runtime/spec/templates의 content identity와 실행 가능한 .forgeflow/runtime/<digest>/ snapshot을 유지해요. 전역 current가 바뀌거나 같은 버전의 bytes가 달라져도 새 규칙을 조용히 적용하지 않아요. Task state의 baseline.command(통상 python3 .forgeflow/run.py --runtime-identity <digest>)로 해당 기준을 계속 실행해요. 여러 task의 기준이 다르면 이 명령의 doc show 또는 baseline.path/spec를 사용하고 프로젝트 기본 spec 링크로 대체하지 않아요.
 
 기준 변경은 영향 검토 후 명시적으로 수행해요.
 

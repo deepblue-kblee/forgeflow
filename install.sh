@@ -14,36 +14,16 @@ NC='\033[0m' # No Color
 
 # Determine script & repository directory (supports both local and remote curl execution)
 TEMP_DIR=""
+STAGING_DIR=""
 cleanup_temp() {
+  if [ -n "${STAGING_DIR:-}" ] && [ -d "$STAGING_DIR" ]; then
+    rm -rf "$STAGING_DIR"
+  fi
   if [ -n "$TEMP_DIR" ] && [ -d "$TEMP_DIR" ]; then
     rm -rf "$TEMP_DIR"
   fi
 }
 trap cleanup_temp EXIT
-
-REPO_ROOT=""
-if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]}" ]; then
-  CANDIDATE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-  if [ -f "$CANDIDATE_DIR/src/forgeflow/_version.py" ]; then
-    REPO_ROOT="$CANDIDATE_DIR"
-  fi
-fi
-
-if [ -z "$REPO_ROOT" ]; then
-  TEMP_DIR="$(mktemp -d)"
-  FORGEFLOW_REPO="${FORGEFLOW_REPO:-https://github.com/deepblue-kblee/forgeflow}"
-  echo "Downloading ForgeFlow distribution package from $FORGEFLOW_REPO..."
-  if command -v git >/dev/null 2>&1; then
-    git clone --depth 1 "$FORGEFLOW_REPO" "$TEMP_DIR/forgeflow" >/dev/null 2>&1 || {
-      curl -sSL "${FORGEFLOW_REPO}/archive/refs/heads/main.tar.gz" | tar -xz -C "$TEMP_DIR"
-      mv "$TEMP_DIR"/forgeflow-* "$TEMP_DIR/forgeflow"
-    }
-  else
-    curl -sSL "${FORGEFLOW_REPO}/archive/refs/heads/main.tar.gz" | tar -xz -C "$TEMP_DIR"
-    mv "$TEMP_DIR"/forgeflow-* "$TEMP_DIR/forgeflow"
-  fi
-  REPO_ROOT="$TEMP_DIR/forgeflow"
-fi
 
 # Defaults: OS user account-level installation (matches agent skills lifecycle)
 DEFAULT_PREFIX="${HOME}/.local/share/forgeflow"
@@ -242,6 +222,24 @@ if [ -n "$ROLLBACK_VERSION" ]; then
     log_error "Target package version directory does not exist: $TARGET_PKG_DIR"
     exit 1
   fi
+  if [ ! -f "$TARGET_PKG_DIR/scripts/install-skills.sh" ]; then
+    log_error "Selected package has no restorable skill generator. Keep the current build active; reinstall the desired complete distribution explicitly."
+    exit 1
+  fi
+  if [ ! -f "$TARGET_PKG_DIR/lib/forgeflow/_version.py" ] || [ ! -f "$TARGET_PKG_DIR/lib/forgeflow/spec/README.md" ]; then
+    log_error "Target package is incomplete: $TARGET_PKG_DIR"
+    exit 1
+  fi
+  TARGET_VERSION="$(grep -E '^__version__\s*=' "$TARGET_PKG_DIR/lib/forgeflow/_version.py" | sed -E 's/.*["'"'"']([^"'"'"']+)["'"'"'].*/\1/')"
+  TARGET_REQUEST_VERSION="${ROLLBACK_VERSION%%-*}"
+  if [ "$TARGET_VERSION" != "$TARGET_REQUEST_VERSION" ]; then
+    log_error "Target package version ($TARGET_VERSION) does not match the requested rollback ($ROLLBACK_VERSION)."
+    exit 1
+  fi
+  PREVIOUS_ROLLBACK_CURRENT=""
+  if [ -L "$PREFIX/current" ]; then
+    PREVIOUS_ROLLBACK_CURRENT="$(readlink "$PREFIX/current")"
+  fi
 
   # Restore the generator belonging to this build, never the current checkout's
   # newer instructions. Legacy packages without it cannot be safely activated.
@@ -255,8 +253,69 @@ if [ -n "$ROLLBACK_VERSION" ]; then
   cmd_run ln -sfn "$PREFIX/bin/forgeflow" "$BIN_DIR/forgeflow"
   cmd_run ln -sfn "$PREFIX/bin/harness" "$BIN_DIR/harness"
 
+  if [ "$DRY_RUN" = false ]; then
+    if ! ROLLBACK_VER=$("$BIN_DIR/forgeflow" version 2>/dev/null) || [[ ! "$ROLLBACK_VER" =~ ForgeFlow\ v([0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?) ]] || [ "${BASH_REMATCH[1]}" != "$TARGET_REQUEST_VERSION" ]; then
+      if [ -n "$PREVIOUS_ROLLBACK_CURRENT" ]; then
+        ln -sfn "$PREVIOUS_ROLLBACK_CURRENT" "$PREFIX/current"
+      fi
+      log_error "Rollback entrypoint probe failed; previous current was restored when available."
+      exit 1
+    fi
+    if ! "$BIN_DIR/forgeflow" workflow --help >/dev/null; then
+      if [ -n "$PREVIOUS_ROLLBACK_CURRENT" ]; then
+        ln -sfn "$PREVIOUS_ROLLBACK_CURRENT" "$PREFIX/current"
+      fi
+      log_error "Rollback workflow probe failed; previous current was restored when available."
+      exit 1
+    fi
+    for skill_name in setup-forgeflow update-forgeflow forgeflow forgeflow-graphify; do
+      if [ ! -f "${FORGEFLOW_SKILLS_DIR:-${HOME}/.agents/skills}/$skill_name/SKILL.md" ]; then
+        log_error "Rollback skills are incomplete: $skill_name"
+        exit 1
+      fi
+    done
+  fi
+
   log_info "Successfully rolled back active version to $ROLLBACK_VERSION."
   exit 0
+fi
+
+# Resolve the source only after argument parsing and rollback handling. A
+# remote --dry-run may download a temporary checkout, but never writes PREFIX.
+REPO_ROOT=""
+if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]}" ]; then
+  CANDIDATE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+  if [ -f "$CANDIDATE_DIR/src/forgeflow/_version.py" ]; then
+    REPO_ROOT="$CANDIDATE_DIR"
+  fi
+fi
+
+if [ -z "$REPO_ROOT" ]; then
+  TEMP_DIR="$(mktemp -d)"
+  FORGEFLOW_REPO="${FORGEFLOW_REPO:-https://github.com/deepblue-kblee/forgeflow}"
+  FORGEFLOW_REVISION="${FORGEFLOW_REVISION:-main}"
+  echo "Downloading ForgeFlow distribution package from $FORGEFLOW_REPO ($FORGEFLOW_REVISION)..."
+  if command -v git >/dev/null 2>&1; then
+    if ! git clone --depth 1 --branch "$FORGEFLOW_REVISION" "$FORGEFLOW_REPO" "$TEMP_DIR/forgeflow" >/dev/null 2>&1; then
+      git clone "$FORGEFLOW_REPO" "$TEMP_DIR/forgeflow" >/dev/null 2>&1 && \
+        git -C "$TEMP_DIR/forgeflow" checkout --detach "$FORGEFLOW_REVISION" >/dev/null 2>&1 || {
+          log_error "Could not check out the selected revision: $FORGEFLOW_REVISION"
+          exit 1
+        }
+    fi
+  else
+    if [[ "$FORGEFLOW_REVISION" =~ ^[0-9a-f]{40}$ ]]; then
+      ARCHIVE_REF="$FORGEFLOW_REVISION"
+    else
+      ARCHIVE_REF="refs/heads/$FORGEFLOW_REVISION"
+    fi
+    curl -sSL "${FORGEFLOW_REPO}/archive/${ARCHIVE_REF}.tar.gz" | tar -xz -C "$TEMP_DIR" || {
+      log_error "Could not download the selected revision archive: $FORGEFLOW_REVISION"
+      exit 1
+    }
+    mv "$TEMP_DIR"/forgeflow-* "$TEMP_DIR/forgeflow"
+  fi
+  REPO_ROOT="$TEMP_DIR/forgeflow"
 fi
 
 # Detect version from canonical source
@@ -269,6 +328,15 @@ fi
 VERSION=$(grep -E '^__version__\s*=' "$VERSION_FILE" | sed -E 's/.*["'"'"']([^"'"'"']+)["'"'"'].*/\1/')
 if [ -z "$VERSION" ]; then
   log_error "Failed to extract version from $VERSION_FILE"
+  exit 1
+fi
+if [[ ! "$VERSION" =~ ^[0-9A-Za-z][0-9A-Za-z._+-]*$ ]]; then
+  log_error "Refusing unsafe version string in $VERSION_FILE"
+  exit 1
+fi
+
+if [ -n "${FORGEFLOW_EXPECTED_VERSION:-}" ] && [ "$VERSION" != "$FORGEFLOW_EXPECTED_VERSION" ]; then
+  log_error "Selected source version ($VERSION) does not match the requested distribution ($FORGEFLOW_EXPECTED_VERSION)."
   exit 1
 fi
 
@@ -314,8 +382,10 @@ PY
 )
 PACKAGE_KEY="${VERSION}-${BUILD_ID:0:16}"
 
-# Package target directories
-PKG_DIR="$PREFIX/packages/$PACKAGE_KEY"
+# Build in staging first; only a complete package becomes visible under its key.
+FINAL_PKG_DIR="$PREFIX/packages/$PACKAGE_KEY"
+STAGING_DIR="$PREFIX/packages/.staging-$PACKAGE_KEY-$$"
+PKG_DIR="$STAGING_DIR"
 PKG_LIB_DIR="$PKG_DIR/lib/forgeflow"
 PKG_BIN_DIR="$PKG_DIR/bin"
 
@@ -329,8 +399,8 @@ if [ -n "$CURRENT_ACTIVE" ]; then
   log_info "Detected existing active installation: $CURRENT_ACTIVE"
 fi
 
-if [ -d "$PKG_DIR" ] && [ "$FORCE" = false ]; then
-  log_info "Package version $VERSION already exists at $PKG_DIR. Synchronizing files to latest build..."
+if [ -d "$FINAL_PKG_DIR" ] && [ "$FORCE" = false ]; then
+  log_info "Package build $PACKAGE_KEY already exists. Rebuilding the same content-addressed package..."
 fi
 
 log_info "Installing ForgeFlow $VERSION into $PREFIX..."
@@ -380,15 +450,12 @@ if [ -d "$SRC_DIR/adr" ]; then
   cmd_run cp -R "$SRC_DIR/adr" "$PKG_LIB_DIR/"
 fi
 
-# Keep history in the package snapshot and the compatibility prefix location.
+# Keep history in the package snapshot. The prefix-level compatibility copy is
+# written only after the previous CHANGELOG has been backed up for rollback.
 if [ -f "$REPO_ROOT/src/forgeflow/CHANGELOG.md" ]; then
   cmd_run cp "$REPO_ROOT/src/forgeflow/CHANGELOG.md" "$PKG_LIB_DIR/CHANGELOG.md"
-  cmd_run cp "$REPO_ROOT/src/forgeflow/CHANGELOG.md" "$PREFIX/CHANGELOG.md"
-  cmd_run chmod 644 "$PREFIX/CHANGELOG.md"
 elif [ -f "$REPO_ROOT/docs/CHANGELOG.md" ]; then
   cmd_run cp "$REPO_ROOT/docs/CHANGELOG.md" "$PKG_LIB_DIR/CHANGELOG.md"
-  cmd_run cp "$REPO_ROOT/docs/CHANGELOG.md" "$PREFIX/CHANGELOG.md"
-  cmd_run chmod 644 "$PREFIX/CHANGELOG.md"
 fi
 
 if [ -d "$SRC_DIR/catalog_oracles" ]; then
@@ -424,7 +491,12 @@ else
   "git_commit": "$GIT_COMMIT",
   "installed_by": "$USER",
   "python_version": "$PYTHON_VERSION",
-  "python_interpreter": "$PYTHON_CANDIDATE"
+  "python_interpreter": "$PYTHON_CANDIDATE",
+  "source_revision": "${FORGEFLOW_REVISION:-}",
+  "source_identity": "${FORGEFLOW_SOURCE_IDENTITY:-}",
+  "install_dir": "$PREFIX",
+  "bin_dir": "$BIN_DIR",
+  "skills_dir": "${FORGEFLOW_SKILLS_DIR:-${HOME}/.agents/skills}"
 }
 EOF
   chmod 644 "$METADATA_FILE"
@@ -474,25 +546,144 @@ EOF
   ln -sfn "forgeflow" "$PKG_BIN_DIR/harness"
 fi
 
-# 5. Generate instructions from this exact package before changing current.
-generate_package_skills "$PKG_DIR/scripts/install-skills.sh" "${FORGEFLOW_INSTALL_SPECKIT_SKILLS:-0}" || exit 1
+# 5. Validate staged completeness, then publish the immutable package key.
+if [ "$DRY_RUN" = false ]; then
+  for required in "$PKG_LIB_DIR/_version.py" "$PKG_LIB_DIR/spec/VERSION" "$PKG_LIB_DIR/spec/README.md" "$PKG_DIR/scripts/install-skills.sh" "$PKG_BIN_DIR/forgeflow" "$PKG_DIR/package.json"; do
+    if [ ! -f "$required" ]; then
+      log_error "Staged distribution is incomplete: $required"
+      exit 1
+    fi
+  done
+  if [ "$(grep -E '^__version__\s*=' "$PKG_LIB_DIR/_version.py" | sed -E 's/.*["'"'"']([^"'"'"']+)["'"'"'].*/\1/')" != "$VERSION" ]; then
+    log_error "Staged runtime version does not match the selected distribution."
+    exit 1
+  fi
+  if [ -f "$FINAL_PKG_DIR/package.json" ] && [ -f "$FINAL_PKG_DIR/lib/forgeflow/_version.py" ] && [ -f "$FINAL_PKG_DIR/scripts/install-skills.sh" ]; then
+    log_info "Reusing the existing complete content-addressed package: $PACKAGE_KEY"
+    rm -rf "$STAGING_DIR"
+    STAGING_DIR=""
+  else
+    rm -rf "$FINAL_PKG_DIR"
+    mv "$PKG_DIR" "$FINAL_PKG_DIR"
+    STAGING_DIR=""
+  fi
+  PKG_DIR="$FINAL_PKG_DIR"
+  PKG_LIB_DIR="$PKG_DIR/lib/forgeflow"
+  PKG_BIN_DIR="$PKG_DIR/bin"
+fi
 
-# Activate the selected CLI/spec/skill distribution.
+# 6. Preserve the previous activation so a failed probe can restore it.
+SKILLS_TARGET="${FORGEFLOW_SKILLS_DIR:-${HOME}/.agents/skills}"
+ACTIVATION_BACKUP="$PREFIX/.activation-backup-$$"
+PREVIOUS_CURRENT=""
+if [ -L "$PREFIX/current" ]; then
+  PREVIOUS_CURRENT="$(readlink "$PREFIX/current")"
+fi
+if [ "$DRY_RUN" = false ]; then
+  mkdir -p "$ACTIVATION_BACKUP/skills" || exit 1
+  for skill_name in setup-forgeflow update-forgeflow forgeflow forgeflow-graphify; do
+    if [ -f "$SKILLS_TARGET/$skill_name/SKILL.md" ]; then
+      cp -p "$SKILLS_TARGET/$skill_name/SKILL.md" "$ACTIVATION_BACKUP/skills/$skill_name" || exit 1
+    fi
+  done
+  if [ -f "$PREFIX/CHANGELOG.md" ]; then
+    cp -p "$PREFIX/CHANGELOG.md" "$ACTIVATION_BACKUP/CHANGELOG.md" || exit 1
+  fi
+fi
+
+if [ "$DRY_RUN" = false ]; then
+  if [ -f "$PKG_LIB_DIR/CHANGELOG.md" ]; then
+    cp "$PKG_LIB_DIR/CHANGELOG.md" "$PREFIX/CHANGELOG.md"
+    chmod 644 "$PREFIX/CHANGELOG.md"
+  fi
+fi
+
+restore_activation() {
+  set +e
+  if [ -n "$PREVIOUS_CURRENT" ]; then
+    ln -sfn "$PREVIOUS_CURRENT" "$PREFIX/current"
+    ln -sfn "../current/bin/forgeflow" "$PREFIX/bin/forgeflow"
+    ln -sfn "../current/bin/harness" "$PREFIX/bin/harness"
+  else
+    rm -f "$PREFIX/current" "$PREFIX/bin/forgeflow" "$PREFIX/bin/harness"
+    rm -f "$BIN_DIR/forgeflow" "$BIN_DIR/harness"
+    rm -rf "$PKG_DIR"
+  fi
+  if [ -d "$ACTIVATION_BACKUP/skills" ]; then
+    for skill_name in setup-forgeflow update-forgeflow forgeflow forgeflow-graphify; do
+      if [ -f "$ACTIVATION_BACKUP/skills/$skill_name" ]; then
+        mkdir -p "$SKILLS_TARGET/$skill_name"
+        cp -p "$ACTIVATION_BACKUP/skills/$skill_name" "$SKILLS_TARGET/$skill_name/SKILL.md"
+      else
+        rm -f "$SKILLS_TARGET/$skill_name/SKILL.md"
+        rmdir "$SKILLS_TARGET/$skill_name" 2>/dev/null || true
+      fi
+    done
+  fi
+  if [ -f "$ACTIVATION_BACKUP/CHANGELOG.md" ]; then
+    cp -p "$ACTIVATION_BACKUP/CHANGELOG.md" "$PREFIX/CHANGELOG.md"
+  else
+    rm -f "$PREFIX/CHANGELOG.md"
+  fi
+  set -e
+  log_warn "Activation failed; restored the previous current/bin/skills/CHANGELOG state."
+}
+
+fail_activation() {
+  restore_activation
+  rm -rf "$ACTIVATION_BACKUP"
+  log_error "$1"
+  exit 1
+}
+
+# 7. Generate instructions from this exact package before changing current.
+if ! generate_package_skills "$PKG_DIR/scripts/install-skills.sh" "${FORGEFLOW_INSTALL_SPECKIT_SKILLS:-0}"; then
+  restore_activation
+  rm -rf "$ACTIVATION_BACKUP"
+  exit 1
+fi
+
+# 8. Activate the selected CLI/spec/skill distribution.
 log_info "Switching active build symlink (current -> packages/$PACKAGE_KEY)..."
-cmd_run ln -sfn "packages/$PACKAGE_KEY" "$PREFIX/current"
-cmd_run ln -sfn "../current/bin/forgeflow" "$PREFIX/bin/forgeflow"
-cmd_run ln -sfn "../current/bin/harness" "$PREFIX/bin/harness"
+cmd_run ln -sfn "packages/$PACKAGE_KEY" "$PREFIX/current" || fail_activation "Could not switch the current pointer."
+cmd_run ln -sfn "../current/bin/forgeflow" "$PREFIX/bin/forgeflow" || fail_activation "Could not update the prefix CLI link."
+cmd_run ln -sfn "../current/bin/harness" "$PREFIX/bin/harness" || fail_activation "Could not update the prefix harness link."
 
-# 6. Global entrypoints in user BIN_DIR (~/.local/bin)
-cmd_run mkdir -p "$BIN_DIR"
+cmd_run mkdir -p "$BIN_DIR" || fail_activation "Could not create BIN_DIR: $BIN_DIR"
 log_info "Linking CLI commands in $BIN_DIR..."
-cmd_run ln -sfn "$PREFIX/bin/forgeflow" "$BIN_DIR/forgeflow"
-cmd_run ln -sfn "$PREFIX/bin/harness" "$BIN_DIR/harness"
+cmd_run ln -sfn "$PREFIX/bin/forgeflow" "$BIN_DIR/forgeflow" || fail_activation "Could not link $BIN_DIR/forgeflow."
+cmd_run ln -sfn "$PREFIX/bin/harness" "$BIN_DIR/harness" || fail_activation "Could not link $BIN_DIR/harness."
 
-# 7. Retention cleanup
+# 9. Post-activation verification must pass before retention removes recovery input.
+log_info "Verifying installation..."
+if [ "$DRY_RUN" = false ]; then
+  if [ ! -x "$BIN_DIR/forgeflow" ]; then
+    fail_activation "$BIN_DIR/forgeflow was not found or is not executable."
+  fi
+  if ! INSTALLED_VER=$("$BIN_DIR/forgeflow" version 2>/dev/null); then
+    fail_activation "Installed entrypoint failed its version probe."
+  fi
+  if [[ ! "$INSTALLED_VER" =~ ForgeFlow\ v([0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?) ]] || [ "${BASH_REMATCH[1]}" != "$VERSION" ]; then
+    fail_activation "Installed entrypoint version does not match the selected build: $INSTALLED_VER"
+  fi
+  if ! "$BIN_DIR/forgeflow" workflow --help >/dev/null; then
+    fail_activation "Installed workflow entrypoint failed its delivery probe."
+  fi
+  if [ ! -f "$PREFIX/current/lib/forgeflow/spec/README.md" ]; then
+    fail_activation "Installed package has no spec entrypoint."
+  fi
+  for skill_name in setup-forgeflow update-forgeflow forgeflow forgeflow-graphify; do
+    if [ ! -f "$SKILLS_TARGET/$skill_name/SKILL.md" ]; then
+      fail_activation "Installed skills are incomplete: $skill_name"
+    fi
+  done
+  log_info "Verified: $INSTALLED_VER"
+fi
+
+# 10. Retention runs only after activation and probes succeeded.
 if [ "$KEEP_COUNT" -gt 0 ] && [ "$DRY_RUN" = false ]; then
   log_info "Applying package retention policy (keeping latest $KEEP_COUNT packages)..."
-  INSTALLED_PKGS=$(find "$PREFIX/packages" -mindepth 1 -maxdepth 1 -type d | sort -V)
+  INSTALLED_PKGS=$(find "$PREFIX/packages" -mindepth 1 -maxdepth 1 -type d ! -name '.staging-*' | sort -V)
   TOTAL_COUNT=$(echo "$INSTALLED_PKGS" | grep -v '^$' | wc -l | tr -d ' ')
   if [ "$TOTAL_COUNT" -gt "$KEEP_COUNT" ]; then
     REMOVE_COUNT=$((TOTAL_COUNT - KEEP_COUNT))
@@ -505,27 +696,8 @@ if [ "$KEEP_COUNT" -gt 0 ] && [ "$DRY_RUN" = false ]; then
   fi
 fi
 
-# 8. Post-installation verification
-log_info "Verifying installation..."
 if [ "$DRY_RUN" = false ]; then
-  if [ -x "$BIN_DIR/forgeflow" ]; then
-    if ! INSTALLED_VER=$("$BIN_DIR/forgeflow" version 2>/dev/null); then
-      log_error "Installed entrypoint failed its version probe."
-      exit 1
-    fi
-    if [[ "$INSTALLED_VER" != *"v$VERSION"* ]]; then
-      log_error "Installed entrypoint version does not match the selected build."
-      exit 1
-    fi
-    if ! "$BIN_DIR/forgeflow" workflow --help >/dev/null; then
-      log_error "Installed workflow entrypoint failed its delivery probe."
-      exit 1
-    fi
-    log_info "Verified: $INSTALLED_VER"
-  else
-    log_error "$BIN_DIR/forgeflow was not found or is not executable."
-    exit 1
-  fi
+  rm -rf "$ACTIVATION_BACKUP"
 fi
 
 # 10. Check if BIN_DIR is in PATH

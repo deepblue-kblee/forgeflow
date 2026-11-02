@@ -397,7 +397,7 @@ class TestInstalledWorkflowE2E(unittest.TestCase):
         document = self.cli("doc", "show", "FLOW_SPEC", "--json", command=pinned)
         self.assertNotIn("Replacement acceptance marker.", document["content"])
         original_config = (self.root / ".forgeflow/config.json").read_bytes()
-        self.run_command([*replacement, "update", "--json"], expected=1)
+        self.run_command([*replacement, "update", "--json"], expected=3)
         self.assertEqual((self.root / ".forgeflow/config.json").read_bytes(), original_config)
         adopted = self.cli("workflow", "adopt", "discount", "--reason", "acceptance test adopts replacement",
                            "--impact", "reviewed changed spec and repeat affected checks", "--json", command=replacement)

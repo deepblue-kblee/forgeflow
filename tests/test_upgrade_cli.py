@@ -1,10 +1,65 @@
 import json
+import tempfile
 import unittest
-from unittest.mock import patch, MagicMock
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+from forgeflow._version import __version__
 from forgeflow.cli import parse_version_tuple, handle_upgrade, parse_forgeflow_args
 
 
+def _response(payload: bytes) -> MagicMock:
+    response = MagicMock()
+    response.read.return_value = payload
+    response.__enter__.return_value = response
+    return response
+
+
+def _target(root: Path) -> dict:
+    return {
+        "prefix": str(root / "prefix"),
+        "bin_dir": str(root / "bin"),
+        "skills_dir": str(root / "skills"),
+    }
+
+
 class TestUpgradeCLI(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        resolver = patch("forgeflow.distribution.resolve_revision", return_value="a" * 40)
+        resolver.start()
+        self.addCleanup(resolver.stop)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def test_with_revision_pins_fetch_and_clone_source(self):
+        from forgeflow.cli import _with_revision
+        from forgeflow.distribution import derive_clone_url
+        base, ref = _with_revision("https://raw.githubusercontent.com/o/r/main", "deadbeef")
+        self.assertEqual(ref, "deadbeef")
+        self.assertEqual(base, "https://raw.githubusercontent.com/o/r/deadbeef")
+        self.assertEqual(derive_clone_url(base), "https://github.com/o/r")
+
+    def test_custom_prefix_is_derived_from_installed_package_path(self):
+        from forgeflow.distribution import resolve_installation_target
+        prefix = self.root / "custom-prefix"
+        package = prefix / "packages" / "0.1.26-abcdef" / "lib" / "forgeflow" / "distribution.py"
+        package.parent.mkdir(parents=True)
+        (prefix / "current").mkdir()
+        (prefix / "current" / "package.json").write_text(json.dumps({
+            "version": __version__,
+            "bin_dir": str(self.root / "custom-bin"),
+            "skills_dir": str(self.root / "custom-skills"),
+        }), encoding="utf-8")
+        with patch("forgeflow.distribution.__file__", str(package)), \
+             patch.dict("os.environ", {}, clear=True):
+            target = resolve_installation_target()
+        self.assertEqual(target["prefix"], str(prefix.resolve()))
+        self.assertEqual(target["bin_dir"], str((self.root / "custom-bin").absolute()))
+        self.assertEqual(target["skills_dir"], str((self.root / "custom-skills").absolute()))
+
     def test_parse_version_tuple(self):
         self.assertEqual(parse_version_tuple("0.1.2"), (0, 1, 2))
         self.assertEqual(parse_version_tuple("v0.1.3"), (0, 1, 3))
@@ -14,82 +69,149 @@ class TestUpgradeCLI(unittest.TestCase):
 
     @patch("urllib.request.urlopen")
     def test_upgrade_check_up_to_date(self, mock_urlopen):
-        # Mock remote version same as current
-        from forgeflow._version import __version__
-        mock_resp = MagicMock()
-        mock_resp.read.return_value = f'__version__ = "{__version__}"'.encode("utf-8")
-        mock_resp.__enter__.return_value = mock_resp
-        mock_urlopen.return_value = mock_resp
-
+        mock_urlopen.side_effect = [
+            _response(f'__version__ = "{__version__}"'.encode("utf-8")),
+            _response(b"#!/usr/bin/env bash\n# forgeflow installer\nexit 0\n"),
+        ]
         args = parse_forgeflow_args(["upgrade", "--check", "--json"])
-        with patch("builtins.print") as mock_print:
-            code = handle_upgrade(args)
-            self.assertEqual(code, 0)
-            mock_print.assert_called_once()
-            output = json.loads(mock_print.call_args[0][0])
-            self.assertEqual(output["status"], "success")
-            self.assertFalse(output["upgrade_available"])
+        with patch("forgeflow.distribution.resolve_installation_target", return_value=_target(self.root)), \
+             patch("forgeflow.distribution.read_package_metadata", return_value={}):
+            with patch("builtins.print") as mock_print:
+                code = handle_upgrade(args)
+                self.assertEqual(code, 0)
+                output = json.loads(mock_print.call_args[0][0])
+                self.assertEqual(output["status"], "success")
+                self.assertTrue(output["upgrade_available"])
+                self.assertEqual(output["identity_comparison"], "not-installed")
+                self.assertFalse(output["installed"])
 
     @patch("urllib.request.urlopen")
     def test_upgrade_check_upgrade_available(self, mock_urlopen):
-        # Mock remote version higher than current
-        mock_resp = MagicMock()
-        mock_resp.read.return_value = b'__version__ = "99.9.9"'
-        mock_resp.__enter__.return_value = mock_resp
-        mock_urlopen.return_value = mock_resp
-
+        mock_urlopen.side_effect = [
+            _response(b'__version__ = "99.9.9"'),
+            _response(b"#!/usr/bin/env bash\n# forgeflow installer\nexit 0\n"),
+        ]
         args = parse_forgeflow_args(["upgrade", "--check", "--json"])
-        with patch("builtins.print") as mock_print:
-            code = handle_upgrade(args)
-            self.assertEqual(code, 0)
-            mock_print.assert_called_once()
-            output = json.loads(mock_print.call_args[0][0])
-            self.assertEqual(output["status"], "success")
-            self.assertTrue(output["upgrade_available"])
-            self.assertEqual(output["remote_version"], "99.9.9")
+        with patch("forgeflow.distribution.resolve_installation_target", return_value=_target(self.root)), \
+             patch("forgeflow.distribution.read_package_metadata", return_value={}):
+            with patch("builtins.print") as mock_print:
+                code = handle_upgrade(args)
+                self.assertEqual(code, 0)
+                output = json.loads(mock_print.call_args[0][0])
+                self.assertTrue(output["upgrade_available"])
+                self.assertEqual(output["remote_version"], "99.9.9")
+                self.assertIn("source_identity", output)
+                self.assertIn("source_revision", output)
 
     @patch("urllib.request.urlopen")
     def test_upgrade_already_up_to_date_skips_install(self, mock_urlopen):
-        from forgeflow._version import __version__
-        mock_resp = MagicMock()
-        mock_resp.read.return_value = f'__version__ = "{__version__}"'.encode("utf-8")
-        mock_resp.__enter__.return_value = mock_resp
-        mock_urlopen.return_value = mock_resp
-
+        mock_urlopen.side_effect = [
+            _response(f'__version__ = "{__version__}"'.encode("utf-8")),
+            _response(b"#!/usr/bin/env bash\n# forgeflow installer\nexit 0\n"),
+        ]
         args = parse_forgeflow_args(["upgrade", "--json"])
-        with patch("subprocess.run") as mock_subproc, patch("builtins.print") as mock_print:
+        with patch("forgeflow.distribution.resolve_installation_target", return_value=_target(self.root)), \
+             patch("forgeflow.distribution.read_package_metadata", return_value={"version": __version__}), \
+             patch("subprocess.run") as mock_subproc, patch("builtins.print") as mock_print:
             code = handle_upgrade(args)
             self.assertEqual(code, 0)
             mock_subproc.assert_not_called()
             output = json.loads(mock_print.call_args[0][0])
             self.assertFalse(output["upgraded"])
 
-    @patch("subprocess.run")
     @patch("urllib.request.urlopen")
-    def test_upgrade_executes_installer_when_upgrade_available(self, mock_urlopen, mock_subproc):
-        # Version check returns 99.0.0, installer download returns echo script
-        v_resp = MagicMock()
-        v_resp.read.return_value = b'__version__ = "99.0.0"'
-        v_resp.__enter__.return_value = v_resp
-
-        inst_resp = MagicMock()
-        inst_resp.read.return_value = b'#!/usr/bin/env bash\necho "installed"'
-        inst_resp.__enter__.return_value = inst_resp
-
-        mock_urlopen.side_effect = [v_resp, inst_resp]
-
-        mock_subproc_result = MagicMock()
-        mock_subproc_result.returncode = 0
-        mock_subproc.return_value = mock_subproc_result
-
-        args = parse_forgeflow_args(["upgrade", "--json"])
-        with patch("builtins.print") as mock_print:
+    def test_upgrade_noop_installer_is_not_reported_as_success(self, mock_urlopen):
+        mock_urlopen.side_effect = [
+            _response(b'__version__ = "99.0.0"'),
+            _response(b"#!/usr/bin/env bash\n# forgeflow installer\nexit 0\n"),
+        ]
+        args = parse_forgeflow_args(["upgrade", "--force", "--json"])
+        with patch("forgeflow.distribution.resolve_installation_target", return_value=_target(self.root)), \
+             patch("forgeflow.distribution.read_package_metadata", return_value={}), \
+             patch("subprocess.run", return_value=MagicMock(returncode=0, stderr="")), \
+             patch("builtins.print") as mock_print:
             code = handle_upgrade(args)
-            self.assertEqual(code, 0)
-            mock_subproc.assert_called_once()
+            self.assertEqual(code, 1)
             output = json.loads(mock_print.call_args[0][0])
-            self.assertTrue(output["upgraded"])
-            self.assertEqual(output["current_version"], "99.0.0")
+            self.assertEqual(output["status"], "error")
+            self.assertFalse(output["upgraded"])
+            self.assertTrue(output["errors"])
+
+    @patch("urllib.request.urlopen")
+    def test_upgrade_wrong_installed_version_is_not_success(self, mock_urlopen):
+        mock_urlopen.side_effect = [
+            _response(b'__version__ = "99.0.0"'),
+            _response(b"#!/usr/bin/env bash\n# forgeflow installer\nexit 0\n"),
+        ]
+        args = parse_forgeflow_args(["upgrade", "--force", "--json"])
+        with patch("forgeflow.distribution.resolve_installation_target", return_value=_target(self.root)), \
+             patch("forgeflow.distribution.read_package_metadata", return_value={}), \
+             patch("subprocess.run", return_value=MagicMock(returncode=0, stderr="")), \
+             patch("forgeflow.distribution.verify_installed_distribution", return_value={
+                 "ok": False,
+                 "errors": ["Installed package version '1.0.0' does not match expected '99.0.0'."],
+                 "observed": {},
+                 "target": _target(self.root),
+             }), \
+             patch("builtins.print") as mock_print:
+            code = handle_upgrade(args)
+            self.assertEqual(code, 1)
+            output = json.loads(mock_print.call_args[0][0])
+            self.assertFalse(output["upgraded"])
+
+    @patch("urllib.request.urlopen")
+    def test_same_version_different_build_is_detected(self, mock_urlopen):
+        mock_urlopen.side_effect = [
+            _response(f'__version__ = "{__version__}"'.encode("utf-8")),
+            _response(b"#!/usr/bin/env bash\n# forgeflow installer\nexit 0\n"),
+        ]
+        args = parse_forgeflow_args(["upgrade", "--check", "--json"])
+        with patch("forgeflow.distribution.resolve_installation_target", return_value=_target(self.root)), \
+             patch("forgeflow.distribution.read_package_metadata", return_value={
+                 "version": __version__, "source_identity": "different-build",
+             }):
+            with patch("builtins.print") as mock_print:
+                code = handle_upgrade(args)
+                self.assertEqual(code, 0)
+                output = json.loads(mock_print.call_args[0][0])
+                self.assertTrue(output["upgrade_available"])
+                self.assertEqual(output["reason"], "same-version-different-build")
+
+    @patch("urllib.request.urlopen")
+    def test_upgrade_without_installation_is_not_success(self, mock_urlopen):
+        mock_urlopen.side_effect = [
+            _response(b'__version__ = "99.0.0"'),
+            _response(b"#!/usr/bin/env bash\n# forgeflow installer\nexit 0\n"),
+        ]
+        args = parse_forgeflow_args(["upgrade", "--json"])
+        with patch("forgeflow.distribution.resolve_installation_target", return_value=_target(self.root)), \
+             patch("forgeflow.distribution.read_package_metadata", return_value={}), \
+             patch("subprocess.run") as mock_subproc, \
+             patch("builtins.print") as mock_print:
+            code = handle_upgrade(args)
+            self.assertEqual(code, 1)
+            mock_subproc.assert_not_called()
+            output = json.loads(mock_print.call_args[0][0])
+            self.assertEqual(output["status"], "error")
+            self.assertFalse(output["upgraded"])
+            self.assertFalse(output["installed"])
+
+    @patch("urllib.request.urlopen")
+    def test_upgrade_installer_failure_returns_nonzero(self, mock_urlopen):
+        mock_urlopen.side_effect = [
+            _response(b'__version__ = "99.0.0"'),
+            _response(b"#!/usr/bin/env bash\n# forgeflow installer\nexit 0\n"),
+        ]
+        args = parse_forgeflow_args(["upgrade", "--force", "--json"])
+        with patch("forgeflow.distribution.resolve_installation_target", return_value=_target(self.root)), \
+             patch("forgeflow.distribution.read_package_metadata", return_value={}), \
+             patch("subprocess.run", return_value=MagicMock(returncode=3, stderr="boom")), \
+             patch("builtins.print") as mock_print:
+            code = handle_upgrade(args)
+            self.assertEqual(code, 3)
+            output = json.loads(mock_print.call_args[0][0])
+            self.assertEqual(output["status"], "error")
+            self.assertFalse(output["upgraded"])
 
     @patch("urllib.request.urlopen")
     def test_upgrade_network_error(self, mock_urlopen):
@@ -102,42 +224,38 @@ class TestUpgradeCLI(unittest.TestCase):
             self.assertEqual(output["status"], "error")
 
     @patch("builtins.input")
-    @patch("subprocess.run")
     @patch("urllib.request.urlopen")
-    def test_upgrade_interactive_prompt_yes(self, mock_urlopen, mock_subproc, mock_input):
+    def test_upgrade_interactive_prompt_yes(self, mock_urlopen, mock_input):
         mock_input.return_value = "y"
-        v_resp = MagicMock()
-        v_resp.read.return_value = b'__version__ = "99.0.0"'
-        v_resp.__enter__.return_value = v_resp
-
-        inst_resp = MagicMock()
-        inst_resp.read.return_value = b'#!/usr/bin/env bash\necho "installed"'
-        inst_resp.__enter__.return_value = inst_resp
-
-        mock_urlopen.side_effect = [v_resp, inst_resp]
-        mock_subproc.return_value = MagicMock(returncode=0)
-
+        mock_urlopen.side_effect = [
+            _response(b'__version__ = "99.0.0"'),
+            _response(b"#!/usr/bin/env bash\n# forgeflow installer\nexit 0\n"),
+        ]
         args = parse_forgeflow_args(["upgrade"])
-        with patch("builtins.print"):
+        with patch("forgeflow.distribution.resolve_installation_target", return_value=_target(self.root)), \
+             patch("forgeflow.distribution.read_package_metadata", return_value={"version": "0.1.0"}), \
+             patch("subprocess.run", return_value=MagicMock(returncode=0, stderr="")), \
+             patch("forgeflow.distribution.verify_installed_distribution", return_value={
+                 "ok": True, "errors": [], "observed": {}, "target": _target(self.root),
+             }), \
+             patch("builtins.print"):
             code = handle_upgrade(args)
             self.assertEqual(code, 0)
             mock_input.assert_called_once()
             self.assertIn("upgrade to v99.0.0", mock_input.call_args[0][0])
-            mock_subproc.assert_called_once()
 
     @patch("builtins.input")
-    @patch("subprocess.run")
     @patch("urllib.request.urlopen")
-    def test_upgrade_interactive_prompt_no_cancels(self, mock_urlopen, mock_subproc, mock_input):
+    def test_upgrade_interactive_prompt_no_cancels(self, mock_urlopen, mock_input):
         mock_input.return_value = "n"
-        v_resp = MagicMock()
-        v_resp.read.return_value = b'__version__ = "99.0.0"'
-        v_resp.__enter__.return_value = v_resp
-
-        mock_urlopen.side_effect = [v_resp]
-
+        mock_urlopen.side_effect = [
+            _response(b'__version__ = "99.0.0"'),
+            _response(b"#!/usr/bin/env bash\n# forgeflow installer\nexit 0\n"),
+        ]
         args = parse_forgeflow_args(["upgrade"])
-        with patch("builtins.print") as mock_print:
+        with patch("forgeflow.distribution.resolve_installation_target", return_value=_target(self.root)), \
+             patch("forgeflow.distribution.read_package_metadata", return_value={"version": __version__}), \
+             patch("subprocess.run") as mock_subproc, patch("builtins.print") as mock_print:
             code = handle_upgrade(args)
             self.assertEqual(code, 0)
             mock_input.assert_called_once()
@@ -145,143 +263,98 @@ class TestUpgradeCLI(unittest.TestCase):
             mock_print.assert_any_call("Upgrade cancelled.")
 
     @patch("builtins.input")
-    @patch("subprocess.run")
     @patch("urllib.request.urlopen")
-    def test_upgrade_force_skips_prompt(self, mock_urlopen, mock_subproc, mock_input):
-        v_resp = MagicMock()
-        v_resp.read.return_value = b'__version__ = "99.0.0"'
-        v_resp.__enter__.return_value = v_resp
-
-        inst_resp = MagicMock()
-        inst_resp.read.return_value = b'#!/usr/bin/env bash\necho "installed"'
-        inst_resp.__enter__.return_value = inst_resp
-
-        mock_urlopen.side_effect = [v_resp, inst_resp]
-        mock_subproc.return_value = MagicMock(returncode=0)
-
+    def test_upgrade_force_skips_prompt(self, mock_urlopen, mock_input):
+        mock_urlopen.side_effect = [
+            _response(b'__version__ = "99.0.0"'),
+            _response(b"#!/usr/bin/env bash\n# forgeflow installer\nexit 0\n"),
+        ]
         args = parse_forgeflow_args(["upgrade", "--force"])
-        with patch("builtins.print"):
+        with patch("forgeflow.distribution.resolve_installation_target", return_value=_target(self.root)), \
+             patch("forgeflow.distribution.read_package_metadata", return_value={"version": "0.1.0"}), \
+             patch("subprocess.run", return_value=MagicMock(returncode=0, stderr="")), \
+             patch("forgeflow.distribution.verify_installed_distribution", return_value={
+                 "ok": True, "errors": [], "observed": {}, "target": _target(self.root),
+             }), \
+             patch("builtins.print"):
             code = handle_upgrade(args)
             self.assertEqual(code, 0)
             mock_input.assert_not_called()
-            mock_subproc.assert_called_once()
 
     @patch("urllib.request.urlopen")
-    def test_upgrade_cache_busting_and_headers(self, mock_urlopen):
-        from forgeflow._version import __version__
-        mock_resp = MagicMock()
-        mock_resp.read.return_value = f'__version__ = "{__version__}"'.encode("utf-8")
-        mock_resp.__enter__.return_value = mock_resp
-        mock_urlopen.return_value = mock_resp
-
+    def test_upgrade_fetches_same_revision_without_cache_busting(self, mock_urlopen):
+        mock_urlopen.side_effect = [
+            _response(f'__version__ = "{__version__}"'.encode("utf-8")),
+            _response(b"#!/usr/bin/env bash\n# forgeflow installer\nexit 0\n"),
+        ]
         args = parse_forgeflow_args(["upgrade", "--check", "--json"])
-        with patch("builtins.print"):
+        with patch("forgeflow.distribution.resolve_installation_target", return_value=_target(self.root)), \
+             patch("forgeflow.distribution.read_package_metadata", return_value={}), \
+             patch("builtins.print"):
             code = handle_upgrade(args)
             self.assertEqual(code, 0)
-
-        mock_urlopen.assert_called_once()
-        req = mock_urlopen.call_args[0][0]
-        self.assertIn("t=", req.full_url)
-        self.assertEqual(req.headers.get("Cache-control"), "no-cache, no-store, must-revalidate")
-        self.assertEqual(req.headers.get("Pragma"), "no-cache")
+        urls = [call[0][0].full_url for call in mock_urlopen.call_args_list]
+        self.assertEqual(len(urls), 2)
+        self.assertTrue(urls[0].endswith("/src/forgeflow/_version.py"))
+        self.assertTrue(urls[1].endswith("/install.sh"))
+        self.assertNotIn("t=", urls[0])
+        request = mock_urlopen.call_args_list[0][0][0]
+        self.assertEqual(request.headers.get("Cache-control"), "no-cache, no-store, must-revalidate")
+        self.assertEqual(request.headers.get("Pragma"), "no-cache")
 
     @patch("urllib.request.urlopen")
     def test_upgrade_remote_older_warning_json_and_stdout(self, mock_urlopen):
-        # When remote version is older than current version (e.g. CDN cache delay)
-        v_resp = MagicMock()
-        v_resp.read.return_value = b'__version__ = "0.1.7"'
-        v_resp.__enter__.return_value = v_resp
-        mock_urlopen.return_value = v_resp
-
-        # Check JSON output
+        mock_urlopen.side_effect = [
+            _response(b'__version__ = "0.1.7"'),
+            _response(b"#!/usr/bin/env bash\n# forgeflow installer\nexit 0\n"),
+        ]
         args_json = parse_forgeflow_args(["upgrade", "--check", "--json"])
-        with patch("builtins.print") as mock_print:
-            code = handle_upgrade(args_json)
-            self.assertEqual(code, 0)
-            output = json.loads(mock_print.call_args[0][0])
-            self.assertIn("warning", output)
-            self.assertIn("older than", output["warning"])
-
-        # Check stdout terminal output
-        args_stdout = parse_forgeflow_args(["upgrade", "--check"])
-        with patch("builtins.print") as mock_print:
-            code = handle_upgrade(args_stdout)
-            self.assertEqual(code, 0)
-            printed_texts = " ".join(call[0][0] for call in mock_print.call_args_list if call[0])
-            self.assertIn("⚠️  Warning:", printed_texts)
-            self.assertIn("older than local version", printed_texts)
-
-    @patch("pathlib.Path.home")
-    @patch("subprocess.run")
-    @patch("urllib.request.urlopen")
-    def test_upgrade_verified_installed_version(self, mock_urlopen, mock_subproc, mock_home):
-        import tempfile
-        from pathlib import Path
-
-        v_resp = MagicMock()
-        v_resp.read.return_value = b'__version__ = "0.1.7"'  # Stale CDN returned 0.1.7
-        v_resp.__enter__.return_value = v_resp
-
-        inst_resp = MagicMock()
-        inst_resp.read.return_value = b'#!/usr/bin/env bash\necho "installed"'
-        inst_resp.__enter__.return_value = inst_resp
-
-        mock_urlopen.side_effect = [v_resp, inst_resp]
-        mock_subproc.return_value = MagicMock(returncode=0)
-
-        with tempfile.TemporaryDirectory() as tmp_home:
-            mock_home.return_value = Path(tmp_home)
-            version_file = Path(tmp_home) / ".local" / "forgeflow" / "current" / "lib" / "forgeflow" / "_version.py"
-            version_file.parent.mkdir(parents=True, exist_ok=True)
-            # Actually installed version by install.sh was 0.1.10
-            version_file.write_text('__version__ = "0.1.10"\n', encoding="utf-8")
-
-            args = parse_forgeflow_args(["upgrade", "--force"])
+        with patch("forgeflow.distribution.resolve_installation_target", return_value=_target(self.root)), \
+             patch("forgeflow.distribution.read_package_metadata", return_value={"version": "99.0.0"}):
             with patch("builtins.print") as mock_print:
-                code = handle_upgrade(args)
+                code = handle_upgrade(args_json)
                 self.assertEqual(code, 0)
-                mock_print.assert_any_call("🎉 Successfully upgraded ForgeFlow to v0.1.10!")
+                output = json.loads(mock_print.call_args[0][0])
+                self.assertIn("warning", output)
+                self.assertIn("older than", output["warning"])
 
-    @patch("subprocess.run")
+        mock_urlopen.side_effect = [
+            _response(b'__version__ = "0.1.7"'),
+            _response(b"#!/usr/bin/env bash\n# forgeflow installer\nexit 0\n"),
+        ]
+        args_stdout = parse_forgeflow_args(["upgrade", "--check"])
+        with patch("forgeflow.distribution.resolve_installation_target", return_value=_target(self.root)), \
+             patch("forgeflow.distribution.read_package_metadata", return_value={"version": "99.0.0"}):
+            with patch("builtins.print") as mock_print:
+                code = handle_upgrade(args_stdout)
+                self.assertEqual(code, 0)
+                printed_texts = " ".join(call[0][0] for call in mock_print.call_args_list if call[0])
+                self.assertIn("⚠️  Warning:", printed_texts)
+                self.assertIn("older than installed version", printed_texts)
+
     @patch("urllib.request.urlopen")
-    def test_upgrade_includes_release_highlights(self, mock_urlopen, mock_subproc):
-        v_resp = MagicMock()
-        v_resp.read.return_value = b'__version__ = "0.1.13"'
-        v_resp.__enter__.return_value = v_resp
-
-        inst_resp = MagicMock()
-        inst_resp.read.return_value = b'#!/usr/bin/env bash\necho "installed"'
-        inst_resp.__enter__.return_value = inst_resp
-
-        mock_urlopen.side_effect = [v_resp, inst_resp]
-        mock_subproc.return_value = MagicMock(returncode=0)
-
-        # JSON mode
+    def test_upgrade_includes_release_highlights(self, mock_urlopen):
+        mock_urlopen.side_effect = [
+            _response(b'__version__ = "99.0.0"'),
+            _response(b"#!/usr/bin/env bash\n# forgeflow installer\nexit 0\n"),
+        ]
+        prefix = Path(_target(self.root)["prefix"])
+        changelog = prefix / "current" / "lib" / "forgeflow" / "CHANGELOG.md"
+        changelog.parent.mkdir(parents=True)
+        changelog.write_text("## [99.0.0] - 2026-11-02\n\n### Added\n- Real installed build.\n", encoding="utf-8")
         args_json = parse_forgeflow_args(["upgrade", "--force", "--json"])
-        with patch("builtins.print") as mock_print:
+        with patch("forgeflow.distribution.resolve_installation_target", return_value=_target(self.root)), \
+             patch("forgeflow.distribution.read_package_metadata", return_value={"version": "0.1.0"}), \
+             patch("subprocess.run", return_value=MagicMock(returncode=0, stderr="")), \
+             patch("forgeflow.distribution.verify_installed_distribution", return_value={
+                 "ok": True, "errors": [], "observed": {}, "target": _target(self.root),
+             }), \
+             patch("builtins.print") as mock_print:
             code = handle_upgrade(args_json)
             self.assertEqual(code, 0)
             output = json.loads(mock_print.call_args[0][0])
             self.assertTrue(output["upgraded"])
             self.assertIn("release_highlights", output)
-
-        # Re-mock urlopen
-        v_resp2 = MagicMock()
-        v_resp2.read.return_value = b'__version__ = "0.1.13"'
-        v_resp2.__enter__.return_value = v_resp2
-        inst_resp2 = MagicMock()
-        inst_resp2.read.return_value = b'#!/usr/bin/env bash\necho "installed"'
-        inst_resp2.__enter__.return_value = inst_resp2
-        mock_urlopen.side_effect = [v_resp2, inst_resp2]
-
-        # Stdout mode
-        args_stdout = parse_forgeflow_args(["upgrade", "--force"])
-        with patch("builtins.print") as mock_print:
-            code = handle_upgrade(args_stdout)
-            self.assertEqual(code, 0)
-            printed = " ".join(call[0][0] for call in mock_print.call_args_list if call[0])
-            self.assertIn("Release Highlights", printed)
-            self.assertIn("forgeflow doc show changelog", printed)
 
 
 if __name__ == "__main__":
