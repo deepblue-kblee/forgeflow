@@ -224,7 +224,7 @@ class TestWorkflow(unittest.TestCase):
 
     def test_symlink_scope_and_state_paths_are_rejected(self):
         (self.root / "link").symlink_to(Path(self.temporary))
-        with self.assertRaises(ValueError):
+        with self.assertRaises(WorkflowError):
             self.workflow.start(self.agreement(scope=["link/other.txt"]))
         with self.assertRaises(WorkflowError):
             Workflow(self.root, "../escape")

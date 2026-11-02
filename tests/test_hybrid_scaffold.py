@@ -30,8 +30,7 @@ class TestHybridScaffold(unittest.TestCase):
         for name in (".specify/memory/constitution.md", ".specify/extensions.yml",
                      ".specify/templates/commands/implement.md", "docs/adr", "docs/spec"):
             self.assertFalse((self.root / name).exists(), name)
-        self.assertTrue((self.root / "tasks/in-progress").is_dir())
-        self.assertTrue((self.root / "tasks/completed").is_dir())
+        self.assertFalse((self.root / "tasks").exists())
         self.assertIn(".forgeflow/runtime/", (self.root / ".gitignore").read_text())
 
     def test_optional_speckit_assets_are_executable_and_usable(self):
@@ -64,8 +63,8 @@ class TestHybridScaffold(unittest.TestCase):
             self.assertEqual((self.root / name).read_text(), content, name)
 
     def test_default_init_does_not_inject_strict_bundle_or_speckit(self):
-        result = TemplateScaffolder.init_project_governance(self.root, "sample")
-        self.assertEqual(result["project_name"], "sample")
+        result = TemplateScaffolder.scaffold_lean_project(self.root)
+        self.assertEqual(result["status"], "success")
         self.assertFalse((self.root / ".specify").exists())
         self.assertFalse((self.root / "docs/forgeflow").exists())
         self.assertFalse((self.root / "src").exists())

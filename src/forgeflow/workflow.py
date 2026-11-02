@@ -17,12 +17,36 @@ import subprocess
 import sys
 import tempfile
 import time
-
-from .lifecycle import validate_relative_path
+import unicodedata
 
 
 class WorkflowError(RuntimeError):
     """A precise pending step; the last verified outcome remains in state."""
+
+
+def validate_relative_path(path: str, root: str | os.PathLike[str] | None = None) -> str:
+    raw = unicodedata.normalize("NFC", str(path))
+    if not raw or raw != str(path) or "\x00" in raw or any(ord(char) < 32 for char in raw):
+        raise WorkflowError("unsafe path")
+    candidate = Path(raw)
+    if candidate.is_absolute() or any(part == ".." for part in candidate.parts):
+        raise WorkflowError("path must be relative and contained")
+    if any(part in {"", "."} for part in candidate.parts):
+        raise WorkflowError("path contains an empty or dot component")
+    normalized = candidate.as_posix()
+    if root is not None:
+        root_path = Path(root).resolve()
+        current = root_path
+        for part in candidate.parts:
+            current = current / part
+            if current.is_symlink():
+                raise WorkflowError("symlink path is not allowed")
+        full = (root_path / normalized).resolve(strict=False)
+        try:
+            full.relative_to(root_path)
+        except ValueError as exc:
+            raise WorkflowError("path escapes repository root") from exc
+    return normalized
 
 
 def _digest(value):
@@ -267,6 +291,10 @@ def _validate_agreement(root, value):
     return agreement
 
 
+def _now():
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
 class Workflow:
     """Single-file task state; process lock covers commands and Git effects."""
 
@@ -317,7 +345,7 @@ class Workflow:
             if os.path.exists(name):
                 os.unlink(name)
 
-    def start(self, agreement):
+    def start(self, agreement, hitl=None):
         from .runtime import assert_runtime, pin_runtime, safe_project_path
         from .scaffold import TemplateScaffolder
         with self.locked():
@@ -339,7 +367,8 @@ class Workflow:
                      "agreement": agreement, "baseline": pin_runtime(self.root),
                      "initial_head": _head(self.root), "initial_changes": existing,
                      "status": "planned", "verification": None, "integration": None,
-                     "cleanup": None, "pending": None, "operations": [], "adoptions": []}
+                     "cleanup": None, "pending": None, "operations": [], "adoptions": [],
+                     "hitl": hitl, "checkpoints": {}}
             state["finalization_complete"] = False
             self.save(state)
             return state
@@ -360,14 +389,86 @@ class Workflow:
         return bool(verification and verification.get("passed")
                     and verification.get("inputs") == self._fingerprint(state))
 
-    def check(self):
+    def check(self, summary=None):
         with self.locked():
             state = self.load()
             self._assert_runtime(state)
             _validate_agreement(self.root, state["agreement"])
             if not state.get("integration") and _git(self.root, "branch", "--show-current") != state["agreement"]["source"]:
                 raise WorkflowError("current branch differs from the recorded source")
+            if state.get("hitl") == "design":
+                checkpoint = state.setdefault("checkpoints", {}).setdefault("design", {})
+                if checkpoint.get("status") != "approved":
+                    checkpoint.update({
+                        "status": "awaiting-user",
+                        "summary": summary or self._default_design_summary(state),
+                        "requested_at": _now(),
+                    })
+                    state["status"] = "awaiting-user"
+                    state["pending"] = {
+                        "operation": "checkpoint:design",
+                        "reason": "Review the design before implementation, then continue, revise, or stop.",
+                    }
+                    self.save(state)
+                    return state
             return self._report(state)
+
+    def _default_design_summary(self, state):
+        agreement = state["agreement"]
+        return {
+            "scope": agreement.get("scope"),
+            "acceptance": agreement.get("acceptance"),
+            "plan": agreement.get("plan"),
+            "checks": agreement.get("checks"),
+            "source": agreement.get("source"),
+            "target": agreement.get("target"),
+        }
+
+    def _require_design_approval(self, state):
+        if state.get("hitl") != "design":
+            return
+        checkpoint = state.get("checkpoints", {}).get("design", {})
+        if checkpoint.get("status") != "approved":
+            raise WorkflowError("design checkpoint is awaiting user approval; run workflow continue, revise, or stop")
+
+    def continue_workflow(self, note=None):
+        with self.locked():
+            state = self.load()
+            checkpoint = state.get("checkpoints", {}).get("design", {})
+            if state.get("pending", {}).get("operation") != "checkpoint:design":
+                raise WorkflowError("no design checkpoint is awaiting a decision")
+            checkpoint.update({"status": "approved", "decision": "continue",
+                               "note": note, "decided_at": _now()})
+            state["status"] = "planned"
+            state["pending"] = None
+            self.save(state)
+            return state
+
+    def revise(self, note=None):
+        with self.locked():
+            state = self.load()
+            checkpoint = state.get("checkpoints", {}).get("design", {})
+            if state.get("pending", {}).get("operation") != "checkpoint:design":
+                raise WorkflowError("no design checkpoint is awaiting a decision")
+            checkpoint.update({"status": "changes-requested", "decision": "revise",
+                               "note": note, "decided_at": _now()})
+            state["status"] = "planned"
+            state["pending"] = None
+            self.save(state)
+            return state
+
+    def stop(self, note=None):
+        with self.locked():
+            state = self.load()
+            checkpoint = state.get("checkpoints", {}).get("design", {})
+            if state.get("pending", {}).get("operation") != "checkpoint:design":
+                raise WorkflowError("no design checkpoint is awaiting a decision")
+            checkpoint.update({"status": "stopped", "decision": "stop",
+                               "note": note, "decided_at": _now()})
+            state["status"] = "stopped"
+            state["pending"] = None
+            self.save(state)
+            return state
 
     def _report(self, state):
         result = copy.deepcopy(state)
@@ -393,6 +494,7 @@ class Workflow:
         with self.locked():
             state = self.load()
             self._assert_runtime(state)
+            self._require_design_approval(state)
             if state.get("integration"):
                 raise WorkflowError("already integrated; resume cleanup instead of reopening verification")
             agreement = state["agreement"]
@@ -674,6 +776,7 @@ class Workflow:
         with self.locked():
             state = self.load()
             self._assert_runtime(state)
+            self._require_design_approval(state)
             _assert_owner(self.root, state["agreement"])
             self._recover_integration(state)
             if state.get("integration"):
@@ -711,13 +814,19 @@ class Workflow:
 def add_parser(subparsers):
     parser = subparsers.add_parser("workflow", help="Plan, verify and finalize a lean development task")
     commands = parser.add_subparsers(dest="workflow_command", required=True)
-    for name in ("start", "status", "check", "verify", "finalize", "adopt"):
+    for name in ("start", "status", "check", "verify", "finalize", "adopt", "continue", "revise", "stop"):
         command = commands.add_parser(name)
         command.add_argument("task_id")
         command.add_argument("--repo-root", default=None)
         command.add_argument("--json", action="store_true")
         if name == "start":
             command.add_argument("--agreement", required=True, help="JSON plan, scope, checks, owner and delegated permissions")
+            command.add_argument("--hitl", choices=["design"], default=None,
+                                 help="Pause at the design checkpoint for user review")
+        if name == "check":
+            command.add_argument("--summary", default=None, help="Design review summary shown to the user")
+        if name in {"continue", "revise", "stop"}:
+            command.add_argument("--note", default=None)
         if name == "finalize":
             command.add_argument("--receipt", help="Host execution receipt JSON file")
         if name == "adopt":
@@ -732,20 +841,35 @@ def handle_command(parsed):
         workflow = Workflow(root, parsed.task_id)
         command = parsed.workflow_command
         if command == "start":
-            state = workflow.start(json.loads(Path(parsed.agreement).read_text()))
+            state = workflow.start(json.loads(Path(parsed.agreement).read_text()), hitl=parsed.hitl)
         elif command == "adopt":
             state = workflow.adopt(parsed.reason, parsed.impact)
         elif command == "finalize":
             receipt = json.loads(Path(parsed.receipt).read_text()) if parsed.receipt else None
             state = workflow.finalize(receipt)
+        elif command == "check":
+            state = workflow.check(summary=parsed.summary)
+        elif command == "continue":
+            state = workflow.continue_workflow(parsed.note)
+        elif command == "revise":
+            state = workflow.revise(parsed.note)
+        elif command == "stop":
+            state = workflow.stop(parsed.note)
         else:
             state = getattr(workflow, command)()
         if parsed.json:
             print(json.dumps(state, indent=2, ensure_ascii=True))
         else:
             print(f"{state['id']}: {state['status']}")
+            if state.get("checkpoints", {}).get("design"):
+                design = state["checkpoints"]["design"]
+                print(f"Design checkpoint: {design.get('status')}")
             if state.get("pending"):
                 print(f"Next: {state['pending']['operation']} — {state['pending']['reason']}")
+        if state.get("status") == "awaiting-user":
+            return 3
+        if state.get("status") == "stopped":
+            return 0
         return 1 if state.get("status") in {"verification-failed", "verification-stale"} or state.get("pending") else 0
     except (WorkflowError, ValueError, OSError) as exc:
         if parsed.json:

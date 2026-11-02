@@ -49,7 +49,6 @@ class DistributionTests(unittest.TestCase):
         self.assertTrue(pkg_dir.is_dir(), "Package directory must exist")
         self.assertTrue((pkg_dir / "lib" / "forgeflow" / "__init__.py").is_file(), "Library files must exist")
         self.assertTrue((pkg_dir / "bin" / "forgeflow").is_file(), "Launcher must exist")
-        self.assertTrue((pkg_dir / "bin" / "harness").is_symlink(), "Harness compatibility symlink must exist")
         self.assertEqual((pkg_dir / "scripts/install-skills.sh").read_bytes(),
                          (self.repo_root / "scripts/install-skills.sh").read_bytes())
 
@@ -61,7 +60,6 @@ class DistributionTests(unittest.TestCase):
         # Check bin symlinks
         self.assertTrue((self.prefix / "bin" / "forgeflow").is_symlink())
         self.assertTrue((self.bin_dir / "forgeflow").is_symlink())
-        self.assertTrue((self.bin_dir / "harness").is_symlink())
 
         # Check package.json metadata
         meta_file = pkg_dir / "package.json"
@@ -94,9 +92,9 @@ class DistributionTests(unittest.TestCase):
         self.assertIn(f"ForgeFlow v{__version__}", proc.stdout)
 
         # 2. Run forgeflow check --help
-        check_proc = subprocess.run([str(self.bin_dir / "forgeflow"), "check", "--help"], capture_output=True, text=True, env=isolated_env)
+        check_proc = subprocess.run([str(self.bin_dir / "forgeflow"), "workflow", "--help"], capture_output=True, text=True, env=isolated_env)
         self.assertEqual(check_proc.returncode, 0)
-        self.assertIn("Run ForgeFlow governance gate audit", check_proc.stdout)
+        self.assertIn("usage: forgeflow workflow", check_proc.stdout)
 
         # 3. Test multi-level chained symlink (extra_bin -> global_bin -> prefix/bin -> pkg/bin)
         extra_bin = self.temp_dir / "extra_bin"
@@ -107,16 +105,6 @@ class DistributionTests(unittest.TestCase):
         chain_proc = subprocess.run([str(chained_link), "version"], capture_output=True, text=True, env=isolated_env)
         self.assertEqual(chain_proc.returncode, 0, chain_proc.stderr)
         self.assertIn(f"ForgeFlow v{__version__}", chain_proc.stdout)
-
-    def test_harness_backward_compatibility(self):
-        res = self._run_installer()
-        self.assertEqual(res.returncode, 0)
-
-        # Run harness version via global bin symlink
-        cmd = [str(self.bin_dir / "harness"), "version"]
-        proc = subprocess.run(cmd, capture_output=True, text=True)
-        self.assertEqual(proc.returncode, 0, proc.stderr)
-        self.assertIn(__version__, proc.stdout)
 
     def test_installer_flags_rollback_and_retention(self):
         # 1. Install current version
@@ -169,14 +157,14 @@ class DistributionTests(unittest.TestCase):
         original = (self.prefix / "current").resolve()
         # A same-version template change must identify a new build while the
         # original package remains available for an existing baseline.
-        template = fixture / "src/forgeflow/templates/COMPLETION_REPORT.md"
-        template.write_text(template.read_text() + "\nSame-version test build.\n")
+        template = fixture / "src/forgeflow/templates/speckit/scripts/bash/common.sh"
+        template.write_text(template.read_text() + "\n# Same-version test build.\n")
         second = subprocess.run(cmd, cwd=fixture, env=env, capture_output=True, text=True)
         self.assertEqual(second.returncode, 0, second.stderr)
         self.assertNotEqual(original, (self.prefix / "current").resolve())
         self.assertTrue(original.is_dir())
         self.assertNotIn("Same-version test build.",
-                         (original / "lib/forgeflow/templates/COMPLETION_REPORT.md").read_text())
+                         (original / "lib/forgeflow/templates/speckit/scripts/bash/common.sh").read_text())
 
     def test_rollback_restores_skills_from_the_selected_build_generator(self):
         fixture = self.temp_dir / "rollback-fixture"
@@ -292,11 +280,7 @@ exec "$FORGEFLOW_TEST_REAL_MV" "$@"
         self.assertEqual(initialized.returncode, 0, initialized.stderr)
         baseline = json.loads((project / ".forgeflow/runtime.json").read_text())
         for root in (package, Path(baseline["path"])):
-            document = root / "spec/GATES_AND_LOOPS.md"
-            links = re.findall(r"\]\((\.\./adr/[^)]+)\)", document.read_text())
-            self.assertTrue(links)
-            for link in links:
-                self.assertTrue((document.parent / link).is_file(), str(document.parent / link))
+            self.assertTrue((root / "spec/FLOW_SPEC.md").is_file())
             self.assertEqual((root / "CHANGELOG.md").read_bytes(),
                              (self.repo_root / "src/forgeflow/CHANGELOG.md").read_bytes())
         history = subprocess.run([*shlex.split(baseline["command"]), "doc", "show", "CHANGELOG", "--json"],

@@ -17,7 +17,6 @@ import importlib.resources as pkg_resources
 
 from .validator import TierRules
 from ._version import __version__
-from .legacy_templates import LEGACY_TEMPLATES
 
 
 class TemplateScaffolder:
@@ -33,7 +32,7 @@ class TemplateScaffolder:
         "Active task 재개는 state의 `baseline.command`로 실행하고 `doc show` 또는 `baseline.path/spec`로 해당 기준 확인.\n"
         "여러 task의 runtime identity가 다르면 project 기본 spec 링크나 identity 없는 launcher로 대체하지 않음.\n"
         "범위·완료 조건·필수 검증을 정한 뒤 구현. 통합·정리는 기록된 권한과 Git/host 소유 도구로 수행.\n"
-        "기존 사용자 헌법·보호 규칙 준수. 추가 승인·strict lifecycle은 프로젝트가 요구한 범위에서 적용.\n"
+        "설계 검토가 필요하면 `workflow start --hitl design`으로 design checkpoint를 사용.\n"
         "<!-- forgeflow:boot-anchor:end -->"
     )
 
@@ -480,10 +479,6 @@ class TemplateScaffolder:
         if local_fallback.is_file():
             return local_fallback.read_text(encoding="utf-8")
 
-        # Fallback for deprecated legacy templates preserved for backwards compatibility
-        if template_name in LEGACY_TEMPLATES:
-            return LEGACY_TEMPLATES[template_name]
-
         raise FileNotFoundError(f"Template '{template_name}' not found in package resources.")
 
     @staticmethod
@@ -904,6 +899,11 @@ class TemplateScaffolder:
         return cls._scaffold_lean(root, speckit=True, skip_config=skip_config)
 
     @classmethod
+    def scaffold_lean_project(cls, root: Path, force: bool = False) -> Dict[str, Any]:
+        """Create the lean project entrypoint without Spec Kit support."""
+        return cls._scaffold_lean(root, speckit=False)
+
+    @classmethod
     def _active_work(cls, root: Path, config: Dict[str, Any]) -> List[str]:
         """Find unfinished task state before changing any project baseline."""
         from .runtime import safe_project_path
@@ -984,8 +984,6 @@ class TemplateScaffolder:
                 json.dumps(desired_config, indent=2, ensure_ascii=False) + "\n",
                 False,
             )
-        tasks_dir = safe_project_path(root, tasks_name)
-        desired[tasks_dir / "README.md"] = (cls.TASKS_GUARD_CONTENT, False)
         if speckit:
             for name in ("check-prerequisites.sh", "common.sh", "create-new-feature.sh", "resolve-template.sh", "setup-plan.sh", "setup-tasks.sh"):
                 path = safe_project_path(root, f".specify/scripts/bash/{name}")
@@ -1048,19 +1046,11 @@ class TemplateScaffolder:
             safe_project_path(root, path.relative_to(root).as_posix())
             if path.exists():
                 cls._assert_safe_file(path, root)
-        for name in (tasks_name, f"{tasks_name}/in-progress", f"{tasks_name}/completed"):
-            directory = safe_project_path(root, name)
-            cls._assert_safe_directory(directory, root) if directory.exists() else None
         gitignore = safe_project_path(root, ".gitignore")
         if gitignore.exists():
             cls._assert_safe_file(gitignore, root)
         # Validate the snapshot before writing user-visible setup files.
         selected = pin_runtime(root) if baseline is None or not active else baseline
-        for name in (tasks_name, f"{tasks_name}/in-progress", f"{tasks_name}/completed"):
-            directory = safe_project_path(root, name)
-            if not directory.exists():
-                directory.mkdir(parents=True, exist_ok=True)
-                created_dirs.append(name)
         for path, (content, executable) in desired.items():
             relative = path.relative_to(root).as_posix()
             if path.exists():
@@ -1071,7 +1061,7 @@ class TemplateScaffolder:
             if executable:
                 path.chmod(0o755)
             created_files.append(relative)
-        required_entries = [".forgeflow/runtime/", ".forgeflow/runtime.json", ".forgeflow/run.py", ".forgeflow/spec", ".forgeflow/workflows/.*.lock", ".forgeflow/lifecycle/.*.lock"]
+        required_entries = [".forgeflow/runtime/", ".forgeflow/runtime.json", ".forgeflow/run.py", ".forgeflow/spec", ".forgeflow/workflows/.*.lock"]
         existing = gitignore.read_text(encoding="utf-8") if gitignore.exists() else ""
         missing = [entry for entry in required_entries if entry not in existing.splitlines()]
         if missing:
@@ -1192,18 +1182,109 @@ class TemplateScaffolder:
         dry_run: bool = False,
         accept_paths: Sequence[str] = (),
     ) -> Dict[str, Any]:
-        """Plan and apply a project migration through the shared migration layer."""
-        from .migration import update_project
+        """Refresh a current 0.2.x project without migrating 0.1.x layouts."""
+        from .runtime import safe_project_path
 
-        result = update_project(Path(root), dry_run=dry_run, accept_paths=accept_paths)
-        runtime = result.get("project_runtime") or {}
-        result["baseline"] = (
-            {"identity": runtime.get("next_identity"), "version": runtime.get("version")}
-            if runtime.get("next_identity") else None
-        )
-        result.setdefault("target_dir", str(Path(root).absolute()))
-        result.setdefault("updated_files", [])
-        return result
+        root = Path(root).absolute()
+        if root.is_symlink() or not root.is_dir():
+            raise ValueError("Project root must be a real directory")
+        root = root.resolve(strict=True)
+        modern = safe_project_path(root, ".forgeflow/config.json")
+        legacy = safe_project_path(root, ".forgeflow.json")
+        if not modern.exists():
+            if legacy.exists():
+                return {
+                    "status": "needs-action",
+                    "target_dir": str(root),
+                    "complete": False,
+                    "blockers": [{
+                        "kind": "legacy-project",
+                        "reason": "Legacy .forgeflow.json layout is not supported by forgeflow 0.2.0 update.",
+                        "next_action": "Run the separate forgeflow-migrate tool from archive/forgeflow-migrate, then rerun update.",
+                    }],
+                    "next_actions": ["Run forgeflow-migrate before updating this project."],
+                }
+            raise ValueError(f"Target directory '{root}' is not a ForgeFlow project (.forgeflow/config.json missing).")
+        legacy_markers = [root / "tasks", root / ".forgeflow/lifecycle"]
+        if any(marker.exists() for marker in legacy_markers):
+            return {
+                "status": "needs-action",
+                "target_dir": str(root),
+                "complete": False,
+                "blockers": [{
+                    "kind": "legacy-project",
+                    "reason": "Legacy tasks/lifecycle artifacts require the separate migration tool.",
+                    "next_action": "Run forgeflow-migrate from archive/forgeflow-migrate, then rerun update.",
+                }],
+                "next_actions": ["Run forgeflow-migrate before updating this project."],
+            }
+        try:
+            config = json.loads(modern.read_text(encoding="utf-8"))
+        except Exception as exc:
+            raise ValueError(f"Failed to parse .forgeflow/config.json: {exc}") from exc
+        if not isinstance(config, dict):
+            raise ValueError("ForgeFlow configuration must be an object")
+        active = cls._active_work(root, config)
+        if active:
+            return {
+                "status": "needs-action",
+                "target_dir": str(root),
+                "complete": False,
+                "blockers": [{
+                    "kind": "active-work",
+                    "task": task,
+                    "reason": "Active work keeps its recorded runtime and rules.",
+                    "next_action": "Finish the workflow or resume it with its pinned command before updating.",
+                } for task in active],
+                "next_actions": ["Finish or resume active workflows before updating."],
+            }
+        previous_version = config.get("forgeflow_version", "unknown")
+        defaults = {
+            "forgeflow_version": __version__,
+            "workflow": {"mode": "lean", "owner": "standalone", "checks": []},
+            "governance": {"max_loop_budget": 5},
+        }
+        desired = cls.deep_merge_config(config, defaults)
+        desired["forgeflow_version"] = __version__
+        desired.get("workflow", {}).pop("continuation", None)
+        desired_text = json.dumps(desired, indent=2, ensure_ascii=False) + "\n"
+        config_changed = desired_text != modern.read_text(encoding="utf-8")
+        if dry_run:
+            return {
+                "status": "planned",
+                "target_dir": str(root),
+                "dry_run": True,
+                "complete": False,
+                "previous_version": previous_version,
+                "current_version": __version__,
+                "updated_files": [".forgeflow/config.json"] if config_changed else [],
+                "created_files": [],
+                "next_actions": [],
+            }
+        scaffold_res = cls._scaffold_lean(root, speckit=(root / ".specify").is_dir(), skip_config=True)
+        created = list(scaffold_res.get("created_files", []))
+        updated = list(scaffold_res.get("updated_files", []))
+        if config_changed:
+            modern.write_text(desired_text, encoding="utf-8")
+            updated.insert(0, ".forgeflow/config.json")
+        status = "applied" if created or updated else "no-op"
+        return {
+            "status": status,
+            "target_dir": str(root),
+            "complete": True,
+            "previous_version": previous_version,
+            "current_version": __version__,
+            "created_files": sorted(set(created)),
+            "updated_files": sorted(set(updated)),
+            "removed_files": [],
+            "preserved_files": [],
+            "conflicts": [],
+            "blockers": [],
+            "warnings": [],
+            "next_actions": [],
+            "baseline": scaffold_res.get("baseline"),
+            "preserved_legacy_config": legacy.exists(),
+        }
 
     @classmethod
     def find_changelog_file(cls, root: Optional[Path] = None) -> Optional[Path]:

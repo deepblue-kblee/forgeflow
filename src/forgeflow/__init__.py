@@ -1,15 +1,11 @@
-"""
-ForgeFlow: Autonomous Agent Governance Framework & Harness Gate Engine
-"""
+"""ForgeFlow: lean development workflow with optional design review."""
 
 from ._version import __version__
 
 from .diagnostics import DiagnosticAnalyzer, DiagnosticAnomaly, DiagnosticLogger
-from .harness import HarnessEngine
 from .renderer import ReportRenderer
 from .review_scanner import ReviewScanner
 from .reviewer import ReviewEngine, ReviewResult
-from .runner import RuntimeTestRunner
 from .scaffold import TemplateScaffolder
 from .scanner import HierarchicalRootScanner, ReleaseScanner
 from .smell_detector import CodeSmell, SmellDetector, calculate_cognitive_complexity
@@ -33,9 +29,7 @@ __all__ = [
     "TierRules",
     "HierarchicalRootScanner",
     "ReleaseScanner",
-    "RuntimeTestRunner",
     "ReportRenderer",
-    "HarnessEngine",
     "TemplateScaffolder",
     "CodeSmell",
     "SmellDetector",

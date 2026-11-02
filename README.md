@@ -1,93 +1,87 @@
 # ForgeFlow
 
-ForgeFlow는 Spec Kit, 프로젝트 검증 명령, Git/host 기능을 연결해 개발부터 허용된 통합·정리까지 조정하는 도구예요. Python 3.10+ 표준 라이브러리로 동작해요.
+ForgeFlow는 AI 에이전트의 개발 작업을 설계·구현·검증·통합·정리까지 조정하는 lean workflow입니다. 기본은 자동 진행이며, 원할 때 디자인 종료 지점에서 사용자가 직접 설계를 검토할 수 있습니다.
 
-기본 흐름은 요구사항 → 계획 → 구현 → 검증 → 통합 → 정리 → 완료 보고예요. 구현 전 범위·완료 조건·검증 방법을 확정하고, 통합 전 검증 결과와 실행 권한을 확인해요. 작은 수정에는 짧은 계획을 쓰고 큰 작업에는 Spec Kit spec/plan/tasks를 활용해요. 기본 흐름에 다중 서명 문서나 패키지 밀봉을 강제하지 않아요.
+## 설치
 
-## 설치와 프로젝트 설정
+```bash
+./install.sh
+# 또는
+FORGEFLOW_SKILLS_DIR=~/.agents/skills ./install.sh
+```
 
-~~~bash
-curl -sSL https://raw.githubusercontent.com/deepblue-kblee/forgeflow/main/install.sh | bash
-forgeflow --version
+## 시작
+
+```bash
+forgeflow init
 forgeflow init --speckit
-~~~
+```
 
-설치는 사용자 계정의 ~/.local/share/forgeflow 및 ~/.local/bin을 사용해요. 생성 스킬은 /forgeflow, /setup-forgeflow, /update-forgeflow, /forgeflow-graphify예요. 외부 Spec Kit 스킬 자동 설치는 FORGEFLOW_INSTALL_SPECKIT_SKILLS=1 opt-in이며, core의 runtime dependency는 아니에요.
+`init --speckit`은 Spec Kit scripts/templates를 추가합니다. `tasks/` 디렉터리는 만들지 않으며 실행 상태는 `.forgeflow/workflows/<id>.json`에 저장됩니다.
 
-setup/update는 사용자 설정·헌법·hook·템플릿·진행 중 작업을 보존해요. 프로젝트에 필요한 test/lint/build 명령을 .forgeflow/config.json의 workflow.checks에 선언해주세요. 파일 생성일을 이유로 과거 자료를 삭제하지 않아요.
+## 기본 flow
 
-## 작업 시작
+```text
+agreement 작성
+  → workflow start
+  → Spec Kit 설계(specify/clarify/plan/tasks)
+  → workflow check
+  → [선택적 design checkpoint]
+  → 구현(speckit-implement 또는 직접)
+  → workflow verify
+  → workflow finalize
+```
 
-다음 agreement.json은 이미 준비된 codex/example-fix branch에서 src/example.py와 tests/test_example.py의 수정을 검증하고, 해당 범위의 commit까지 위임하는 예시예요. 실제 경로·branch·프로젝트 검증 명령으로 바꿔 사용해주세요. 시작 시 이미 존재하던 변경을 포함하려면 include_existing_changes를 명시적으로 결정해야 해요.
+```bash
+forgeflow workflow start example --agreement agreement.json
+forgeflow workflow check example --json
+forgeflow workflow verify example --json
+forgeflow workflow finalize example --json
+```
 
-~~~json
-{
-  "scope": ["src/example.py", "tests/test_example.py"],
-  "acceptance": ["재현된 오류가 해결되고 회귀 테스트가 통과한다"],
-  "plan": "오류를 재현하고 해당 범위의 구현을 수정한 뒤 프로젝트 검증을 실행한다",
-  "checks": [["python3", "-m", "unittest", "discover", "-s", "tests"]],
-  "owner": "standalone",
-  "source": "codex/example-fix",
-  "target": "main",
-  "integration": "none",
-  "permissions": ["commit"],
-  "remote": "origin",
-  "task_owned_branch": true,
-  "include_existing_changes": false
-}
-~~~
+## 선택적 design checkpoint
 
-~~~bash
-forgeflow workflow start example-fix --agreement agreement.json
-forgeflow workflow check example-fix
-# 합의된 범위의 구현
-forgeflow workflow verify example-fix
-forgeflow workflow finalize example-fix
-forgeflow workflow status example-fix
-~~~
+설계가 끝난 지점에서만 멈춥니다.
 
-프로젝트 workflow.checks는 task에서 생략할 수 없어요. 실행 상태의 단일 근거는 .forgeflow/workflows/<id>.json이에요. source/target, owner, 각 operation의 위임 범위를 이미 확인했다면 같은 승인을 반복 요청하지 않아요.
+```bash
+forgeflow workflow start example --agreement agreement.json --hitl design
+forgeflow workflow check example --summary "spec/plan/tasks 요약"
+forgeflow workflow continue example --note "설계 승인"
+# 또는
+forgeflow workflow revise example --note "수정 요청"
+forgeflow workflow stop example --note "보류"
+```
 
-## 통합·정리와 재개
+기본 `auto` mode에서는 멈추지 않고 끝까지 진행합니다. checkpoint decision은 workflow state에 기록됩니다.
 
-local 통합은 PR 없이 사용할 수 있고 pr route는 owner=host에서 지원해요. merge/push/delete-branch는 각각 해당 permission이 필요해요. host-managed worktree는 host가 소유하며 중복 branch를 만들지 않아요. host 작업은 pending action과 관찰 가능한 실행 영수증으로 연결하고, 정리는 소유 도구를 사용해요.
+## Spec Kit
 
-ready는 검증 완료, integrated는 통합 확인, cleaned는 허용된 정리 완료를 뜻해요. 요청된 위임 범위의 완료는 finalization_complete로 구분해 readiness-only 작업의 완료를 merge로 오인하지 않아요. 통합 후 정리가 실패하면 통합 결과를 유지하고 정리부터 재개해요. 관련 없는 dirty 파일은 보존하고 임의로 commit/reset/stash하지 않아요.
+큰 작업은 다음 순서를 사용할 수 있습니다.
 
-## 업데이트와 작업 기준 고정
+```text
+speckit-specify → speckit-clarify → speckit-plan → speckit-tasks → speckit-analyze
+  → speckit-implement → forgeflow workflow verify
+```
 
-~~~bash
-forgeflow upgrade --check --json
-forgeflow upgrade --revision <ref>
+작은 작업은 Spec Kit 없이 agreement plan과 checks로 처리할 수 있습니다.
+
+## Update와 upgrade
+
+```bash
 forgeflow update --dry-run --json
 forgeflow update --json
-forgeflow update --accept .specify/memory/constitution.md
-forgeflow update --recover <migration-id>
-~~~
+forgeflow upgrade --check --json
+forgeflow upgrade --revision <ref>
+```
 
-전역 upgrade와 프로젝트 update는 별도 범위예요. upgrade는 같은 revision의 version/installer를 사용하고 실제 package metadata, entrypoint version, spec, 생성 skills를 검증한 뒤에만 성공을 보고해요. update는 dry-run plan을 먼저 보여주며 active work, 사용자 수정 conflict, plan drift가 있으면 파일을 쓰지 않아요. `--accept`는 plan이 보고한 특정 conflict만 framework bytes로 해소하고, `--recover`는 실패한 migration의 managed path만 복구해요.
+`update`는 현재 0.2.x project를 갱신합니다. 0.1.x `tasks/`, `docs/releases/`, strict lifecycle layout은 자동 변환하지 않고 `needs-action`으로 안내합니다. 해당 project는 별도 `forgeflow-migrate` 도구로 정리합니다.
 
-진행 중 작업은 runtime/spec/templates의 content identity와 실행 가능한 .forgeflow/runtime/<digest>/ snapshot을 유지해요. 전역 current가 바뀌거나 같은 버전의 bytes가 달라져도 새 규칙을 조용히 적용하지 않아요. Task state의 baseline.command(통상 python3 .forgeflow/run.py --runtime-identity <digest>)로 해당 기준을 계속 실행해요. 여러 task의 기준이 다르면 이 명령의 doc show 또는 baseline.path/spec를 사용하고 프로젝트 기본 spec 링크로 대체하지 않아요.
+## 원칙
 
-기준 변경은 영향 검토 후 명시적으로 수행해요.
+- 프로젝트 checks가 검증의 기준입니다.
+- commit/push/merge/cleanup은 agreement의 permissions를 따릅니다.
+- 사용자 변경과 unrelated dirty work를 임의로 삭제하지 않습니다.
+- active task는 content-addressed runtime/spec baseline으로 고정됩니다.
+- 과거 0.1.x strict lifecycle/audit은 현행 flow가 아니며 `archive/pre-0.2.0` tag에 보존됩니다.
 
-~~~bash
-forgeflow workflow adopt example-fix --reason "기준 변경 이유" --impact "검토한 변경과 영향"
-~~~
-
-## 명세와 호환 경로
-
-[공식 명세 색인](docs/spec/README.md)에서 각 계약의 원본을 확인할 수 있어요. docs/spec/가 편집 원본이며 src/forgeflow/spec/는 기계적으로 동기화해요. [개발 흐름](docs/spec/FLOW_SPEC.md), [검증·strict 호환](docs/spec/GATES_AND_LOOPS.md), [배포·기준 고정](docs/spec/DISTRIBUTION_SPEC.md)을 참고해주세요.
-
-기존 release/task/lifecycle 명령과 완료된 strict 증거는 보존해요. strict 경로를 명시적으로 선택하면 package-review → RELEASE_SIGNOFF/manifest 준비 → seal → complete 순서를 따르고, 해당 패키지의 git-sha 또는 sha-free 정책을 유지해요. 패키지 완료는 Git merge를 의미하지 않아요.
-
-## 개발·검증
-
-~~~bash
-PYTHONPATH=src python3 -m unittest discover -s tests -p 'test_*.py'
-PYTHONPATH=src python3 -m forgeflow.cli --help
-~~~
-
-설치된 CLI와 실제 Git으로 작은 프로그램의 실패·수정·push·통합·정리·재개를 재현하려면 `python3 -m unittest discover -s tests -p 'test_workflow_e2e.py' -v`를 실행해주세요. [실제 동작 검증과 확인 범위](docs/design/lean-development-flow/behavior-verification.md)에 시나리오와 한계를 기록했어요.
-
-설치 검증은 임시 prefix/bin과 FORGEFLOW_SKILLS_DIR을 지정해 전역 설치를 건드리지 않게 수행해요. 이 저장소의 작업 지침은 [AGENTS.md](AGENTS.md), 현재 진행 상태는 [next-actions.md](docs/session-state/next-actions.md)에 있어요.
+공식 계약은 [docs/spec/README.md](docs/spec/README.md)에서 확인할 수 있습니다.

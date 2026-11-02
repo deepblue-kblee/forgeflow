@@ -247,11 +247,9 @@ if [ -n "$ROLLBACK_VERSION" ]; then
 
   cmd_run ln -sfn "packages/$ROLLBACK_VERSION" "$PREFIX/current"
   cmd_run ln -sfn "../current/bin/forgeflow" "$PREFIX/bin/forgeflow"
-  cmd_run ln -sfn "../current/bin/harness" "$PREFIX/bin/harness"
 
   cmd_run mkdir -p "$BIN_DIR"
   cmd_run ln -sfn "$PREFIX/bin/forgeflow" "$BIN_DIR/forgeflow"
-  cmd_run ln -sfn "$PREFIX/bin/harness" "$BIN_DIR/harness"
 
   if [ "$DRY_RUN" = false ]; then
     if ! ROLLBACK_VER=$("$BIN_DIR/forgeflow" version 2>/dev/null) || [[ ! "$ROLLBACK_VER" =~ ForgeFlow\ v([0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?) ]] || [ "${BASH_REMATCH[1]}" != "$TARGET_REQUEST_VERSION" ]; then
@@ -433,12 +431,6 @@ done
 
 if [ -d "$SRC_DIR/templates" ]; then
   cmd_run cp -R "$SRC_DIR/templates" "$PKG_LIB_DIR/"
-  # Purge legacy templates from new package
-  if [ "$DRY_RUN" = false ]; then
-    for legacy_tmpl in PRD.md DESIGN.md ROADMAP.md GOVERNANCE.md RELEASE_NOTES.md; do
-      rm -f "$PKG_LIB_DIR/templates/$legacy_tmpl"
-    done
-  fi
 fi
 
 if [ -d "$SRC_DIR/spec" ]; then
@@ -543,7 +535,6 @@ fi
 exec "$PYTHON_BIN" -m forgeflow.cli "$@"
 EOF
   chmod 755 "$LAUNCHER_FILE"
-  ln -sfn "forgeflow" "$PKG_BIN_DIR/harness"
 fi
 
 # 5. Validate staged completeness, then publish the immutable package key.
@@ -603,10 +594,9 @@ restore_activation() {
   if [ -n "$PREVIOUS_CURRENT" ]; then
     ln -sfn "$PREVIOUS_CURRENT" "$PREFIX/current"
     ln -sfn "../current/bin/forgeflow" "$PREFIX/bin/forgeflow"
-    ln -sfn "../current/bin/harness" "$PREFIX/bin/harness"
   else
-    rm -f "$PREFIX/current" "$PREFIX/bin/forgeflow" "$PREFIX/bin/harness"
-    rm -f "$BIN_DIR/forgeflow" "$BIN_DIR/harness"
+    rm -f "$PREFIX/current" "$PREFIX/bin/forgeflow"
+    rm -f "$BIN_DIR/forgeflow"
     rm -rf "$PKG_DIR"
   fi
   if [ -d "$ACTIVATION_BACKUP/skills" ]; then
@@ -647,12 +637,10 @@ fi
 log_info "Switching active build symlink (current -> packages/$PACKAGE_KEY)..."
 cmd_run ln -sfn "packages/$PACKAGE_KEY" "$PREFIX/current" || fail_activation "Could not switch the current pointer."
 cmd_run ln -sfn "../current/bin/forgeflow" "$PREFIX/bin/forgeflow" || fail_activation "Could not update the prefix CLI link."
-cmd_run ln -sfn "../current/bin/harness" "$PREFIX/bin/harness" || fail_activation "Could not update the prefix harness link."
 
 cmd_run mkdir -p "$BIN_DIR" || fail_activation "Could not create BIN_DIR: $BIN_DIR"
 log_info "Linking CLI commands in $BIN_DIR..."
 cmd_run ln -sfn "$PREFIX/bin/forgeflow" "$BIN_DIR/forgeflow" || fail_activation "Could not link $BIN_DIR/forgeflow."
-cmd_run ln -sfn "$PREFIX/bin/harness" "$BIN_DIR/harness" || fail_activation "Could not link $BIN_DIR/harness."
 
 # 9. Post-activation verification must pass before retention removes recovery input.
 log_info "Verifying installation..."

@@ -1,5 +1,5 @@
 {
-  "forgeflow_version": "0.1.25",
+  "forgeflow_version": "0.1.26",
   "workflow": {
     "mode": "lean",
     "owner": "standalone",
@@ -11,14 +11,8 @@
     "verification_paths": ["src", "tests", "scripts", "install.sh", "pyproject.toml", "docs/spec", "docs/adr", "docs/CHANGELOG.md"]
   },
   "governance": {
-    "tasks_dir": "tasks",
-    "strict_mode": true,
     "max_loop_budget": 5,
     "auto_create_branch": false,
     "test_timeout_seconds": 300
-  },
-  "paths": {
-    "in_progress": "tasks/in-progress",
-    "completed": "tasks/completed"
   }
 }

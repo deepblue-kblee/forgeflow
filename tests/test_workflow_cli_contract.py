@@ -48,8 +48,8 @@ class TestWorkflowCLIContract(unittest.TestCase):
         }))
         started = self.cli("workflow", "start", "example", "--agreement", str(agreement), "--json")
         self.assertEqual(started.returncode, 0, started.stderr + started.stdout)
-        checked = self.cli("check", "example", "--stage", "2", "--quiet")
-        self.assertEqual(checked.returncode, 0, checked.stderr)
+        checked = self.cli("workflow", "check", "example", "--json")
+        self.assertEqual(checked.returncode, 0, checked.stderr + checked.stdout)
         (self.root / "app.txt").write_text("after\n")
         verified = self.cli("workflow", "verify", "example", "--json")
         self.assertEqual(verified.returncode, 0, verified.stderr + verified.stdout)
@@ -60,26 +60,7 @@ class TestWorkflowCLIContract(unittest.TestCase):
         self.assertEqual(self.git("show", "main:app.txt"), "after")
         self.assertFalse((self.root / "tasks").exists())
 
-    def test_host_branch_option_cannot_override_ownership(self):
-        config = self.root / ".forgeflow/config.json"
-        config.parent.mkdir()
-        config.write_text(json.dumps({"workflow": {"owner": "host"},
-                                      "governance": {"auto_create_branch": True}}))
-        result = self.cli("release", "create", "v0.1.0-example", "--create-branch")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIn("Host owns", result.stderr)
-        self.assertEqual(self.git("branch", "--show-current"), "codex/example")
-        self.assertFalse((self.root / "tasks").exists())
-
-    def test_legacy_close_honors_host_ownership(self):
-        config = self.root / ".forgeflow/config.json"
-        config.parent.mkdir()
-        config.write_text(json.dumps({"workflow": {"owner": "host"}}))
-        result = self.cli("lifecycle", "close", "v0.1.0-example", "--json")
-        self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(json.loads(result.stdout)["error"], "host_owned_workspace")
-
-    def test_fresh_skill_generation_uses_workflow_and_keeps_strict_order(self):
+    def test_fresh_skill_generation_uses_current_workflow_only(self):
         skills = Path(self.temporary.name) / "skills"
         env = dict(self.env, FORGEFLOW_SKILLS_DIR=str(skills))
         generated = subprocess.run(["bash", str(SOURCE_ROOT / "scripts/install-skills.sh")],
@@ -87,12 +68,13 @@ class TestWorkflowCLIContract(unittest.TestCase):
         self.assertEqual(generated.returncode, 0, generated.stderr)
         text = (skills / "forgeflow/SKILL.md").read_text()
         self.assertIn("workflow", text)
-        self.assertIn("host", text)
-        self.assertLess(text.index("package-review"), text.index("lifecycle seal"))
-        self.assertLess(text.index("RELEASE_SIGNOFF.md"), text.index("lifecycle seal"))
+        self.assertIn("design", text)
         for path in skills.rglob("SKILL.md"):
-            self.assertNotIn("git reset --hard", path.read_text())
-            self.assertNotIn("Date-Based Amnesia", path.read_text())
+            content = path.read_text()
+            self.assertNotIn("git reset --hard", content)
+            self.assertNotIn("Date-Based Amnesia", content)
+            self.assertNotIn("package-review", content)
+            self.assertNotIn("lifecycle seal", content)
 
     def test_canonical_distribution_documents_are_identical(self):
         result = subprocess.run([sys.executable, str(SOURCE_ROOT / "scripts/sync-distribution.py"), "--check"],

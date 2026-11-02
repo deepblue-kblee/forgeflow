@@ -297,10 +297,6 @@ class TestInstalledWorkflowE2E(unittest.TestCase):
 
     def test_host_pending_receipts_require_actual_external_git_results(self):
         self.configure(owner="host")
-        before = self.git("branch", "--list")
-        rejected = self.run_command([self.cli_path, "release", "create", "v0.1.0-example", "--create-branch"], expected=2)
-        self.assertIn("Host owns", rejected.stderr)
-        self.assertEqual(self.git("branch", "--list"), before)
         self.ready(owner="host")
         self.assertEqual(self.cli("workflow", "finalize", "discount", "--json", expected=1)["pending"]["operation"], "commit")
         self.assertEqual(self.git("rev-parse", "HEAD").strip(), self.base)
