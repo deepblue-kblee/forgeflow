@@ -2,4 +2,4 @@
 
 단일 session checkpoint는 [next-actions.md](next-actions.md)입니다.
 
-Issue #12(legacy upgrade/update migration) 구현과 검증을 `codex/issue-12-upgrade-migration` branch에 완료했습니다. 버전은 `0.1.26`이며, 사용자 검토·PR merge·배포는 아직 실행하지 않았습니다.
+PR #13이 `main`에 merge됐고 `v0.1.26` tag/release와 로컬 전역 설치를 완료했습니다. Issue #12의 핵심 구현·검증은 전달됐으며, 일부 acceptance matrix 변형과 다른 runtime 환경은 후속 보강 범위로 남아 있습니다.
