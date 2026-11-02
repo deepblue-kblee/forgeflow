@@ -2,50 +2,69 @@
 
 ## 목적과 단일 기준
 
-ForgeFlow는 요구사항·계획·구현·검증·허용된 통합·정리를 완료까지 조정합니다. 계획은 Spec Kit, 검증은 project tools, repository operations는 Git/owning host에 위임합니다. Core는 Python 3.10+ 표준 라이브러리만 사용하며 third-party runtime dependency를 추가하지 않습니다.
+ForgeFlow 0.2.x는 요구사항·설계·구현·검증·허용된 통합·정리를 단일 workflow state로 조정합니다. 기본은 auto 진행이며, 사용자가 요청한 경우 디자인 종료 지점에서 한 번만 멈춥니다.
 
-Session 시작 시 docs/session-state/next-actions.md와 docs/spec/README.md를 읽고 현재 작업의 소유 계약을 참조합니다. docs/spec/가 공식 편집 원본이며 src/forgeflow/spec/는 기계적 배포 복제본입니다. 양쪽 정책을 독립 유지하지 않습니다.
+- 실행 상태: `.forgeflow/workflows/<id>.json`
+- 현재 사양서: `docs/spec/` 편집 원본, `src/forgeflow/spec/` 기계적 복제본
+- 세션 checkpoint: `docs/session-state/next-actions.md`
+- Core runtime: Python 3.10+ 표준 라이브러리만 사용
 
-tasks/completed/와 과거 docs/releases/는 불변 evidence이며 현행 행동 규칙이 아닙니다. 필요한 compatibility 맥락만 선별 조회합니다. 날짜만으로 사용자 자료를 삭제하지 않습니다.
+## 기본 flow
 
-## 기본 개발 계약
+```text
+agreement → workflow start → Spec Kit 설계 → workflow check
+  → [선택적 design checkpoint]
+  → 구현(speckit-implement 또는 직접)
+  → workflow verify → workflow finalize
+```
 
-구현 전 scope·observable acceptance·proportionate plan·필수 checks를 확정합니다. 통합 전 해당 검증 성공과 operation 권한을 확인합니다. 작은 변경에 다중 서명·seal을 요구하지 않습니다. 큰 변경에는 Spec Kit spec/plan/tasks를 활용하며 추가 심사는 실제 위험·프로젝트 요구에 따릅니다.
+- 구현 전 scope, acceptance, plan, checks를 agreement에 기록합니다.
+- 검증은 프로젝트가 선언한 checks가 소유합니다.
+- commit/push/merge/delete/cleanup은 기록된 permissions와 Git/host ownership을 따릅니다.
+- readiness는 integration 권한이 아닙니다.
+- 무관한 dirty 파일과 사용자 변경을 임의로 삭제·stage·stash·reset하지 않습니다.
 
-docs/spec/FLOW_SPEC.md의 workflow CLI/state를 사용합니다. 기본 실행 단일 근거는 .forgeflow/workflows/<id>.json입니다. Project workflow.checks를 task 입력으로 제거할 수 없습니다. 선택적 forgeflow review 임계치를 universal blocker로 삼지 않습니다.
+## HITL design checkpoint
 
-기존 release/task/lifecycle는 명시적 strict compatibility입니다. Package-review/signoff/manifest/seal 순서·binding policy는 docs/spec/GATES_AND_LOOPS.md가 정의합니다. 패키지 완료를 통합 증거 없이 merged로 보고하지 않습니다.
+```bash
+forgeflow workflow start <id> --agreement agreement.json --hitl design
+forgeflow workflow check <id> --summary "<spec/plan/tasks 요약>"
+forgeflow workflow continue <id> --note "승인"
+forgeflow workflow revise <id> --note "수정 요청"
+forgeflow workflow stop <id> --note "보류"
+```
 
-## Repository ownership과 권한
+- 기본값은 auto이며 checkpoint 없이 끝까지 진행합니다.
+- `--hitl design`일 때만 `awaiting-user`로 멈춥니다.
+- 이후 구현·검증·통합·정리에는 추가 checkpoint가 없습니다.
+- design checkpoint는 구현 전 spec/plan/tasks와 acceptance를 확인하는 용도입니다.
 
-이미 받은 사용자 승인을 재사용합니다. Source·target·owner·integration route·각 permission을 한 번 기록합니다. Readiness 자체는 push/merge/delete/deploy 권한이 아닙니다. Local integration에 PR을 강제하지 않습니다.
+## Spec Kit
 
-Host-owned checkout에 다른 branch/worktree를 중복 생성하지 않습니다. Host cleanup은 소유 도구를 사용합니다. Standalone operation은 task-owned paths/branches만 다룹니다. 무관한 staged/unstaged/untracked 변경을 몰래 commit/stash/reset하지 않으며 자동 destructive rollback을 금지합니다.
+큰 작업은 `speckit-specify → clarify → plan → tasks → analyze → implement`를 사용할 수 있습니다. 작은 작업은 짧은 agreement plan으로 처리합니다. `speckit-implement`는 `tasks.md`가 있는 구현 단계의 실행 도구입니다.
 
-Ready/integrated/cleaned와 요청 범위 완료 finalization_complete를 구분합니다. Merge 성공·cleanup 실패 시 정리만 재개합니다. 관찰된 Git/host 결과를 확인한 뒤 성공을 보고합니다.
+Spec Kit은 계획·태스크 도구이며, 검증은 `forgeflow workflow verify`, repository operations는 Git/owning host가 소유합니다.
 
-## 검증·심사
+## 검증과 실패 처리
 
-작업 중 focused 검사, 통합 전 필요한 관련 suite를 실행합니다. ForgeFlow runtime 변경은 python3 -m unittest discover -s tests -p "test_*.py"와 영향에 맞는 source-entrypoint/delivery 검사를 사용합니다. Legacy parser/lifecycle에 영향이 있으면 해당 archive audit를 수행합니다.
+- 구현 중 focused 검사를 사용하고, 통합 전 필요한 관련 suite를 실행합니다.
+- 코드·환경·통합 결과가 바뀌면 영향받는 검사를 다시 실행합니다.
+- 결함을 숨기려고 테스트를 완화하지 않습니다.
+- 동일 무진전 반복에는 설정된 no-progress budget(통상 5회)을 적용합니다.
+- 외부 권한·필수 capability·중대한 사용자 결정이 없으면 해당 단계에서 막힐 수 있습니다.
 
-결함을 숨기려고 테스트를 완화하지 않습니다. 의도적 contract 변경은 의미 있는 테스트로 갱신합니다. 코드·환경·통합 결과의 변화가 있을 때 검증을 반복하고 새/Critical 문제와 기존 무관한 findings를 구분합니다.
+## Runtime과 update
 
-Governance control-plane 또는 repository-operation authority 변경에는 독립 Security/Reliability/Maintainability 설계·최종 review를 적용합니다. 실제 findings/results를 한 번 기록합니다. 기존 사용자 scope 승인은 유효하며 반복 전체 승인 loop를 만들지 않습니다. 필요한 설계 심사 완료 전 src 구현을 시작하지 않습니다.
+- Active task는 content-addressed runtime/spec/template baseline과 실행 snapshot을 유지합니다.
+- 기준 변경은 `workflow adopt <id> --reason ... --impact ...`로 명시합니다.
+- `forgeflow update`는 현재 0.2.x project만 갱신합니다.
+- 0.1.x `tasks/`, `docs/releases/`, legacy `.forgeflow.json`, `.forgeflow/lifecycle`은 자동 변환하지 않고 `needs-action`과 `forgeflow-migrate` 안내를 반환합니다.
+- User project migration은 별도 `forgeflow-migrate` 도구가 담당하며 core package에 포함하지 않습니다.
 
-반복 실패·조사에 설정된 no-progress budget(통상 5회)을 적용합니다. 동일 자료/명령의 반복은 전진이 아닙니다. 외부 권한·승인·필수 capability·중대한 사용자 결정이 없으면 해당 단계는 먼저 막힐 수 있습니다. 정확한 실패·다음 행동을 기록하고 통과를 꾸미지 않습니다.
+## 과거 버전
 
-## Runtime·release 유지보수
+0.1.x strict lifecycle/audit, Gate 1/2/3, QA-SHA, package seal은 현행 선택지가 아닙니다. 과거 artifact와 code는 `archive/pre-0.2.0` tag에 보존하며 active 문서·CLI·skills에서 안내하지 않습니다.
 
-Active 작업은 content identity와 executable local snapshot을 유지합니다. 재개는 해당 state의 baseline.command를 통한 doc show 또는 baseline.path/spec를 사용하며 여러 task의 기준을 project 기본 spec 링크로 대체하지 않습니다. Global current/same-version replacement가 조용히 규칙을 바꿀 수 없습니다. 새 baseline adoption은 명시적 이유·영향 검토를 기록하며 완료 evidence를 보존합니다.
+## Handoff
 
-Runtime/tests/공식 specs/지침/배포를 바꾸는 self-maintenance는 src/forgeflow/_version.py와 spec/VERSION을 일치시킵니다. 현재 0.1.X patch 정책을 유지하고 minor 변경은 별도 합의합니다. Runtime·packaged specs/templates·generator·installer 계약을 일치시킵니다.
-
-응집된 단위로 commit하고 저장소가 요구하는 attribution을 지킵니다. Commit/push/merge는 기존 권한 안에서만 수행합니다. Issue close/comment는 해당 사용자 범위가 필요하며 branch push를 merge로 취급하지 않습니다. 개발에 전역 설치 update를 암묵적으로 포함하지 않습니다.
-
-Handoff 전 docs/session-state/next-actions.md에 관찰된 진행·검증·미완·다음 행동을 갱신합니다. 구현 완료·차단·미착수를 정확히 보고합니다.
-
-<!-- forgeflow:boot-anchor:start -->
-## ForgeFlow session 진입점
-
-docs/session-state/next-actions.md, .forgeflow/config.json, docs/spec/README.md를 읽습니다. Active task의 pinned runtime·기존 권한을 재사용하고 현 작업의 소유 계약을 따릅니다. 사용자 지침·과거 evidence를 보존합니다.
-<!-- forgeflow:boot-anchor:end -->
+작업 종료 전 `docs/session-state/next-actions.md`에 관찰된 진행·검증·미완·다음 행동을 기록합니다. 구현 완료·차단·미착수를 정확히 보고합니다.
