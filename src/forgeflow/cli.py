@@ -31,7 +31,7 @@ def parse_forgeflow_args(args=None):
 
     parser = argparse.ArgumentParser(
         prog="forgeflow",
-        description="ForgeFlow: Autonomous Agent Governance & Review CLI",
+        description="ForgeFlow: lean workflow with optional design review",
     )
     parser.add_argument(
         "-v", "--version", action="version", version=f"ForgeFlow v{__version__} (Autonomous Agent Governance Framework)"
@@ -86,7 +86,7 @@ def parse_forgeflow_args(args=None):
     # Command: update
     update_parser = subparsers.add_parser(
         "update",
-        help="Update local repository governance specifications and Spec Kit assets to the latest version",
+        help="Refresh a current 0.2.x project configuration and runtime",
     )
     update_parser.add_argument(
         "--path",

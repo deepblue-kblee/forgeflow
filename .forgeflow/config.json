@@ -1,5 +1,5 @@
 {
-  "forgeflow_version": "0.1.26",
+  "forgeflow_version": "0.2.0",
   "workflow": {
     "mode": "lean",
     "owner": "standalone",
