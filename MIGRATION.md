@@ -1,10 +1,10 @@
-# ForgeFlow 0.1.x → 0.2.0 user-project migration
+# ForgeFlow 0.1.x → 0.2.x user-project migration
 
 This document belongs to the `archive/forgeflow-migrate` branch, not the 0.2.x core distribution.
 
 ## What it does
 
-- Creates `archive/pre-forgeflow-0.2.0` on the project's current HEAD.
+- Creates `archive/pre-forgeflow-0.2.1` on the project's current HEAD.
 - Removes the old `tasks/`, `docs/releases/`, and `docs/forgeflow/` trees from the working tree.
 - Removes known 0.1.x strict files: legacy constitution, gatekeeper hook, implement override, old spec/ADR copies, `.forgeflow.json`, `.forgeflow/lifecycle`.
 - Writes a 0.2.x `.forgeflow/config.json` while preserving user keys and project checks.
@@ -33,4 +33,4 @@ forgeflow init --path . --speckit   # if Spec Kit support is wanted
 forgeflow update --dry-run --json
 ```
 
-Old project artifacts remain available with `git show archive/pre-forgeflow-0.2.0:tasks/...` or a temporary worktree.
+Old project artifacts remain available with `git show archive/pre-forgeflow-0.2.1:tasks/...` or a temporary worktree.

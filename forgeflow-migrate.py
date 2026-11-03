@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
 ARCHIVE_REF = "archive/pre-forgeflow-0.2.0"
-TARGET_VERSION = "0.2.0"
+TARGET_VERSION = "0.2.1"
 
 # Legacy paths removed unconditionally after the archive ref is created. The
 # archive ref is the recovery source; this tool never deletes without it.
