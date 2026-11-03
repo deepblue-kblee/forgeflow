@@ -25,7 +25,7 @@ class DistributionTests(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    def _run_installer(self, *extra_args):
+    def _run_installer(self, *extra_args, skills_dir=None):
         installer_script = self.repo_root / "install.sh"
         cmd = [
             "bash",
@@ -36,7 +36,7 @@ class DistributionTests(unittest.TestCase):
             str(self.bin_dir),
             *extra_args,
         ]
-        test_env = dict(os.environ, FORGEFLOW_SKILLS_DIR=str(self.temp_dir / "skills"))
+        test_env = dict(os.environ, FORGEFLOW_SKILLS_DIR=str(skills_dir or (self.temp_dir / "skills")))
         return subprocess.run(cmd, cwd=self.repo_root, capture_output=True, text=True, env=test_env)
 
     def test_package_accumulation_and_current_symlink(self):
@@ -75,6 +75,16 @@ class DistributionTests(unittest.TestCase):
         self.assertFalse(self.prefix.exists())
         self.assertFalse((self.temp_dir / "skills").exists())
         self.assertIn("Generate skills", result.stdout)
+
+    def test_symlinked_skills_destination_is_resolved(self):
+        real = self.temp_dir / "real-skills"
+        real.mkdir()
+        link = self.temp_dir / "linked-skills"
+        link.symlink_to(real, target_is_directory=True)
+        result = self._run_installer(skills_dir=link)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for name in ("setup-forgeflow", "update-forgeflow", "forgeflow", "forgeflow-graphify"):
+            self.assertTrue((real / name / "SKILL.md").is_file(), name)
 
     def test_launcher_execution_and_pythonpath(self):
         res = self._run_installer()

@@ -1,5 +1,10 @@
 # ForgeFlow 변경 이력
 
+## [0.2.1] - 2026-11-03
+
+### Fixed
+- Installer now accepts a symlinked `~/.agents/skills` root by resolving it to the real directory before publication, while still rejecting symlinks inside individual skill directories/files.
+
 ## [0.2.0] - 2026-11-03
 
 ### Lean workflow with optional design review
