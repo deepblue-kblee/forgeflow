@@ -5,16 +5,17 @@
 ## 현재 상태
 
 - PR #15 merge commit: `3bff95f`
-- Version: 0.2.0 (`src/forgeflow/_version.py`, `docs/spec/VERSION`)
+- Patch: PR #16 merge commit `3104474`
+- Version: 0.2.1 (`src/forgeflow/_version.py`, `docs/spec/VERSION`)
 - Working Tree: clean
 - Archive: tag `archive/pre-0.2.0`, branch `archive/forgeflow-migrate`
 
 ## 배포판 현황
 
-- Local Artifacts: `dist/forgeflow-0.2.0-py3-none-any.whl`, `dist/forgeflow-0.2.0.tar.gz`
-- Git Tag: `v0.2.0` push 완료
-- GitHub Releases: `v0.2.0` 등록 완료
-- Active User Distribution: v0.2.0 설치 완료 (`~/.local/share/forgeflow/current`, `~/.local/bin/forgeflow`)
+- Local Artifacts: `dist/forgeflow-0.2.1-py3-none-any.whl`, `dist/forgeflow-0.2.1.tar.gz`
+- Git Tag: `v0.2.0`, `v0.2.1` push 완료
+- GitHub Releases: `v0.2.0`, `v0.2.1` 등록 완료
+- Active User Distribution: v0.2.1 설치 완료 (`~/.local/share/forgeflow/current`, `~/.local/bin/forgeflow`)
 - Entrypoint `workflow --help`, version, skills probe 통과
 
 ## 완료한 범위
@@ -29,9 +30,9 @@
 
 ## 검증
 
-- `PYTHONPATH=src python3 -m unittest discover -s tests -p "test_*.py"` → 215 tests OK
+- `PYTHONPATH=src python3 -m unittest discover -s tests -p "test_*.py"` → 216 tests OK
 - `python3 scripts/sync-distribution.py --check` → match
-- 0.2.0 wheel/tar.gz build 및 격리 venv install
+- 0.2.0/0.2.1 wheel/tar.gz build 및 격리 venv install
 - HITL checkpoint → continue → verify → finalize 실제 Git repo 검증
 - package에 lifecycle/harness/migration legacy module 미포함 확인
 
