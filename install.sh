@@ -124,6 +124,13 @@ generate_package_skills() (
   local generator="$1"
   local external_skills="${2:-0}"
   local skills_target="${FORGEFLOW_SKILLS_DIR:-${HOME}/.agents/skills}"
+  if [ -L "$skills_target" ]; then
+    if [ ! -d "$skills_target" ]; then
+      log_error "Skills destination is a dangling symbolic link: $skills_target"
+      return 1
+    fi
+    skills_target="$(cd -P "$skills_target" && pwd -P)" || return 1
+  fi
   local skills_stage=""
   local skills_transaction=""
   local published_skills=""
