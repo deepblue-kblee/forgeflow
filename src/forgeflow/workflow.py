@@ -568,6 +568,43 @@ class Workflow:
             self.save(state)
             return state
 
+    def amend(self, agreement, reason, impact):
+        """Revise scope/plan/checks/acceptance of an in-progress agreement.
+
+        Only pre-integration amendments are allowed. Operation authority and
+        repository/target selection are immutable: they cannot be widened by a
+        plan edit. Any amendment invalidates prior verification evidence.
+        """
+        if not (reason or "").strip() or not (impact or "").strip():
+            raise WorkflowError("agreement amendment requires a reason and a reviewed impact")
+        with self.locked():
+            state = self.load()
+            self._assert_runtime(state)
+            if state.get("integration"):
+                raise WorkflowError("integrated tasks retain their agreement; only cleanup remains")
+            if (state.get("pending") or {}).get("operation") == "checkpoint:design":
+                raise WorkflowError("a design checkpoint is awaiting a decision; run workflow continue, revise, or stop first")
+            old = state["agreement"]
+            new = _validate_agreement(self.root, agreement)
+            immutable = ("owner", "source", "target", "integration", "permissions",
+                         "remote", "task_owned_branch", "include_existing_changes")
+            changed = [field for field in immutable if old.get(field) != new.get(field)]
+            if changed:
+                raise WorkflowError(
+                    "amendment cannot change operation authority or repository selection: "
+                    + ", ".join(changed) + "; keep the existing agreement or supersede it with a new workflow")
+            state.setdefault("amendments", []).append({
+                "at": _now(), "reason": reason, "impact": impact,
+                "before": old, "after": new,
+            })
+            state["agreement"] = new
+            state["verification"] = None
+            state["status"] = "planned"
+            state["pending"] = None
+            state["finalization_complete"] = False
+            self.save(state)
+            return state
+
     def _pending(self, state, operation, reason):
         state["finalization_complete"] = False
         state["pending"] = {"operation": operation, "reason": reason}
@@ -814,7 +851,7 @@ class Workflow:
 def add_parser(subparsers):
     parser = subparsers.add_parser("workflow", help="Plan, verify and finalize a lean development task")
     commands = parser.add_subparsers(dest="workflow_command", required=True)
-    for name in ("start", "status", "check", "verify", "finalize", "adopt", "continue", "revise", "stop"):
+    for name in ("start", "status", "check", "verify", "finalize", "adopt", "amend", "continue", "revise", "stop"):
         command = commands.add_parser(name)
         command.add_argument("task_id")
         command.add_argument("--repo-root", default=None)
@@ -832,6 +869,10 @@ def add_parser(subparsers):
         if name == "adopt":
             command.add_argument("--reason", required=True)
             command.add_argument("--impact", required=True, help="Reviewed effect of explicitly changing rules")
+        if name == "amend":
+            command.add_argument("--agreement", required=True, help="Revised JSON plan, scope, checks, owner and delegated permissions")
+            command.add_argument("--reason", required=True, help="Why the in-progress agreement is being amended")
+            command.add_argument("--impact", required=True, help="Reviewed effect on scope, acceptance and verification")
     return parser
 
 
@@ -844,6 +885,8 @@ def handle_command(parsed):
             state = workflow.start(json.loads(Path(parsed.agreement).read_text()), hitl=parsed.hitl)
         elif command == "adopt":
             state = workflow.adopt(parsed.reason, parsed.impact)
+        elif command == "amend":
+            state = workflow.amend(json.loads(Path(parsed.agreement).read_text()), parsed.reason, parsed.impact)
         elif command == "finalize":
             receipt = json.loads(Path(parsed.receipt).read_text()) if parsed.receipt else None
             state = workflow.finalize(receipt)
