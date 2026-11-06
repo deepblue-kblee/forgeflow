@@ -1,5 +1,24 @@
 # ForgeFlow 변경 이력
 
+## [0.2.2] - 2026-11-07
+
+### Added
+- `workflow amend`: 진행 중 agreement의 scope/plan/checks/acceptance를 새 workflow 없이 보완. operation 권한·repository/target은 불변이며, 보완 시 기존 verification을 폐기.
+- `workflow list`: active workflow 기본 조회와 `--all` 전체 이력(active/completed/stopped/superseded).
+- `workflow supersede`: 대체된 workflow에 후속 ID와 이유를 기록하고 finalize를 차단.
+- 일반 `workflow stop`/`resume`: design checkpoint와 별개로 통합 전 작업을 보류·재개.
+- `workflow status`/`check`의 `interpretation`: 검증 기록, 관찰된 Git 결과, 선언/증거 연결 acceptance, 이력 증거를 구분.
+- blocker별 `cause`, `minimal_action`, `state_command`, `mutation_command`, `requires_user` 안내.
+
+### Changed
+- ForgeFlow workflow는 사용자의 명시 요청 또는 실제 `forgeflow` skill 사용 시에만 활성화. 단순 commit/push 요청에 workflow·메타데이터 commit을 만들지 않음.
+- workflow 단위 선택, 재개·수정·분리·대체 선택표, `planned`/`ready`/`initial_head` 해석 주의를 공식 spec·README·AGENTS·생성 skill에 반영.
+- 외부에서 이미 수행한 commit/push를 관찰 가능한 Git 증거로 연결하는 경로를 문서화하고 검증.
+
+### Verification
+- clean init/제거된 legacy surface 계약 테스트와 CLI-level HITL JSON state 검증 추가.
+- Python 3.10/3.12 import·version·HITL smoke 검증.
+
 ## [0.2.1] - 2026-11-03
 
 ### Fixed
