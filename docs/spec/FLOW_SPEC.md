@@ -117,6 +117,18 @@ forgeflow workflow stop <id> --note "보류"
 - host-owned checkout은 owning tool이 작업하고 receipt로 결과를 연결합니다.
 - 관련 없는 dirty 파일과 사용자 변경을 보존합니다.
 
+### 상태 출력의 증거 구분
+
+`workflow status`와 `workflow check`는 machine-readable `interpretation`을 반환합니다.
+
+- `verification`: 도구에 기록된 검증 결과의 유무·통과·fresh 여부.
+- `observed_operations`: 관찰된 commit/push/merge/cleanup 결과.
+- `acceptance`: 사용자가 선언한 조건과 증거가 연결된 부분(자동으로 완료하지 않음).
+- `historical`: 과거 완료 시점 증거와 대체 관계.
+- `pending`: 현재 blocker의 operation·reason·cause·minimal_action·state_command·mutation_command·requires_user.
+
+`planned`는 "아직 최종 검증 기록 없음"이며 미착수 판단 근거가 아닙니다. `ready`는 검증 통과이지 제품 인수 완료가 아닙니다.
+
 ## 작업 단위와 재개·대체
 
 독립적으로 검증·완료할 수 있는 결과 하나를 workflow 하나로 관리합니다. 같은 결과를 위한 계획 보완은 기존 workflow에서 처리하고, 실제 실행과 검증·종료 기록을 같은 경로로 연결합니다.
