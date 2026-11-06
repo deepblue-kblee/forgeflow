@@ -60,6 +60,29 @@ class TestWorkflowCLIContract(unittest.TestCase):
         self.assertEqual(self.git("show", "main:app.txt"), "after")
         self.assertFalse((self.root / "tasks").exists())
 
+    def test_hitl_design_checkpoint_cli_json_state(self):
+        agreement = Path(self.temporary.name) / "agreement.json"
+        agreement.write_text(json.dumps({
+            "scope": ["app.txt"], "acceptance": ["app contains the new text"],
+            "plan": "Update the text", "owner": "standalone",
+            "source": "codex/example", "integration": "none", "permissions": [],
+            "checks": [[sys.executable, "-c", "pass"]],
+        }))
+        started = self.cli("workflow", "start", "hitl", "--agreement", str(agreement),
+                           "--hitl", "design", "--json")
+        self.assertEqual(started.returncode, 0, started.stderr + started.stdout)
+        checked = self.cli("workflow", "check", "hitl", "--summary", "short spec", "--json")
+        self.assertEqual(checked.returncode, 3, checked.stderr + checked.stdout)
+        state = json.loads(checked.stdout)
+        self.assertEqual(state["checkpoints"]["design"]["status"], "awaiting-user")
+        self.assertEqual(state["checkpoints"]["design"]["summary"], "short spec")
+        self.assertEqual(state["pending"]["operation"], "checkpoint:design")
+        continued = self.cli("workflow", "continue", "hitl", "--note", "approve", "--json")
+        self.assertEqual(continued.returncode, 0, continued.stderr + continued.stdout)
+        approved = json.loads(continued.stdout)
+        self.assertEqual(approved["checkpoints"]["design"]["decision"], "continue")
+        self.assertEqual(approved["checkpoints"]["design"]["note"], "approve")
+
     def test_fresh_skill_generation_uses_current_workflow_only(self):
         skills = Path(self.temporary.name) / "skills"
         env = dict(self.env, FORGEFLOW_SKILLS_DIR=str(skills))
