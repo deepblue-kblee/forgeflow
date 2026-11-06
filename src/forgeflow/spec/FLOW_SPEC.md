@@ -47,6 +47,20 @@ agreement → workflow start → 설계 → workflow check
 | task_owned_branch | task가 source branch를 소유하는지 여부 |
 | include_existing_changes | 시작 전 scoped 변경 포함 여부 |
 
+## Agreement 보완 (amend)
+
+통합 전 진행 중인 agreement의 scope/plan/checks/acceptance를 새 workflow 없이 보완합니다.
+
+```bash
+forgeflow workflow amend <id> --agreement agreement.json \
+  --reason "<변경 이유>" --impact "<검증에 미치는 영향>"
+```
+
+- 이전/이후 agreement, 변경 이유, 검증 영향을 `amendments`에 보존합니다.
+- `owner`, `source`, `target`, `integration`, `permissions`, `remote`, `task_owned_branch`, `include_existing_changes`는 변경할 수 없습니다. 권한·대상 변경은 새 workflow 또는 대체로 처리합니다.
+- 어떤 보완도 이전 `verification`을 폐기하고 `planned`로 되돌립니다. 과거 PASS를 새 조건에 재사용하지 않습니다.
+- design checkpoint가 `awaiting-user`인 동안에는 amend를 허용하지 않습니다.
+
 ## 선택적 design checkpoint
 
 디자인 종료 지점 한 곳에서 사용자가 직접 확인할 수 있습니다.
@@ -100,7 +114,7 @@ forgeflow workflow stop <id> --note "보류"
 ### 재개·수정·분리·대체 선택표
 
 - 같은 목표, 구현 진행 중 → 기존 workflow 재개.
-- 같은 목표, scope/plan/checks 보완 → 기존 workflow의 agreement 수정 경로 사용.
+- 같은 목표, scope/plan/checks 보완 → 기존 workflow의 agreement 수정 경로 사용([Agreement 보완](#agreement-보완-amend)).
 - 독립적인 목표 추가 → 새 workflow 및 관계 연결.
 - 기존 계획 폐기 후 다른 계획으로 진행 → 기존 기록을 대체됨으로 보존하고 후속 연결.
 - 유효한 완료 기록 이후 새 변경 발생 → 과거 완료 증거를 보존하고 새 작업과 구분.
