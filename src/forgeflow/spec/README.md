@@ -1,6 +1,6 @@
 # ForgeFlow 공식 명세 색인
 
-ForgeFlow 0.2.x는 단일 agreement/state로 설계·구현·검증·통합·정리를 조정합니다. 디자인 종료 지점의 사용자 checkpoint는 선택적입니다.
+ForgeFlow 0.2.x는 단일 agreement/state로 설계·구현·검증·통합·정리를 조정합니다. 디자인 종료 지점의 사용자 checkpoint는 선택적입니다. workflow는 사용자가 ForgeFlow 사용을 명시적으로 요청했거나 현재 작업에서 `forgeflow` skill을 실제로 사용한 경우에만 활성화합니다.
 
 | 질문 | 소유 문서 |
 | --- | --- |
