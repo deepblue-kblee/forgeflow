@@ -76,6 +76,51 @@ forgeflow workflow stop <id> --note "보류"
 - host-owned checkout은 owning tool이 작업하고 receipt로 결과를 연결합니다.
 - 관련 없는 dirty 파일과 사용자 변경을 보존합니다.
 
+## 작업 단위와 재개·대체
+
+독립적으로 검증·완료할 수 있는 결과 하나를 workflow 하나로 관리합니다. 같은 결과를 위한 계획 보완은 기존 workflow에서 처리하고, 실제 실행과 검증·종료 기록을 같은 경로로 연결합니다.
+
+### Workflow 단위 선택 기준
+
+- 배포 가능한 결과 또는 비코드 작업의 독립적인 인수 결과 하나를 workflow 하나로 묶습니다.
+- 조사·구현·테스트·문서는 그 결과의 내부 단계이며, 단계마다 새 workflow를 만들지 않습니다.
+- 기존 작업과 독립적으로 인수·배포·보류할 수 있는 결과가 추가되면 분리를 검토합니다.
+- 한 workflow의 완료 조건에 당장 끝낼 수 있는 장애 복구와 장기 기능 개발을 함께 넣지 않습니다.
+- 작은 작업에는 짧은 agreement/plan을 허용하며 Spec Kit의 모든 산출물을 일괄 강제하지 않습니다.
+- 기존 변경의 단순 commit/push 요청은 [활성화 조건](#활성화-조건)을 따릅니다.
+
+| 요청 | 권장 단위 |
+| --- | --- |
+| 운영 명령 장애 복구 및 검증된 배포 | 복구 결과를 소유하는 workflow 하나 |
+| 복구 과정에서 확인된 별도 장기 기능 | 후속 결과로 분리하고 관계 연결 |
+| 같은 결과의 설계 누락 수정·테스트 보완 | 기존 workflow에서 계획 보완 |
+| 자동 report와 별도 원문 writer | 각각 독립 인수가 가능하면 별도 workflow |
+| 문서 개선만 요청 | 해당 문서 결과에 비례한 workflow; 불필요한 배포 단계 없음 |
+
+### 재개·수정·분리·대체 선택표
+
+- 같은 목표, 구현 진행 중 → 기존 workflow 재개.
+- 같은 목표, scope/plan/checks 보완 → 기존 workflow의 agreement 수정 경로 사용.
+- 독립적인 목표 추가 → 새 workflow 및 관계 연결.
+- 기존 계획 폐기 후 다른 계획으로 진행 → 기존 기록을 대체됨으로 보존하고 후속 연결.
+- 유효한 완료 기록 이후 새 변경 발생 → 과거 완료 증거를 보존하고 새 작업과 구분.
+- 검증 stale → 변경된 입력과 필요한 검증 확인; 새 workflow를 기본 해결책으로 제시하지 않음.
+
+### 실행 경로와 승인 재사용
+
+- 개발 중 focused checks와 최종 `workflow verify`의 역할을 구분합니다.
+- 최종 검증·종료는 `verify → finalize`로 연결하여 중복 실행과 별도 상태 기록을 줄입니다.
+- 이미 받은 승인 중 현재 저장소·대상·operation 범위에 유효한 것은 재사용합니다. 기록 누락을 승인 부재로 단정하지 않습니다.
+- 메타데이터를 기록하기 위해 요청 범위 밖 추가 commit을 자동 생성하지 않습니다.
+- 상태 정리만을 위한 새 spec 작성, runtime 교체, 전체 회귀 재실행을 기본 절차로 요구하지 않습니다.
+
+### 상태 해석 주의
+
+- `planned`는 "아직 최종 검증 기록 없음"이며 구현 미착수 여부를 판단할 근거가 아닙니다.
+- `ready`는 검증 통과를 뜻하며 전체 제품 인수 완료를 뜻하지 않습니다.
+- `initial_head`와 현재 HEAD의 차이는 오류가 아닙니다.
+- acceptance 진행 요약은 명시된 결과·증거가 있을 때만 제공하고, 테스트 PASS나 AI 추론만으로 전체 acceptance를 자동 완료하지 않습니다.
+
 ## 재개와 baseline
 
 Active task는 content identity와 실행 가능한 `.forgeflow/runtime/<digest>/forgeflow/` snapshot을 유지합니다. Global current가 바뀌어도 task state의 `baseline.command`로 같은 기준을 실행합니다. 기준 변경은 영향 검토 후 `workflow adopt <id> --reason ... --impact ...`로 명시합니다.
