@@ -328,6 +328,94 @@ def _supersede_chain_reaches(directory, start_id, target_id, seen):
     return bool(successor) and _supersede_chain_reaches(directory, successor, target_id, seen)
 
 
+_BLOCKER_GUIDANCE = {
+    "checkpoint:design": {
+        "cause": "design checkpoint is awaiting user review",
+        "minimal_action": "review the design summary, then continue, revise, or stop",
+        "state_command": "workflow status <id>",
+        "mutation_command": "workflow continue|revise|stop <id>",
+        "requires_user": True,
+    },
+    "verify": {
+        "cause": "required verification is missing, failed, or stale",
+        "minimal_action": "confirm the current inputs, then run workflow verify",
+        "state_command": "workflow status <id>",
+        "mutation_command": "workflow verify <id>",
+        "requires_user": False,
+    },
+    "verify-committed-inputs": {
+        "cause": "verified dependencies outside the task scope are not committed in the accepted source",
+        "minimal_action": "preserve them, declare genuinely unrelated inputs via verification_paths, or verify an independently prepared committed result",
+        "state_command": "workflow status <id>",
+        "mutation_command": "commit the accepted source or amend verification_paths",
+        "requires_user": False,
+    },
+    "commit": {
+        "cause": "task changes need an explicitly authorized commit or are not yet committed",
+        "minimal_action": "authorize commit in the agreement or commit the accepted task paths",
+        "state_command": "workflow status <id>",
+        "mutation_command": "workflow finalize <id> (when commit is authorized)",
+        "requires_user": False,
+    },
+    "push": {
+        "cause": "the accepted source is not yet published to the recorded remote",
+        "minimal_action": "publish the accepted source to the recorded remote",
+        "state_command": "git ls-remote --heads <remote> refs/heads/<source>",
+        "mutation_command": "git push <remote> <source>",
+        "requires_user": False,
+    },
+    "merge": {
+        "cause": "readiness does not authorize integration; merge is not yet performed",
+        "minimal_action": "authorize merge or integrate with the owning host",
+        "state_command": "workflow status <id>",
+        "mutation_command": "workflow finalize <id> (when merge is authorized)",
+        "requires_user": False,
+    },
+    "reconcile": {
+        "cause": "the integration target diverged; the tested source is not a fast-forward of the target",
+        "minimal_action": "reconcile on source and run affected verification",
+        "state_command": "git log --oneline <target>..<source>",
+        "mutation_command": "reconcile the source branch with the target, then verify",
+        "requires_user": False,
+    },
+    "delete-branch": {
+        "cause": "branch ownership is not delegated or the source branch changed after integration",
+        "minimal_action": "confirm branch ownership and delete the merged source branch",
+        "state_command": "git branch --list <source>",
+        "mutation_command": "git branch -d <source> (when owned)",
+        "requires_user": False,
+    },
+    "verify-integration": {
+        "cause": "the target no longer contains the accepted source commit",
+        "minimal_action": "preserve the task branch and restore integration before cleanup",
+        "state_command": "git merge-base --is-ancestor <source_commit> <target>",
+        "mutation_command": "restore integration on the target",
+        "requires_user": False,
+    },
+    "resume-source": {
+        "cause": "the source checkout moved during integration and must be restored",
+        "minimal_action": "restore the source checkout with its owner before resuming",
+        "state_command": "git branch --show-current",
+        "mutation_command": "git switch <source>",
+        "requires_user": False,
+    },
+    "resume-baseline": {
+        "cause": "the task baseline drifted from the active runtime/spec",
+        "minimal_action": "resume with the pinned baseline command",
+        "state_command": "workflow status <id>",
+        "mutation_command": "run the pinned baseline command",
+        "requires_user": False,
+    },
+    "host-cleanup": {
+        "cause": "the host-owned checkout must be archived by its owning tool",
+        "minimal_action": "archive the host-owned checkout with its owning tool",
+        "state_command": None,
+        "mutation_command": None,
+        "requires_user": True,
+    },
+}
+
+
 def list_workflows(root, all_history=False):
     """List workflow states, classified into active/stopped/superseded/completed."""
     directory = root / ".forgeflow/workflows"
@@ -466,6 +554,7 @@ class Workflow:
                     state["pending"] = {
                         "operation": "checkpoint:design",
                         "reason": "Review the design before implementation, then continue, revise, or stop.",
+                        **_BLOCKER_GUIDANCE["checkpoint:design"],
                     }
                     self.save(state)
                     return state
@@ -575,11 +664,44 @@ class Workflow:
 
     def _report(self, state):
         result = copy.deepcopy(state)
-        if not state.get("integration") and state.get("verification") and not self._fresh(state):
+        fresh = self._fresh(state) if not state.get("integration") else True
+        if not state.get("integration") and state.get("verification") and not fresh:
             result["status"] = "verification-stale"
             result["finalization_complete"] = False
-        result["ready"] = self._fresh(state) if not state.get("integration") else True
+        result["ready"] = fresh
+        result["interpretation"] = self._interpret(result, fresh)
         return result
+
+    def _interpret(self, state, fresh):
+        verification = state.get("verification")
+        interpretation = {
+            "status": state.get("status"),
+            "verification": {
+                "recorded": verification is not None,
+                "passed": bool(verification and verification.get("passed")),
+                "fresh": bool(fresh),
+            },
+            "acceptance": {
+                "declared": state.get("agreement", {}).get("acceptance", []),
+                "evidenced": [],
+            },
+            "observed_operations": [event.get("operation") for event in state.get("operations", [])],
+            "historical": {
+                "finalization_complete": bool(state.get("finalization_complete")),
+                "superseded_by": (state.get("superseded_by") or {}).get("id"),
+                "completed_at": state.get("updated_at") if state.get("finalization_complete") else None,
+            },
+        }
+        if state.get("status") == "planned" and not verification:
+            interpretation["status_note"] = (
+                "no final verification recorded yet; this state alone does not indicate whether implementation has started")
+        if state.get("status") == "ready":
+            interpretation["status_note"] = (
+                "verification passed; this does not mean product acceptance is complete")
+        if state.get("status") == "verification-stale":
+            interpretation["status_note"] = (
+                "verification inputs changed after the recorded pass; confirm the changes and re-verify")
+        return interpretation
 
     def status(self):
         with self.locked():
@@ -712,6 +834,15 @@ class Workflow:
     def _pending(self, state, operation, reason):
         state["finalization_complete"] = False
         state["pending"] = {"operation": operation, "reason": reason}
+        guidance = _BLOCKER_GUIDANCE.get(operation)
+        if guidance:
+            state["pending"].update({
+                "cause": guidance["cause"],
+                "minimal_action": guidance["minimal_action"],
+                "state_command": guidance["state_command"],
+                "mutation_command": guidance["mutation_command"],
+                "requires_user": guidance["requires_user"],
+            })
         self.save(state)
         return state
 
@@ -1033,8 +1164,15 @@ def handle_command(parsed):
             if state.get("checkpoints", {}).get("design"):
                 design = state["checkpoints"]["design"]
                 print(f"Design checkpoint: {design.get('status')}")
+            if state.get("interpretation", {}).get("status_note"):
+                print(f"Note: {state['interpretation']['status_note']}")
             if state.get("pending"):
-                print(f"Next: {state['pending']['operation']} — {state['pending']['reason']}")
+                pending = state["pending"]
+                print(f"Next: {pending['operation']} — {pending['reason']}")
+                if pending.get("minimal_action"):
+                    print(f"Action: {pending['minimal_action']}")
+                if pending.get("requires_user"):
+                    print("Requires user decision.")
         if state.get("status") == "awaiting-user":
             return 3
         if state.get("status") == "stopped":
