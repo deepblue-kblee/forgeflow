@@ -26,6 +26,9 @@ class TestBootAnchor(unittest.TestCase):
         self.assertIn(TemplateScaffolder.BOOT_ANCHOR_START, content)
         self.assertIn(TemplateScaffolder.BOOT_ANCHOR_END, content)
         self.assertIn("ForgeFlow Session Boot Sequence", content)
+        # Issue #17: activation boundary must be embedded in the generated boot anchor.
+        self.assertIn("명시 요청", content)
+        self.assertIn("설정 존재만으로 시작하지 않음", content)
 
     def test_bind_appends_to_existing_agents_md_preserving_content(self):
         agents_file = self.temp_dir / "AGENTS.md"

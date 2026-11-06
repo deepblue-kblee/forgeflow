@@ -32,6 +32,7 @@ class TemplateScaffolder:
         "여러 task의 runtime identity가 다르면 project 기본 spec 링크나 identity 없는 launcher로 대체하지 않음.\n"
         "범위·완료 조건·필수 검증을 정한 뒤 구현. 통합·정리는 기록된 권한과 Git/host 소유 도구로 수행.\n"
         "설계 검토가 필요하면 `workflow start --hitl design`으로 design checkpoint를 사용.\n"
+        "workflow는 사용자가 ForgeFlow를 명시 요청했거나 이 skill을 실제 사용한 경우에만 시작; 설정 존재만으로 시작하지 않음.\n"
         "<!-- forgeflow:boot-anchor:end -->"
     )
 

@@ -69,6 +69,10 @@ class TestWorkflowCLIContract(unittest.TestCase):
         text = (skills / "forgeflow/SKILL.md").read_text()
         self.assertIn("workflow", text)
         self.assertIn("design", text)
+        # Issue #17: explicit activation boundary must be part of the generated skill.
+        self.assertIn("명시적으로 요청", text)
+        self.assertIn("commit/push", text)
+        self.assertIn("새 workflow를 만들지 않고", text)
         for path in skills.rglob("SKILL.md"):
             content = path.read_text()
             self.assertNotIn("git reset --hard", content)

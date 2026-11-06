@@ -10,6 +10,18 @@ ForgeFlow는 AI 에이전트의 개발 작업을 설계·구현·검증·통합�
 FORGEFLOW_SKILLS_DIR=~/.agents/skills ./install.sh
 ```
 
+## 언제 사용하나
+
+ForgeFlow workflow는 사용자가 ForgeFlow 사용을 명시적으로 요청했거나, 현재 작업에서 `forgeflow` skill이 실제로 사용된 경우에만 적용합니다. 저장소에 `.forgeflow/` 설정이나 skill이 있고 과거 workflow가 있다는 사실만으로는 적용하지 않습니다.
+
+| 요청 | 처리 |
+| --- | --- |
+| "이 변경을 commit/push해 줘" | 새 workflow를 만들지 않고 해당 권한·저장소 정책에 따라 commit/push와 결과 확인만 수행 |
+| "ForgeFlow로 진행해 줘" | workflow 시작 |
+| 현재 작업에서 `forgeflow` skill을 실제로 사용 | workflow 진입 사례 |
+
+이미 검토된 변경의 commit/push 요청은 workflow·세션 상태 기록용 추가 커밋을 만들지 않습니다.
+
 ## 시작
 
 ```bash

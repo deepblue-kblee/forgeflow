@@ -9,6 +9,14 @@ ForgeFlow 0.2.x는 요구사항·설계·구현·검증·허용된 통합·정�
 - 세션 checkpoint: `docs/session-state/next-actions.md`
 - Core runtime: Python 3.10+ 표준 라이브러리만 사용
 
+## 활성화 경계
+
+ForgeFlow workflow는 **사용자가 ForgeFlow 사용을 명시적으로 요청했거나**, 현재 작업에서 `forgeflow` skill이 실제로 사용된 경우에만 적용합니다. 저장소에 `.forgeflow/` 설정이나 skill이 있고 과거 workflow가 있다는 사실만으로는 적용하지 않습니다.
+
+- 이미 검토된 변경의 commit/push만 요청하면 새 workflow를 만들지 않고, 해당 작업의 권한과 저장소 정책에 따라 변경 경로를 확인한 뒤 commit/push와 결과 확인만 수행합니다.
+- workflow·세션 상태 기록용 추가 커밋은 요청 범위에 포함되거나 프로젝트 정책이 직접 요구할 때만 생성합니다.
+- ForgeFlow가 명시적으로 활성화된 경우에도 workflow와 완료 기록은 요청된 작업 범위에 비례해야 합니다.
+
 ## 기본 flow
 
 ```text
