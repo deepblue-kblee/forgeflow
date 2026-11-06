@@ -32,6 +32,13 @@ agreement → workflow start → Spec Kit 설계 → workflow check
 - readiness는 integration 권한이 아닙니다.
 - 무관한 dirty 파일과 사용자 변경을 임의로 삭제·stage·stash·reset하지 않습니다.
 
+## 작업 단위와 재개
+
+- 독립적으로 검증·완료할 수 있는 결과 하나를 workflow 하나로 관리합니다. 조사·구현·테스트·문서는 내부 단계입니다.
+- 같은 결과의 계획 보완은 기존 workflow에서 처리하고, 독립 목표가 추가될 때만 새 workflow를 만들어 관계를 연결합니다.
+- 한 workflow의 완료 조건에 당장 끝낼 수 있는 장애 복구와 장기 기능을 함께 넣지 않습니다.
+- `planned`는 미착수, `ready`는 제품 완료, `initial_head` 차이는 오류로 해석하지 않습니다.
+
 ## HITL design checkpoint
 
 ```bash

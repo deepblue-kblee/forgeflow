@@ -66,6 +66,21 @@ forgeflow workflow stop example --note "보류"
 
 기본 `auto` mode에서는 멈추지 않고 끝까지 진행합니다. checkpoint decision은 workflow state에 기록됩니다.
 
+## 작업 단위
+
+독립적으로 검증·완료할 수 있는 결과 하나를 workflow 하나로 관리합니다.
+
+| 요청 | 권장 단위 |
+| --- | --- |
+| 운영 명령 장애 복구 및 검증된 배포 | 복구 결과를 소유하는 workflow 하나 |
+| 복구 중 확인된 별도 장기 기능 | 후속 결과로 분리하고 관계 연결 |
+| 같은 결과의 설계 누락 수정·테스트 보완 | 기존 workflow에서 계획 보완 |
+| 문서 개선만 요청 | 문서 결과에 비례한 workflow; 불필요한 배포 단계 없음 |
+
+- 구현 진행 중인 같은 목표는 기존 workflow를 재개하고, 독립 목표가 추가될 때만 새 workflow를 만듭니다.
+- `planned`는 "아직 최종 검증 기록 없음"을 뜻하며 미착수 판단 근거가 아닙니다. `ready`는 검증 통과이지 제품 인수 완료가 아닙니다.
+- 상세 선택표는 [docs/spec/FLOW_SPEC.md](docs/spec/FLOW_SPEC.md)를 참조합니다.
+
 ## Spec Kit
 
 큰 작업은 다음 순서를 사용할 수 있습니다.

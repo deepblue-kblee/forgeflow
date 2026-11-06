@@ -87,11 +87,20 @@ ForgeFlow workflow는 사용자가 ForgeFlow 사용을 명시적으로 요청했
 10. `forgeflow workflow verify <id>`로 프로젝트 checks를 실행합니다. project checks를 제거하거나 acceptance를 임의 완화하지 않습니다.
 11. `forgeflow workflow finalize <id>`는 기록된 권한 안에서만 commit/push/merge/cleanup을 수행합니다. host-owned checkout은 owning tool에 위임하고 receipt로 결과를 연결합니다.
 
+## 작업 단위와 재개
+
+- 독립적으로 검증·완료할 수 있는 결과 하나를 workflow 하나로 관리합니다. 조사·구현·테스트·문서는 그 결과의 내부 단계입니다.
+- 같은 결과의 계획 보완은 기존 workflow에서 처리하고, 독립 목표가 추가될 때만 새 workflow를 만들어 관계를 연결합니다.
+- 한 workflow의 완료 조건에 당장 끝낼 수 있는 장애 복구와 장기 기능 개발을 함께 넣지 않습니다.
+- 구현 진행 중인 같은 목표는 기존 workflow를 재개하고, 검증이 stale하면 변경된 입력을 확인해 재검증합니다. 새 workflow를 기본 해결책으로 제시하지 않습니다.
+- 최종 검증·종료는 `verify → finalize`로 연결하고, 유효한 승인은 현재 저장소·대상·operation 범위 안에서 재사용합니다. 메타데이터용 범위 밖 추가 commit은 만들지 않습니다.
+
 ## 원칙
 
 - `.forgeflow/workflows/<id>.json`이 실행 상태의 단일 근거입니다.
 - active task는 pinned runtime/spec baseline을 유지합니다.
 - 사용자 변경, unrelated dirty work, historical evidence를 임의로 삭제하지 않습니다.
+- `planned`는 미착수, `ready`는 제품 완료, `initial_head` 차이는 오류로 해석하지 않습니다. acceptance 진행은 명시된 증거가 있을 때만 표시합니다.
 - 0.1.x strict lifecycle/audit 명령은 0.2.x의 선택지가 아닙니다.
 EOF
 
