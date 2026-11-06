@@ -129,6 +129,15 @@ forgeflow workflow stop <id> --note "보류"
 
 `planned`는 "아직 최종 검증 기록 없음"이며 미착수 판단 근거가 아닙니다. `ready`는 검증 통과이지 제품 인수 완료가 아닙니다.
 
+### 외부 실행 결과 연결
+
+workflow 밖에서 이미 수행한 commit/push는 관찰 가능한 Git 증거로 기존 workflow 종료에 연결합니다.
+
+- scoped 변경이 이미 commit된 경우 `verify → finalize`는 추가 commit을 만들지 않고 기존 commit을 그대로 사용합니다.
+- 원격 publish는 실제 remote 관찰(`ls-remote`)로 확인합니다. 기록된 `remote_identity`와 다른 remote로 publish하지 않으며, 성공했다는 텍스트 주장만으로 수용하지 않습니다.
+- 이미 수행한 작업을 다시 수행하지 않습니다. 기록된 push commit과 source가 같으면 push를 반복하지 않습니다.
+- 외부 검증 결과(PASS)의 자동 수용은 실행 명령·입력 fingerprint·환경·결과가 검증 가능한 경우에 한정합니다. 현행 버전은 외부 PASS를 자동으로 수용하는 경로를 제공하지 않으며, commit/push 관찰 연결과 분리합니다.
+
 ## 작업 단위와 재개·대체
 
 독립적으로 검증·완료할 수 있는 결과 하나를 workflow 하나로 관리합니다. 같은 결과를 위한 계획 보완은 기존 workflow에서 처리하고, 실제 실행과 검증·종료 기록을 같은 경로로 연결합니다.
