@@ -61,6 +61,33 @@ forgeflow workflow amend <id> --agreement agreement.json \
 - 어떤 보완도 이전 `verification`을 폐기하고 `planned`로 되돌립니다. 과거 PASS를 새 조건에 재사용하지 않습니다.
 - design checkpoint가 `awaiting-user`인 동안에는 amend를 허용하지 않습니다.
 
+## Workflow 이력과 대체
+
+현재 작업과 과거 기록을 구분합니다.
+
+```bash
+forgeflow workflow list              # 현재 active workflow만
+forgeflow workflow list --all        # 완료·중단·대체 포함 전체
+forgeflow workflow supersede <id> --by <후속 id> --reason "<이유>"
+```
+
+- `list`는 workflow를 `active`, `completed`, `stopped`, `superseded`로 분류합니다. 완료하지 않은 작업을 완료로 표시하지 않습니다.
+- `supersede`는 기존 계획을 폐기하고 다른 workflow로 대체할 때 후속 ID와 이유를 기록하고 상태를 `superseded`로 바꿉니다. 완료된 기록은 대체하지 않습니다.
+- 대체된 workflow는 `verify`/`finalize`가 차단됩니다.
+
+## 보류와 재개
+
+design checkpoint의 `stop`과 별개로, 통합 전 workflow를 일반 보류·재개할 수 있습니다.
+
+```bash
+forgeflow workflow stop <id> --note "<사유>"
+forgeflow workflow resume <id>
+```
+
+- `stop`은 state와 verification을 보존하고 status를 `stopped`로 바꿉니다. design checkpoint가 대기 중이면 기존 checkpoint stop으로 처리합니다.
+- `resume`은 verification freshness에 따라 `ready` 또는 `planned`로 복원합니다.
+- 보류된 workflow는 `verify`/`finalize`가 차단됩니다.
+
 ## 선택적 design checkpoint
 
 디자인 종료 지점 한 곳에서 사용자가 직접 확인할 수 있습니다.

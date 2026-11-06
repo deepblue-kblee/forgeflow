@@ -295,6 +295,63 @@ def _now():
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
+def _read_workflow_state(directory, task_id):
+    """Read one workflow state file without requiring repository identity match."""
+    path = directory / (task_id + ".json")
+    try:
+        state = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+    if not isinstance(state, dict) or state.get("schema") != 1 or state.get("id") != task_id:
+        return None
+    return state
+
+
+def _classify(state):
+    if state.get("superseded_by"):
+        return "superseded"
+    if state.get("status") == "stopped":
+        return "stopped"
+    if state.get("finalization_complete"):
+        return "completed"
+    return "active"
+
+
+def _supersede_chain_reaches(directory, start_id, target_id, seen):
+    if start_id in seen:
+        return False
+    seen.add(start_id)
+    if start_id == target_id:
+        return True
+    state = _read_workflow_state(directory, start_id)
+    successor = (state or {}).get("superseded_by", {}).get("id")
+    return bool(successor) and _supersede_chain_reaches(directory, successor, target_id, seen)
+
+
+def list_workflows(root, all_history=False):
+    """List workflow states, classified into active/stopped/superseded/completed."""
+    directory = root / ".forgeflow/workflows"
+    if not directory.is_dir():
+        return []
+    items = []
+    for path in sorted(directory.glob("*.json")):
+        state = _read_workflow_state(directory, path.stem)
+        if state is None:
+            continue
+        items.append({
+            "id": state["id"],
+            "status": state.get("status"),
+            "kind": _classify(state),
+            "updated_at": state.get("updated_at"),
+            "finalization_complete": bool(state.get("finalization_complete")),
+            "superseded_by": state.get("superseded_by"),
+        })
+    if not all_history:
+        items = [item for item in items if item["kind"] == "active"]
+    items.sort(key=lambda item: (item["kind"] != "active", item.get("updated_at") or "", item["id"]))
+    return items
+
+
 class Workflow:
     """Single-file task state; process lock covers commands and Git effects."""
 
@@ -333,6 +390,7 @@ class Workflow:
 
     def save(self, state):
         state["revision"] = state.get("revision", 0) + 1
+        state["updated_at"] = _now()
         fd, name = tempfile.mkstemp(prefix=".workflow-", dir=self.directory)
         try:
             with os.fdopen(fd, "w") as stream:
@@ -368,7 +426,7 @@ class Workflow:
                      "initial_head": _head(self.root), "initial_changes": existing,
                      "status": "planned", "verification": None, "integration": None,
                      "cleanup": None, "pending": None, "operations": [], "adoptions": [],
-                     "hitl": hitl, "checkpoints": {}}
+                     "amendments": [], "created_at": _now(), "hitl": hitl, "checkpoints": {}}
             state["finalization_complete"] = False
             self.save(state)
             return state
@@ -460,15 +518,60 @@ class Workflow:
     def stop(self, note=None):
         with self.locked():
             state = self.load()
-            checkpoint = state.get("checkpoints", {}).get("design", {})
-            if state.get("pending", {}).get("operation") != "checkpoint:design":
-                raise WorkflowError("no design checkpoint is awaiting a decision")
-            checkpoint.update({"status": "stopped", "decision": "stop",
-                               "note": note, "decided_at": _now()})
+            if (state.get("pending") or {}).get("operation") == "checkpoint:design":
+                checkpoint = state.get("checkpoints", {}).get("design", {})
+                checkpoint.update({"status": "stopped", "decision": "stop",
+                                   "note": note, "decided_at": _now()})
+                state["status"] = "stopped"
+                state["pending"] = None
+                self.save(state)
+                return state
+            if state.get("integration"):
+                raise WorkflowError("integrated tasks cannot be stopped; only cleanup remains")
             state["status"] = "stopped"
+            state["pending"] = None
+            state["paused"] = {"at": _now(), "note": note}
+            state["finalization_complete"] = False
+            self.save(state)
+            return state
+
+    def resume(self, note=None):
+        with self.locked():
+            state = self.load()
+            if not state.get("paused"):
+                raise WorkflowError("no paused workflow to resume; use workflow continue for a design checkpoint")
+            state.pop("paused", None)
+            state["status"] = "ready" if self._fresh(state) else "planned"
             state["pending"] = None
             self.save(state)
             return state
+
+    def supersede(self, by_id, reason):
+        if not (reason or "").strip():
+            raise WorkflowError("supersede requires a reason")
+        with self.locked():
+            state = self.load()
+            if state.get("finalization_complete"):
+                raise WorkflowError("completed workflows are historical evidence; do not supersede them")
+            if state.get("superseded_by"):
+                raise WorkflowError("workflow is already superseded")
+            if by_id == self.task_id:
+                raise WorkflowError("a workflow cannot supersede itself")
+            if _supersede_chain_reaches(self.directory, by_id, self.task_id, set()):
+                raise WorkflowError("supersede would create a cycle")
+            if _read_workflow_state(self.directory, by_id) is None:
+                raise WorkflowError("superseding workflow does not exist: " + by_id)
+            state["superseded_by"] = {"id": by_id, "reason": reason, "at": _now()}
+            state["status"] = "superseded"
+            state["pending"] = None
+            self.save(state)
+            return state
+
+    def _assert_mutable(self, state):
+        if state.get("superseded_by"):
+            raise WorkflowError("workflow is superseded by " + state["superseded_by"]["id"] + "; resume a successor instead")
+        if state.get("status") == "stopped":
+            raise WorkflowError("workflow is stopped; resume it before continuing")
 
     def _report(self, state):
         result = copy.deepcopy(state)
@@ -495,6 +598,7 @@ class Workflow:
             state = self.load()
             self._assert_runtime(state)
             self._require_design_approval(state)
+            self._assert_mutable(state)
             if state.get("integration"):
                 raise WorkflowError("already integrated; resume cleanup instead of reopening verification")
             agreement = state["agreement"]
@@ -814,6 +918,7 @@ class Workflow:
             state = self.load()
             self._assert_runtime(state)
             self._require_design_approval(state)
+            self._assert_mutable(state)
             _assert_owner(self.root, state["agreement"])
             self._recover_integration(state)
             if state.get("integration"):
@@ -851,7 +956,7 @@ class Workflow:
 def add_parser(subparsers):
     parser = subparsers.add_parser("workflow", help="Plan, verify and finalize a lean development task")
     commands = parser.add_subparsers(dest="workflow_command", required=True)
-    for name in ("start", "status", "check", "verify", "finalize", "adopt", "amend", "continue", "revise", "stop"):
+    for name in ("start", "status", "check", "verify", "finalize", "adopt", "amend", "continue", "revise", "stop", "resume", "supersede"):
         command = commands.add_parser(name)
         command.add_argument("task_id")
         command.add_argument("--repo-root", default=None)
@@ -862,7 +967,7 @@ def add_parser(subparsers):
                                  help="Pause at the design checkpoint for user review")
         if name == "check":
             command.add_argument("--summary", default=None, help="Design review summary shown to the user")
-        if name in {"continue", "revise", "stop"}:
+        if name in {"continue", "revise", "stop", "resume"}:
             command.add_argument("--note", default=None)
         if name == "finalize":
             command.add_argument("--receipt", help="Host execution receipt JSON file")
@@ -873,14 +978,31 @@ def add_parser(subparsers):
             command.add_argument("--agreement", required=True, help="Revised JSON plan, scope, checks, owner and delegated permissions")
             command.add_argument("--reason", required=True, help="Why the in-progress agreement is being amended")
             command.add_argument("--impact", required=True, help="Reviewed effect on scope, acceptance and verification")
+        if name == "supersede":
+            command.add_argument("--by", required=True, help="Successor workflow that replaces this one")
+            command.add_argument("--reason", required=True, help="Why this workflow is superseded")
+    list_parser = commands.add_parser("list", help="List workflows by current/historical status")
+    list_parser.add_argument("--repo-root", default=None)
+    list_parser.add_argument("--json", action="store_true")
+    list_parser.add_argument("--all", action="store_true", help="Include completed, stopped and superseded workflows")
     return parser
 
 
 def handle_command(parsed):
     try:
         root = Path(parsed.repo_root).resolve() if parsed.repo_root else Path(_git(Path.cwd(), "rev-parse", "--show-toplevel")).resolve()
-        workflow = Workflow(root, parsed.task_id)
         command = parsed.workflow_command
+        if command == "list":
+            items = list_workflows(root, all_history=parsed.all)
+            if parsed.json:
+                print(json.dumps(items, indent=2, ensure_ascii=True))
+            else:
+                for item in items:
+                    print(f"{item['id']}: {item['kind']}")
+                if not items:
+                    print("No workflows found.")
+            return 0
+        workflow = Workflow(root, parsed.task_id)
         if command == "start":
             state = workflow.start(json.loads(Path(parsed.agreement).read_text()), hitl=parsed.hitl)
         elif command == "adopt":
@@ -898,6 +1020,10 @@ def handle_command(parsed):
             state = workflow.revise(parsed.note)
         elif command == "stop":
             state = workflow.stop(parsed.note)
+        elif command == "resume":
+            state = workflow.resume(parsed.note)
+        elif command == "supersede":
+            state = workflow.supersede(parsed.by, parsed.reason)
         else:
             state = getattr(workflow, command)()
         if parsed.json:
