@@ -42,12 +42,13 @@ class TestWorkflowHistory(unittest.TestCase):
     def test_list_classifies_active_and_historical(self):
         first = Workflow(self.root, "first")
         first.start(self.agreement(["app.txt"], "first"))
-        second = Workflow(self.root, "second")
-        second.start(self.agreement(["other.txt"], "second"))
-        # first is completed, second stays active
+        # first is completed before the second writer starts, since a checkout
+        # may only have one active writer at a time.
         (self.root / "app.txt").write_text("after\n")
         first.verify()
         first.finalize()
+        second = Workflow(self.root, "second")
+        second.start(self.agreement(["other.txt"], "second"))
 
         active = list_workflows(self.root)
         self.assertEqual([item["id"] for item in active], ["second"])
@@ -58,10 +59,9 @@ class TestWorkflowHistory(unittest.TestCase):
     def test_supersede_links_successor_and_blocks_finalize(self):
         old = Workflow(self.root, "old")
         old.start(self.agreement(["app.txt"], "old"))
-        new = Workflow(self.root, "new")
-        new.start(self.agreement(["other.txt"], "new"))
 
-        state = old.supersede("new", "replaced by a revised plan")
+        state = old.supersede("new", "replaced by a revised plan",
+                              self.agreement(["other.txt"], "new"))
         self.assertEqual(state["status"], "superseded")
         self.assertEqual(state["superseded_by"]["id"], "new")
         with self.assertRaises(WorkflowError):
@@ -125,6 +125,57 @@ class TestWorkflowHistory(unittest.TestCase):
         self.assertEqual(wf.finalize()["status"], "cleaned")
         with self.assertRaises(WorkflowError):
             wf.stop("too late")
+
+    def test_stop_completed_workflow_is_blocked(self):
+        wf = Workflow(self.root, "done")
+        wf.start(self.agreement(["app.txt"], "done"))
+        (self.root / "app.txt").write_text("after\n")
+        wf.verify()
+        wf.finalize()
+        with self.assertRaisesRegex(WorkflowError, "historical evidence"):
+            wf.stop("reopen")
+
+    def test_stop_preserves_uncommitted_obligations(self):
+        wf = Workflow(self.root, "paused")
+        wf.start(self.agreement(["app.txt"], "paused"))
+        (self.root / "app.txt").write_text("after\n")
+        stopped = wf.stop("pause")
+        self.assertEqual(stopped["status"], "stopped")
+        self.assertEqual(stopped["obligations"]["uncommitted_paths"], ["app.txt"])
+
+    def test_supersede_retry_is_idempotent(self):
+        old = Workflow(self.root, "old")
+        old.start(self.agreement(["app.txt"], "old"))
+        successor = self.agreement(["other.txt"], "new")
+        old.supersede("new", "first attempt", successor)
+        state = old.supersede("new", "retry", successor)
+        self.assertEqual(state["status"], "superseded")
+        states = sorted(p.stem for p in (self.root / ".forgeflow/workflows").glob("*.json"))
+        self.assertEqual(states, ["new", "old"])
+
+    def test_adopt_not_blocked_by_stopped_or_superseded_sibling(self):
+        first = Workflow(self.root, "first")
+        first.start(self.agreement(["app.txt"], "first"))
+        first.stop("paused")
+
+        second = Workflow(self.root, "second")
+        second.start(self.agreement(["other.txt"], "second"))
+        second.supersede("third", "revised", self.agreement(["other.txt"], "third"))
+
+        third = Workflow(self.root, "third")
+        third.adopt("align rules", "no behavior change")
+
+    def test_active_work_excludes_stopped_and_superseded(self):
+        from forgeflow.scaffold import TemplateScaffolder
+        first = Workflow(self.root, "first")
+        first.start(self.agreement(["app.txt"], "first"))
+        first.stop("paused")
+
+        second = Workflow(self.root, "second")
+        second.start(self.agreement(["other.txt"], "second"))
+        second.supersede("third", "revised", self.agreement(["other.txt"], "third"))
+
+        self.assertEqual(TemplateScaffolder._active_work(self.root.resolve(), {}), ["third"])
 
 
 if __name__ == "__main__":

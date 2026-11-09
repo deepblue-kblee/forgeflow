@@ -307,6 +307,15 @@ def _read_workflow_state(directory, task_id):
     return state
 
 
+def _is_writer(state):
+    """True when the workflow still owns implementation/Git work in its checkout."""
+    if state.get("superseded_by"):
+        return False
+    if state.get("finalization_complete"):
+        return False
+    return state.get("status") not in {"stopped", "superseded", "completed", "cleaned", "cancelled"}
+
+
 def _classify(state):
     if state.get("superseded_by"):
         return "superseded"
@@ -433,6 +442,7 @@ def list_workflows(root, all_history=False):
             "updated_at": state.get("updated_at"),
             "finalization_complete": bool(state.get("finalization_complete")),
             "superseded_by": state.get("superseded_by"),
+            "obligations": state.get("obligations"),
         })
     if not all_history:
         items = [item for item in items if item["kind"] == "active"]
@@ -491,33 +501,80 @@ class Workflow:
             if os.path.exists(name):
                 os.unlink(name)
 
+    def _writer_states(self):
+        """Workflows that still own implementation/Git work in this checkout."""
+        identity = _identity(self.root)
+        writers = []
+        for path in sorted(self.directory.glob("*.json")):
+            if path.stem == self.task_id:
+                continue
+            state = _read_workflow_state(self.directory, path.stem)
+            if state is None or not _is_writer(state):
+                continue
+            if state.get("repository") is None or state.get("repository") == identity:
+                writers.append(state)
+        return writers
+
+    def _raise_writer_block(self, writer):
+        agreement = writer.get("agreement", {})
+        acceptance = agreement.get("acceptance") or []
+        goal = agreement.get("plan") or (acceptance[0] if acceptance else "")
+        baseline = writer.get("baseline", {})
+        command = baseline.get("command") if baseline.get("command") else ""
+        raise WorkflowError(
+            "checkout already has an active writer workflow: "
+            + writer["id"] + " (" + str(writer.get("status")) + ")"
+            + "; goal: " + str(goal)
+            + "; resume/amend it, supersede it with a successor, or use a separate branch/worktree"
+            + (("; pinned command: " + command) if command else ""))
+
+    def _obligations(self, state):
+        """Remaining ownership that must not be lost when stopping/superseding."""
+        agreement = state["agreement"]
+        obligations = {}
+        dirty = sorted(path for path in _dirty(self.root) if _inside_scope(path, agreement["scope"]))
+        if dirty:
+            obligations["uncommitted_paths"] = dirty
+        if state.get("integration") and not state.get("finalization_complete"):
+            obligations["cleanup"] = state.get("cleanup") or {"status": "remaining"}
+        if state.get("pending"):
+            obligations["pending_operation"] = state["pending"].get("operation")
+        return obligations or None
+
     def start(self, agreement, hitl=None):
-        from .runtime import assert_runtime, pin_runtime, safe_project_path
-        from .scaffold import TemplateScaffolder
         with self.locked():
             if self.path.exists():
                 raise WorkflowError("workflow already exists; resume its recorded agreement")
-            agreement = _validate_agreement(self.root, agreement)
-            if _git(self.root, "branch", "--show-current") != agreement["source"]:
-                raise WorkflowError("source must be the current branch")
-            existing = sorted(path for path in _dirty(self.root) if _inside_scope(path, agreement["scope"]))
-            if existing and not agreement["include_existing_changes"]:
-                raise WorkflowError("scope contains pre-existing changes; explicitly include them or narrow scope")
-            active = TemplateScaffolder._active_work(self.root, _config(self.root))
-            if active:
-                baseline_path = safe_project_path(self.root, ".forgeflow/runtime.json")
-                if not baseline_path.is_file():
-                    raise WorkflowError("active work has no executable baseline; preserve its rules and review migration before starting a new workflow")
-                assert_runtime(self.root, json.loads(baseline_path.read_text()))
-            state = {"schema": 1, "id": self.task_id, "repository": _identity(self.root),
-                     "agreement": agreement, "baseline": pin_runtime(self.root),
-                     "initial_head": _head(self.root), "initial_changes": existing,
-                     "status": "planned", "verification": None, "integration": None,
-                     "cleanup": None, "pending": None, "operations": [], "adoptions": [],
-                     "amendments": [], "created_at": _now(), "hitl": hitl, "checkpoints": {}}
-            state["finalization_complete"] = False
+            writers = self._writer_states()
+            if writers:
+                self._raise_writer_block(writers[0])
+            state = self._prepare_state(agreement, hitl)
             self.save(state)
             return state
+
+    def _prepare_state(self, agreement, hitl=None):
+        from .runtime import assert_runtime, pin_runtime, safe_project_path
+        from .scaffold import TemplateScaffolder
+        agreement = _validate_agreement(self.root, agreement)
+        if _git(self.root, "branch", "--show-current") != agreement["source"]:
+            raise WorkflowError("source must be the current branch")
+        existing = sorted(path for path in _dirty(self.root) if _inside_scope(path, agreement["scope"]))
+        if existing and not agreement["include_existing_changes"]:
+            raise WorkflowError("scope contains pre-existing changes; explicitly include them or narrow scope")
+        active = TemplateScaffolder._active_work(self.root, _config(self.root))
+        if active:
+            baseline_path = safe_project_path(self.root, ".forgeflow/runtime.json")
+            if not baseline_path.is_file():
+                raise WorkflowError("active work has no executable baseline; preserve its rules and review migration before starting a new workflow")
+            assert_runtime(self.root, json.loads(baseline_path.read_text()))
+        state = {"schema": 1, "id": self.task_id, "repository": _identity(self.root),
+                 "agreement": agreement, "baseline": pin_runtime(self.root),
+                 "initial_head": _head(self.root), "initial_changes": existing,
+                 "status": "planned", "verification": None, "integration": None,
+                 "cleanup": None, "pending": None, "operations": [], "adoptions": [],
+                 "amendments": [], "created_at": _now(), "hitl": hitl, "checkpoints": {}}
+        state["finalization_complete"] = False
+        return state
 
     def _assert_runtime(self, state):
         from .runtime import assert_runtime
@@ -607,6 +664,8 @@ class Workflow:
     def stop(self, note=None):
         with self.locked():
             state = self.load()
+            if state.get("finalization_complete"):
+                raise WorkflowError("completed workflows are historical evidence; do not stop them")
             if (state.get("pending") or {}).get("operation") == "checkpoint:design":
                 checkpoint = state.get("checkpoints", {}).get("design", {})
                 checkpoint.update({"status": "stopped", "decision": "stop",
@@ -617,6 +676,7 @@ class Workflow:
                 return state
             if state.get("integration"):
                 raise WorkflowError("integrated tasks cannot be stopped; only cleanup remains")
+            state["obligations"] = self._obligations(state)
             state["status"] = "stopped"
             state["pending"] = None
             state["paused"] = {"at": _now(), "note": note}
@@ -635,7 +695,7 @@ class Workflow:
             self.save(state)
             return state
 
-    def supersede(self, by_id, reason):
+    def supersede(self, by_id, reason, agreement=None):
         if not (reason or "").strip():
             raise WorkflowError("supersede requires a reason")
         with self.locked():
@@ -643,13 +703,25 @@ class Workflow:
             if state.get("finalization_complete"):
                 raise WorkflowError("completed workflows are historical evidence; do not supersede them")
             if state.get("superseded_by"):
-                raise WorkflowError("workflow is already superseded")
+                if state["superseded_by"].get("id") == by_id:
+                    return state
+                raise WorkflowError("workflow is already superseded by " + state["superseded_by"]["id"])
+            if state.get("integration") and not state.get("finalization_complete"):
+                raise WorkflowError("integrated workflow has remaining cleanup; complete cleanup before superseding")
             if by_id == self.task_id:
                 raise WorkflowError("a workflow cannot supersede itself")
             if _supersede_chain_reaches(self.directory, by_id, self.task_id, set()):
                 raise WorkflowError("supersede would create a cycle")
-            if _read_workflow_state(self.directory, by_id) is None:
-                raise WorkflowError("superseding workflow does not exist: " + by_id)
+            successor = _read_workflow_state(self.directory, by_id)
+            if successor is None:
+                if agreement is None:
+                    raise WorkflowError("superseding workflow does not exist: " + by_id + "; provide --agreement to create it")
+                other_writers = self._writer_states()
+                if other_writers:
+                    self._raise_writer_block(other_writers[0])
+                successor_workflow = Workflow(self.root, by_id)
+                successor_workflow.save(successor_workflow._prepare_state(agreement, hitl=None))
+            state["obligations"] = self._obligations(state)
             state["superseded_by"] = {"id": by_id, "reason": reason, "at": _now()}
             state["status"] = "superseded"
             state["pending"] = None
@@ -691,6 +763,7 @@ class Workflow:
                 "superseded_by": (state.get("superseded_by") or {}).get("id"),
                 "completed_at": state.get("updated_at") if state.get("finalization_complete") else None,
             },
+            "obligations": state.get("obligations"),
         }
         if state.get("status") == "planned" and not verification:
             interpretation["status_note"] = (
@@ -780,7 +853,7 @@ class Workflow:
                 if other != self.path:
                     validate_relative_path(str(other.relative_to(self.root)), self.root)
                     sibling = json.loads(other.read_text())
-                    if sibling.get("finalization_complete") is not True and sibling.get("status") not in {"cleaned", "completed", "cancelled"}:
+                    if _is_writer(sibling):
                         raise WorkflowError("another active workflow shares the project rules; finish or explicitly migrate it before adopting a new project baseline")
             previous = state["baseline"]
             baseline = pin_runtime(self.root)
@@ -806,6 +879,10 @@ class Workflow:
         with self.locked():
             state = self.load()
             self._assert_runtime(state)
+            if state.get("finalization_complete"):
+                raise WorkflowError("completed workflows are historical evidence; start a successor instead of amending")
+            if state.get("superseded_by"):
+                raise WorkflowError("workflow is superseded by " + state["superseded_by"]["id"] + "; amend a successor instead")
             if state.get("integration"):
                 raise WorkflowError("integrated tasks retain their agreement; only cleanup remains")
             if (state.get("pending") or {}).get("operation") == "checkpoint:design":
@@ -1112,6 +1189,7 @@ def add_parser(subparsers):
         if name == "supersede":
             command.add_argument("--by", required=True, help="Successor workflow that replaces this one")
             command.add_argument("--reason", required=True, help="Why this workflow is superseded")
+            command.add_argument("--agreement", default=None, help="JSON agreement for the successor, created and linked in one step")
     list_parser = commands.add_parser("list", help="List workflows by current/historical status")
     list_parser.add_argument("--repo-root", default=None)
     list_parser.add_argument("--json", action="store_true")
@@ -1154,7 +1232,8 @@ def handle_command(parsed):
         elif command == "resume":
             state = workflow.resume(parsed.note)
         elif command == "supersede":
-            state = workflow.supersede(parsed.by, parsed.reason)
+            agreement = json.loads(Path(parsed.agreement).read_text()) if parsed.agreement else None
+            state = workflow.supersede(parsed.by, parsed.reason, agreement)
         else:
             state = getattr(workflow, command)()
         if parsed.json:

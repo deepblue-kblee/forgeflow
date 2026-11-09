@@ -171,6 +171,7 @@ class TemplateScaffolder:
     def _active_work(cls, root: Path, config: Dict[str, Any]) -> List[str]:
         """Find unfinished task state before changing any project baseline."""
         from .runtime import safe_project_path
+        from .workflow import _is_writer
         active: List[str] = []
         state_dir = safe_project_path(root, ".forgeflow/workflows")
         if state_dir.exists():
@@ -179,7 +180,7 @@ class TemplateScaffolder:
                 state = json.loads(state_file.read_text(encoding="utf-8"))
                 if not isinstance(state, dict):
                     raise ValueError(f"Invalid workflow state: {state_file.name}")
-                if state.get("finalization_complete") is not True and state.get("status") not in {"cleaned", "completed", "cancelled"}:
+                if _is_writer(state):
                     active.append(state_file.stem)
         legacy_state_dir = safe_project_path(root, ".forgeflow/lifecycle")
         if legacy_state_dir.exists():

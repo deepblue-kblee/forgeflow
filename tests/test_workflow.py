@@ -311,14 +311,20 @@ class TestWorkflow(unittest.TestCase):
         (self.root / "other.txt").write_text("dependency changed\n")
         self.assertEqual(self.workflow.status()["status"], "verification-stale")
 
-    def test_new_workflow_cannot_replace_an_active_runtime(self):
+    def test_second_writer_in_same_checkout_is_blocked(self):
         self.prepare()
         baseline = (self.root / ".forgeflow/runtime.json").read_bytes()
-        from forgeflow.runtime import RuntimeBaselineError
-        with patch("forgeflow.runtime.assert_runtime", side_effect=RuntimeBaselineError("different source package")):
-            with self.assertRaisesRegex(RuntimeBaselineError, "different source"):
-                Workflow(self.root, "second-task").start(self.agreement(include_existing_changes=True))
+        with self.assertRaisesRegex(WorkflowError, "active writer"):
+            Workflow(self.root, "second-task").start(self.agreement(include_existing_changes=True))
         self.assertEqual((self.root / ".forgeflow/runtime.json").read_bytes(), baseline)
+
+    def test_supersede_blocked_while_integrated_with_remaining_cleanup(self):
+        self.prepare(task_owned_branch=False)
+        result = self.workflow.finalize()
+        self.assertIsNotNone(result.get("integration"))
+        self.assertFalse(result.get("finalization_complete"))
+        with self.assertRaisesRegex(WorkflowError, "remaining cleanup"):
+            self.workflow.supersede("other", "revised", self.agreement(scope=["other.txt"]))
 
     def test_ready_only_finalization_is_complete_without_claiming_merge(self):
         self.prepare(integration="none", permissions=["commit"])

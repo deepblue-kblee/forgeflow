@@ -60,6 +60,7 @@ forgeflow workflow amend <id> --agreement agreement.json \
 - `owner`, `source`, `target`, `integration`, `permissions`, `remote`, `task_owned_branch`, `include_existing_changes`는 변경할 수 없습니다. 권한·대상 변경은 새 workflow 또는 대체로 처리합니다.
 - 어떤 보완도 이전 `verification`을 폐기하고 `planned`로 되돌립니다. 과거 PASS를 새 조건에 재사용하지 않습니다.
 - design checkpoint가 `awaiting-user`인 동안에는 amend를 허용하지 않습니다.
+- 완료·대체된 기록은 amend로 다시 열지 않습니다. 완료 이후 변경은 후속 workflow로 시작합니다.
 
 ## Workflow 이력과 대체
 
@@ -69,11 +70,15 @@ forgeflow workflow amend <id> --agreement agreement.json \
 forgeflow workflow list              # 현재 active workflow만
 forgeflow workflow list --all        # 완료·중단·대체 포함 전체
 forgeflow workflow supersede <id> --by <후속 id> --reason "<이유>"
+forgeflow workflow supersede <id> --by <후속 id> --reason "<이유>" --agreement <file.json>
 ```
 
+- 같은 checkout에는 구현·working tree·Git index·commit/integration을 소유하는 active workflow를 기본 하나만 허용합니다. 다른 ID의 `start`는 상태 파일을 쓰기 전에 차단하고, 기존 workflow의 재개·amend·대체 경로와 별도 branch/worktree 선택지를 안내합니다.
 - `list`는 workflow를 `active`, `completed`, `stopped`, `superseded`로 분류합니다. 완료하지 않은 작업을 완료로 표시하지 않습니다.
-- `supersede`는 기존 계획을 폐기하고 다른 workflow로 대체할 때 후속 ID와 이유를 기록하고 상태를 `superseded`로 바꿉니다. 완료된 기록은 대체하지 않습니다.
+- `supersede`는 기존 계획을 폐기하고 후속 ID와 이유를 기록하고 상태를 `superseded`로 바꿉니다. 완료된 기록과 cleanup이 남은 통합 기록은 대체하지 않습니다.
+- `--agreement`를 주면 후속을 같은 동작에서 생성하고 연결합니다. 재시도 시 기존 후속을 재사용하며 workflow가 추가 생성되지 않습니다.
 - 대체된 workflow는 `verify`/`finalize`가 차단됩니다.
+- `stop`/`supersede`는 미커밋 변경·남은 cleanup을 `obligations`에 보존하고 `list`/`status`에 표시합니다.
 
 ## 보류와 재개
 
@@ -86,6 +91,7 @@ forgeflow workflow resume <id>
 
 - `stop`은 state와 verification을 보존하고 status를 `stopped`로 바꿉니다. design checkpoint가 대기 중이면 기존 checkpoint stop으로 처리합니다.
 - `resume`은 verification freshness에 따라 `ready` 또는 `planned`로 복원합니다.
+- 완료된 기록은 `stop`으로 다시 열지 않습니다. 완료 이후 변경은 후속 workflow로 시작합니다.
 - 보류된 workflow는 `verify`/`finalize`가 차단됩니다.
 
 ## 선택적 design checkpoint

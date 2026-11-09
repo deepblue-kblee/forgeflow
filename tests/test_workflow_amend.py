@@ -91,6 +91,15 @@ class TestWorkflowAmend(unittest.TestCase):
         with self.assertRaises(WorkflowError):
             self.workflow.amend(self.agreement(), reason="x", impact="")
 
+    def test_amend_completed_workflow_is_blocked(self):
+        self.workflow.start(self.agreement())
+        (self.root / "app.txt").write_text("after\n")
+        self.workflow.verify()
+        self.assertEqual(self.workflow.finalize()["status"], "ready")
+        self.assertTrue(self.workflow.load()["finalization_complete"])
+        with self.assertRaisesRegex(WorkflowError, "historical evidence"):
+            self.workflow.amend(self.agreement(), reason="x", impact="y")
+
 
 if __name__ == "__main__":
     unittest.main()
