@@ -45,3 +45,4 @@ htmlcov/
 .forgeflow/runtime/
 .forgeflow/runtime.json
 .forgeflow/run.py
+.forgeflow/workflows/
