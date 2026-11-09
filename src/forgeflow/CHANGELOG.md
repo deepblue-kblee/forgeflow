@@ -1,5 +1,24 @@
 # ForgeFlow 변경 이력
 
+## [0.2.3] - 2026-11-10
+
+### Added
+- checkout별 단일 active writer 가드레일: 같은 checkout에 구현·Git 작업을 소유하는 active workflow가 있으면 다른 ID의 `workflow start`를 상태 파일 생성 전에 차단하고, 재개/amend/대체/별도 worktree 경로를 안내.
+- `workflow supersede --agreement`: 후속 workflow 생성과 predecessor 연결을 단일 lock에서 원자적으로 수행. 재시도 시 기존 후속을 재사용.
+- `workflow stop`/`supersede`가 미커밋 변경·남은 cleanup을 `obligations`로 보존하고 `list`/`status`에 표시.
+
+### Changed
+- 단일 lifecycle 판정 `_is_writer`를 도입해 `workflow list`, `update`/`init`의 active-work 판정, `adopt`가 같은 정의를 공유.
+- `workflow amend`와 `workflow stop`은 완료 기록을 재오픈하지 않음.
+- `workflow supersede`는 cleanup이 남은 통합 기록을 대체로 숨길 수 없음.
+
+### Fixed
+- stopped/superseded 기록이 `forgeflow update`/`init`/`adopt`를 잘못 차단하던 lifecycle 판정 불일치.
+- `.forgeflow/workflows/` runtime state를 `.gitignore`에 추가.
+
+### Verification
+- 246 tests OK, sync-distribution match.
+
 ## [0.2.2] - 2026-11-07
 
 ### Added
