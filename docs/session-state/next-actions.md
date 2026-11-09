@@ -1,6 +1,6 @@
 # Session checkpoint
 
-갱신: 2026-11-07. Base: `main`.
+갱신: 2026-11-09. Base: `main`. 세션 종료: 2026-11-09 23:42 KST (Graceful Exit).
 
 ## 현재 상태
 
